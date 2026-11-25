@@ -30,11 +30,16 @@
   const REVIEW = window.SharedReportReview ? window.SharedReportReview.create({ key: 'psb2.reportReview.v1', tocKey: 'psb2.reportToc', title: 'Prestressed Bridge Design' }) : null;
   const incOf = o => { const inc = {}; window.PSBReportBuild.SECTIONS.forEach(([k]) => { inc[k] = !(o.inc && o.inc[k] === false); }); return inc; };
   /* PS-25 (engineer decision 2026-11-13): "Worked sections: each type's governing line (default) | every girder line", kept in ctx.opts.worked
-     (the page's psb2.ui object, as the section chips); shown when the project has more than one girder type × line */
+     (the page's psb2.ui object, as the section chips); shown when the project has more than one girder type × line. RG (2026-11-25): shown
+     as the box "Work every girder line in full" (the same key and values), with "Full rating table (appendix)" (ctx.opts.rtApp) */
   const modeOf = o => (o.worked === 'all' ? 'all' : 'gov');
+  const fullOf = (o, B) => modeOf(o) === 'all' && !!(B && B.all && B.all.n > 1);   // RG: every girder line worked in full (the report as before)
   function controls(o, B) {
-    const inc = incOf(o), m = modeOf(o);
-    const ch = B && B.all && B.all.n > 1 ? `<div class="rp-chips" role="radiogroup" aria-label="Worked sections" id="rpWorked"><span class="rp-chip" style="border:0;padding-left:0"><b>Worked sections:</b></span>${[['gov', "each type's governing line"], ['all', 'every girder line']].map(([v, t]) => `<label class="rp-chip"><input type="radio" name="rpWorked" data-rpworked="${v}"${m === v ? ' checked' : ''}>${t}</label>`).join('')}</div>` : '';
+    const inc = incOf(o), m = modeOf(o), fu = fullOf(o, B);
+    /* RG (2026-11-25, the engineer's request): the choice as one box "Work every girder line in full" (the same ctx.opts.worked, 'all' when
+       ticked, 'gov' when not: a saved choice keeps its meaning) and "Full rating table (appendix)" (ctx.opts.rtApp, new, absent = off; with
+       every line worked in full the report is as before, each rating table in place, so the box is off and greyed there) */
+    const ch = `<div class="rp-chips" role="group" aria-label="Report scope" id="rpWorked"><span class="rp-chip" style="border:0;padding-left:0"><b>Scope:</b></span>${B && B.all && B.all.n > 1 ? `<label class="rp-chip"><input type="checkbox" data-rpworked="all"${m === 'all' ? ' checked' : ''}>Work every girder line in full</label>` : ''}<label class="rp-chip"${fu ? ' title="Every girder line is worked in full: each rating table is printed in its Rating section"' : ''}><input type="checkbox" data-rprtapp${o.rtApp && !fu ? ' checked' : ''}${fu ? ' disabled' : ''}>Full rating table (appendix)</label></div>`;
     const dt = `<div class="rp-chips" role="radiogroup" aria-label="Detail" id="rpDetail"><span class="rp-chip" style="border:0;padding-left:0"><b>Detail:</b></span>${[['tab', 'the stations the tabs tabulate'], ['all', 'every station']].map(([v, t]) => `<label class="rp-chip"><input type="radio" name="rpDetail" data-rpdetail="${v}"${(o.detail === 'all' ? 'all' : 'tab') === v ? ' checked' : ''}>${t}</label>`).join('')}</div>`;   // 2026-11-15 (batch C): the steel report's Detail choice
     return ch + dt + `<div class="rp-chips" role="group" aria-label="Report sections">${window.PSBReportBuild.SECTIONS.map(([k, t]) => `<label class="rp-chip"><input type="checkbox" data-rpinc="${k}"${inc[k] ? ' checked' : ''}>${esc(t)}</label>`).join('')}</div>`;
   }
@@ -126,18 +131,19 @@
     if (B.err) { box.innerHTML = `<div class="alert err" role="alert">The report cannot be built: ${esc(B.err)}</div>`; return null; }
     const ADU = window.PSBAutoDesignUI, adb = ADU && ADU.basis ? ADU.basis(ctx.P) : null;   // ADB (2026-11-15): §2's Auto design basis (the run shown or applied in this page view)
     const snap = window.PSB3DUI && window.PSB3DUI.snapshot ? window.PSB3DUI.snapshot() : null;   // batch G8: the 3D view captured for the Report (§2)
-    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o), o.detail === 'all', ADU && ADU.basisKey ? ADU.basisKey() : '', adb && adb.stale, snap ? snap.at + snap.png.length : '']);
+    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o), o.detail === 'all', ADU && ADU.basisKey ? ADU.basisKey() : '', adb && adb.stale, snap ? snap.at + snap.png.length : '', !!o.rtApp]);
     // the model is kept while the inputs, the sections chosen and the figure width are the same (the result object of the page is the same)
     // PS-25: several worked units: each unit's graphics drawn with its own result (an array, one per unit)
     if (S.key !== key || !S.M) { let figs = {}; try { figs = B.multi ? B.units.map(u => figures({ P: u.P, inp: u.inp, R: u.R, W: u.W }, inc, narrow ? wScr : 0)) : figures(B, inc, narrow ? wScr : 0); } catch (e) { console.warn(e); }
-      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0), sumFig: inc.sum === false ? null : sumFig(B, narrow ? wScr : 0), every: o.detail === 'all', autodesign: adb, snap3d: inc.proj === false ? null : snap }); S.key = key; }
+      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0), sumFig: inc.sum === false ? null : sumFig(B, narrow ? wScr : 0), every: o.detail === 'all', full: fullOf(o, B), rtApp: !!o.rtApp, autodesign: adb, snap3d: inc.proj === false ? null : snap }); S.key = key; }
     const tb = document.getElementById('tabBar');
     const V = window.SharedReport.mount(box, S.M, { controls: controls(o, B), closed: S.closed, stick: tb ? tb.offsetHeight : 0, spy: true,
       onGoto: t => { if (/^in:/.test(t)) { if (ctx.goin) ctx.goin(t.slice(3)); } else if (ctx.goto) ctx.goto(t); } });
     S.V = V;   // ADB: the viewer, for a link that jumps to a key (index.html, href "#rp:<key>")
     if (REVIEW) REVIEW.attach(box, ctx);   // 2026-11-23: the review tools (shared/report-review.js): contents sidebar, markup comments, reviewed copy, comments appendix in print
     box.querySelectorAll('[data-rpdetail]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.detail = el.dataset.rpdetail; if (ctx.save) ctx.save(); render(host, ctx); }));
-    box.querySelectorAll('[data-rpworked]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.worked = el.dataset.rpworked; if (ctx.save) ctx.save(); render(host, ctx); }));
+    box.querySelectorAll('[data-rpworked]').forEach(el => el.addEventListener('change', () => { o.worked = el.checked ? 'all' : 'gov'; if (ctx.save) ctx.save(); render(host, ctx); }));
+    box.querySelectorAll('[data-rprtapp]').forEach(el => el.addEventListener('change', () => { o.rtApp = el.checked; if (ctx.save) ctx.save(); render(host, ctx); }));
     box.querySelectorAll('[data-rpinc]').forEach(el => el.addEventListener('change', () => { o.inc = o.inc || {}; o.inc[el.dataset.rpinc] = el.checked; if (ctx.save) ctx.save(); render(host, ctx); }));
     return V;
   }
