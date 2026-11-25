@@ -55,6 +55,8 @@
 //   PS-34 (2026-11-14): the pier block's family thickness of a NEXT / box / slab (ps34.t, engine/pierblock.js; the old app's t_bf is the
 //   I-girder bottom flange) is compared with the thickness worked here from the old app's girder (NEXT h − t_f, box the bottom slab, voided
 //   slab (h − D)/2, solid slab h); every other value with the old app, as before.
+//   HP (2026-11-25): the haunch along the girder (haunch.<i>.buildup, engine/haunch.js: t_h the minimum at midspan) is compared with the profile
+//   worked here from the old app's own Δ_deck and ψ, max(t_h + Δ⁺(1 − ψ) + Δ⁻ψ, 0.5); every other value with the old app, as before.
 //   PS-35 (2026-11-14): a box beam / voided slab design gets the type (f) / (g) distribution factors (engine/lldf-fg.js): the old page computes
 //   with that module wrapping its own distFactors (the module file added to the old page), so every value downstream is compared as before;
 //   the (f) / (g) factors are checked by hand in tests/engine/psbridge-lldf-fg.test.mjs; the old app's type (k) factors logged (before / after).
@@ -258,6 +260,11 @@ for (const name of names) {
     const e1 = (() => { const b = JSON.parse(rt0), d = [], cmp = (o, n, pfx) => Object.keys(o || {}).forEach(k => { if (o[k] && typeof o[k] === 'object') cmp(o[k], n && n[k], pfx + k + '.'); else if (typeof o[k] === 'number' && n && !Object.is(o[k], n[k])) d.push(`${pfx}${k} ${o[k]} -> ${n[k]}`); });
       cmp(b.r, R.rating, 'rating.'); cmp(b.s, R.shrRating, 'shrRating.'); (b.v || []).forEach((v, j) => cmp(v, R.vehRatings[j], `vehRatings.${j}.`)); return d; })();
     paths.forEach(p => { vals[p] = at(R, p); });
+    // HP (engineer decision 2026-11-25; engine/haunch.js after computeAll): t_h is the minimum haunch at midspan, the haunch along the girder
+    // max(t_h + Δ⁺(1 − ψ) + Δ⁻ψ, 0.5) (Δ = the old app's Δ_deck); the intended difference from the old app's t_h + Δψ, worked here from the
+    // old app's own Δ_deck and ψ; every other value compared with the old app exactly, as before
+    paths.forEach(p => { const m = /^haunch\.(\d+)\.buildup$/.exec(p); if (!m) return; const r = R.haunch[+m[1]], d = R.cam.afterDeck;
+      vals[p] = Math.max(+i.th + Math.max(d, 0) * (1 - r.par) + Math.max(-d, 0) * r.par, 0.5); });
     // PS-10 hand values (no counterpart in the old app): from the inputs and the old app's f_pbt, A_b, w_sw
     const h = i.harp, L = +i.L, al = Math.atan((+h.yEnd - +h.yMid) / (12 * +h.frac * L)), Fstr = R.fpbt * R.ss.st.Ab * Math.sin(al), Ftot = 2 * +h.n * Fstr, Lg = L + 2 * (+i.opt.endOh || 0) / 12, Wb = R.g.wsw * Lg;
     const f = typeof i.opt.hdFrac === 'number' && i.opt.hdFrac > 0 ? i.opt.hdFrac : 0.75, lim = f * Wb;
