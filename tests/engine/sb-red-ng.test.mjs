@@ -45,3 +45,29 @@ test('SBNG: made-up thin bridge: every failing / warning item links to a shown s
   for (const k of ['flex', 'cn', 'stiff', 'fat', 'spl']) assert.ok(n[k] > 0, `${k}: the made-up bridge has failing items (${JSON.stringify(n)})`);
   console.log(`       failing / warning items linked to shown steps: ${JSON.stringify(n)}`);
 });
+
+// SBNG-DK (2026-11-24; follow-up of SBNG-4): the Deck tab (ui/deck.js marks / stepLi), on made-up decks: the default deck with deck design on,
+// and a failing deck (#4 bars at 18 in both faces, #3 longitudinal bars at 18 / 24 in): every NG check row's step and every NG overhang /
+// DK5 set / DK6 section row's failing test step is red "NG"; passing rows, the "Not checked" rows and the steps no failing row links to are not.
+test('SBNG-DK: Deck tab, every NG check row links to a red step; passing and not-checked rows are not marked', () => {
+  const WD = loadShared(...['units.js', 'steps.js', 'lldf.js', 'deck.js'].concat(['engine/model.js', 'engine/sections.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js', 'engine/deck.js', 'ui/sub.js', 'ui/deck.js'].map(E)));
+  const DU = WD.SBDDeckUI, D = WD.SBDDeck, P0 = J(WD.SBDModel.defaultProject());
+  P0.deckDesign = { on: true, sBot: 8 };
+  const P1 = J(P0); Object.assign(P1.deckDesign, { sBot: 18, sTop: 18, barTop: 0.2, barBot: 0.2, barLongBot: 0.11, sLongBot: 18, barLongTop: 0.11, sLongTop: 24 });
+  const ok = D.calc(P0), ng = D.calc(P1);
+  // the passing default deck: nothing marked; DK4 and the longitudinal DK5 sets "Not checked" (bars not entered)
+  assert.ok(ok.checks.every(c => c.ok) && !ok.checks.some(c => c.id === 'DK4') && ok.ts.sets.some(q => !q.on), 'default deck: all OK, rows not checked');
+  eq([...DU.marks(ok)], []);
+  const M = DU.marks(ng), red = [...M.keys()].sort(), shown = new Set(ng.steps.map(s => s.id));
+  assert.ok([...M.values()].every(v => v === 'fail'));
+  for (const c of ng.checks) if (!c.ok) assert.ok(M.get(c.step) === 'fail' && shown.has(c.step), `${c.id} → ${c.step}`);
+  for (const id of red) assert.ok(shown.has(id), `${id}: a shown step`);
+  eq(ng.checks.filter(c => !c.ok).map(c => c.id), ['DK1', 'DK2', 'DK3', 'DK4', 'DK5', 'DK6']);
+  eq(red, ['dk.crn1.fl', 'dk.crn1.s', 'dk.crohL.fl', 'dk.crohL.s', 'dk.crohR.fl', 'dk.crohR.s', 'dk.crp1.fl', 'dk.crp1.s', 'dk.distR', 'dk.neg.r', 'dk.ohL.cap.r', 'dk.ohR.cap.r', 'dk.pos.r', 'dk.ts.bl.rA', 'dk.ts.tl.rA', 'dk.ts.tl.rs']);
+  assert.ok(!M.has('dk.ts.bl.rs') && !M.has('dk.ts.tt.rA'), 'a passing part of an NG set, a passing set: not marked');
+  // the rendered <li>: red with one NG tag; a passing test step without a class; the value line unchanged by the marking
+  const li = id => DU.stepLi(ng.steps.find(s => s.id === id), M);
+  assert.match(li('dk.pos.r'), /^<li id="st-dk\.pos\.r" class="no ng"><div class="lbl"><span class="ngTag">NG<\/span> /);
+  assert.match(li('dk.ts.tt.rA'), /^<li id="st-dk\.ts\.tt\.rA"><div class="lbl">[^<]/);
+  assert.equal(li('dk.pos.r').replace('<span class="ngTag">NG</span> ', '').replace(' class="no ng"', ' class="no"'), DU.stepLi(ng.steps.find(s => s.id === 'dk.pos.r')), 'only the class and the tag differ');
+});
