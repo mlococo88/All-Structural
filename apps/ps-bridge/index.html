@@ -675,6 +675,7 @@
     const t = e.target, go = t.closest('[data-goin]');
     if (go) { e.preventDefault(); goIn(go.dataset.goin, panelTop); return; }   // GSUB: 'tab@target'
     { const gb = t.closest('[data-gsub]'); if (gb) { e.preventDefault(); gsubTo(gb.dataset.gsub); return; } }   // GSUB: a Girders & strands sub-tab
+    { const sg = t.closest('[data-sumgo]'); if (sg) { e.preventDefault(); const [k, g, tab, st] = sg.dataset.sumgo.split('|'); if (k !== '' && P.types && P.types[+k]) pick(+k, +g); gotoStep(tab, st); return; } }   // NX-1: the Cross-section tab's NEXT F line card: that type and line, its tab at the worked step
     { const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }   // PS-35: an input note's link to an output tab (the Loads input tab's J note)
     if (LGUI.onClick(e, lgCtx)) return;
     if (DMUI.onClick(e, P, ui, dmCtx)) return;   // batch D1
