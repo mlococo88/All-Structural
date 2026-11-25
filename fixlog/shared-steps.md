@@ -305,7 +305,7 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 - Decision (pending engineer review): the rule (ok agrees with value ≤ 1 within 1e-3) and a failing step below 1.0 read as not a ratio
   (chip `NG` with no number); a D/C with a limit other than 1.0 must declare `ratio: true` to keep its number. None found in the audit.
 
-## 2026-11-24 — PR: claude/sb-ng-relation (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (NGREL) — line(): a failing comparison prints the relation that holds ("33.75 > 17.75, NG", not "33.75 ≤ 17.75, NG"); opt-in, on only in the Steel Bridge app   [display only; no value, ok flag, verdict, formula or reference changes]
+## 2026-11-24 — PR: claude/sb-ng-relation (PR #1712: https://github.com/mlococo88/All-Structural/pull/1712) (NGREL) — line(): a failing comparison prints the relation that holds ("33.75 > 17.75, NG", not "33.75 ≤ 17.75, NG"); opt-in, on only in the Steel Bridge app   [display only; no value, ok flag, verdict, formula or reference changes]
 ### Request (engineer, approved Steel Bridge follow-up)
 A failing step printed the satisfied form of its requirement with numbers that violate it: Constructibility GS14 "f_bu + f_ℓ/3 ≤ φ_fF_nc = 35.05 + 0.00/3 = 35.05 ≤ 19.09, NG", Flexure Service II "|f_f| ≤ 0.95R_hF_yf = 50.67 ≤ 0.95(1.000)(50.00) = 47.50, NG". The numeric line should read the relation that holds (">" where the demand exceeds the limit, "<" for an unmet "≥"); the symbolic requirement stays.
 ### Where / Before / After
