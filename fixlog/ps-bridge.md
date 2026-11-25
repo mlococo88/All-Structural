@@ -9801,3 +9801,32 @@ Built-in new project: Girders & strands → Girder types shows the two types (In
 - GSUB-b. "Edit its inputs" opens the Section sub-tab (the type's inputs start there).
 - GSUB-c. On narrow panels (below 720 px) the Strands sub-tab stacks rows, figure, draped strands; the strand editor stays full width below.
 - GSUB-d. A link that names the tab in general (the output tabs' "Girders & strands tab" note, the Report's assumptions) opens Girder types; one about a card or a field opens its sub-tab and scrolls to it (a field is focused).
+
+## 2026-11-25 — PR: claude/ps-wide-inputs (PR pending) (WIDE) — "Widen inputs" (the input panel over the whole width) and the input-tab figures opened enlarged (display only)
+### Request (engineer, 2026-11-25)
+See the input-tab graphics and input boxes bigger. A second window was considered and not chosen, since two copies of the app would overwrite each other's saved project.
+### Where / Before / After
+- `ui/widein.js` (new, `window.PSBWideIn`): `init({ changed })`, `isOn()`, `set(on)`, `open(host, title)`, `mark(host, title)`, `enlargeBtn(title, hostId)`. On: `body.psbWide`; after each change `changed(on)`, then window `psb2:panelresize` (detail `{ input, output }`) and `resize` (as `ui/splitter.js`). Turned off when the window drops below 900 px. The dialog `#figZoomDlg` (`<dialog>`, `showModal`): copies of the figure's SVGs (`viewBox` kept, width 100 %), every id prefixed `fz<n>-` with its `url(#…)` / `href="#…"` references rewritten; Escape, Close or a click on the backdrop closes it, and closing empties it.
+- `index.html` HTML: before `<div class="inTabs" role="tablist" id="inTabs"></div>` → after `<div class="inTabs" id="inTabRow"><div role="tablist" id="inTabs" class="inTabList"></div><button type="button" id="bWide" class="wideBtn" aria-pressed="false">⤢ Widen inputs</button></div>` (`#inTabs{display:contents}`: the tab buttons are laid out as before).
+- `index.html` CSS (screen, 900 px and wider): `body.psbWide` hides `#sbSplit` and `#sbDashCol`, gives `#inputPanel` `flex:1 1 auto; max-width:none`, and hides the output panel's content except `#notices`, which float at the bottom right. Bridge layout tab: the Plan card beside the spans and skews. Strands sub-tab: from a 1100 px panel, the strand editor beside the draped strands (`.gStrE`, `ui/girdsubs.js`: the editor card moved into the `.gStr` grid; below 1100 px it sits full width under it, as before). The dialog and button styles. Print: `#figZoomDlg` hidden; the button goes with `.inTabs`.
+- `index.html` script list: `'ui/widein.js'` before `'ui/girdsubs.js'`. `const … WI = window.PSBWideIn`. `drawInputs`: `WI.mark($('gfx_plan'), 'Plan')` and `WI.mark($('gfx_strands_in'), 'Strand pattern')` after their mounts; the strand editor card head gets `WI.enlargeBtn(…, 'strandEditHost')`. `gotoOut`: before `ui.otab = t; …` → after `if (WI.isOn()) WI.set(false); ui.otab = t; …` (every output-tab link, `data-gotab` from the inputs included). After the first draw: `WI.init({ changed: on => { drawInputs(); if (!on) drawOut(); } })`.
+### Problem
+Display only. No input, value, calculation, project format or storage key changed (the toggle is not stored).
+### Governing provision
+None (display only).
+### Check case
+1500 × 900, the splitter dragged to 0.45 (`psb2.splitRatio_v1`):
+- Widen inputs: the input panel goes from 549 px to 1500 px, and the strand pattern from 357 to 805 px.
+- Back to outputs: input 549 px, output 664 px, `--sbIn` 0.45000; `psb2.splitRatio_v1` unchanged.
+- The strand pattern enlarged: about 1374 px wide in the dialog.
+### How verified
+`tests/smoke/ps-bridge-wide.mjs` (new); `tests/smoke/ps-bridge-gsub.mjs`, the PS smokes; `node tests/engine/run.mjs psbridge-model psbridge-gird-subtabs`; `node tests/check-syntax.mjs`.
+### Saved data
+None: no key added (the toggle lasts for the page view).
+### Decisions (pending engineer review)
+- WIDE-a. The toggle is not remembered: each page opens with the outputs shown (no new key).
+- WIDE-b. In wide mode the notices (owner change, girder count, Undo) float at the bottom right, so they stay visible while the output panel is hidden.
+- WIDE-c. A click on the plan or the strand pattern opens it enlarged, also on the figures' hover regions; a tap there no longer pins the hover read-out (hovering still shows it).
+- WIDE-d. The strand editor's "⤢ Enlarge" shows an enlarged view; strands are edited on the figure in the panel (with Widen inputs, the editor is drawn larger there).
+### Open items
+- The Section sub-tab and the Cross-section input tab have no figure today (the section and cross-section figures are on the Section properties and Loads & LLDF output tabs). Adding a section-shape figure to the Section sub-tab is new content: ask the engineer.
