@@ -109,15 +109,18 @@
     return out;
   }
   /* live-load traffic face each side (GirderDetail dfLLFace): the innermost non-mountable element: the deck-edge face, a sidewalk
-     12 in or thicker (its curb face), or a railing or fence on the sidewalk; a sidewalk thinner than 12 in is mountable and ignored */
+     12 in or thicker (its curb face), or a railing or fence on the sidewalk; a sidewalk thinner than 12 in is mountable and ignored.
+     RCURB (sb-ridot-curb PR, 2026-11-25): dl.mountL / dl.mountR ('yes' | 'no'; xs.sidewalks.<side>.mount) set it as entered; absent or 'auto':
+     the 12 in rule, as before. dl.mcaseL / dl.mcaseR (set by cases() below only): the curb face of case 2 of RIDOT BDM 3.4.1.1.1. */
   function llFaces(b, dl, xs, fL, fR) {
     const o = {};
     ['L', 'R'].forEach(sd => { const f = sd === 'L' ? fL : fR, sw = nm(dl['sw' + sd]) > 0 ? nm(dl['sw' + sd]) : 0, t = nm(dl['swThk' + sd]), curb = !!(b.edge && b.edge[sd] && b.edge[sd].mode === 'curb');
-      const mount = sw > 0 && !(t >= 12 - 1e-9), c = [{ x: f, by: b.edge && b.edge[sd] && b.edge[sd].fby ? b.edge[sd].fby : curb ? 'curb and railing traffic face' : 'barrier face' }];
-      if (sw > 0 && !mount) c.push({ x: sw, by: `sidewalk curb face (${f2(t)} in ≥ 12 in)` });
+      const mo = dl['mount' + sd], how = dl['mcase' + sd] ? 'case 2 of RIDOT BDM 3.4.1.1.1: the curb-to-curb roadway' : mo === 'yes' || mo === 'no' ? 'entered' : '';
+      const mount = sw > 0 && (mo === 'yes' ? true : mo === 'no' ? false : !(t >= 12 - 1e-9)), c = [{ x: f, by: b.edge && b.edge[sd] && b.edge[sd].fby ? b.edge[sd].fby : curb ? 'curb and railing traffic face' : 'barrier face' }];
+      if (sw > 0 && !mount) c.push({ x: sw, by: how ? `sidewalk curb face (${f2(t)} in sidewalk, not mountable: ${how})` : `sidewalk curb face (${f2(t)} in ≥ 12 in)` });
       const fx = xs && xs['fenceX' + sd]; if (sw > 0 && fx > 0) c.push({ x: fx, by: 'railing or fence on the sidewalk' });
       const g = c.reduce((a, q) => q.x > a.x + 1e-9 ? q : a);
-      o[sd] = { r: g.x, by: g.by, mount, sw, t, rOld: Math.max(f, sw) }; });
+      o[sd] = { r: g.x, by: g.by, mount, sw, t, rOld: Math.max(f, sw), ...(how ? { how } : {}) }; });
     return o;
   }
 
@@ -276,9 +279,42 @@
     const fw = St().work('xs');
     ['L', 'R'].forEach(sd => { const q = ll[sd], f = sd === 'L' ? fL : fR;
       fw.add({ id: 'f' + sd, label: `${sd === 'L' ? 'Left' : 'Right'} deck edge to its traffic face (${b.edge && b.edge[sd] && b.edge[sd].fby ? b.edge[sd].fby : 'barrier face'})`, sym: `f_{${sd}}`, eq: '', sub: '', value: f, unit: 'ft', d: 3 });
-      fw.add({ id: 'r' + sd, label: `${sd === 'L' ? 'Left' : 'Right'} live-load traffic face from the deck edge: ${q.by}${q.mount ? `; the ${n2(q.t)} in sidewalk is mountable (< 12 in) and ignored` : ''}`, sym: `r_{${sd}}`, eq: q.sw > 0 ? '\\max(f, \\text{sidewalk curb}, \\text{fence})' : 'f', sub: '', value: q.r, unit: 'ft', d: 3, ref: `${ED} Art. 3.6.1.1.1` }); });
+      fw.add({ id: 'r' + sd, label: `${sd === 'L' ? 'Left' : 'Right'} live-load traffic face from the deck edge: ${q.by}${q.mount ? `; the ${n2(q.t)} in sidewalk is mountable (${q.how ? q.how : '< 12 in'}) and ignored` : ''}`, sym: `r_{${sd}}`, eq: q.sw > 0 ? '\\max(f, \\text{sidewalk curb}, \\text{fence})' : 'f', sub: '', value: q.r, unit: 'ft', d: 3, ref: `${ED} Art. 3.6.1.1.1` }); });
     fw.add({ id: 'n', label: 'Modular ratio for K_g (E_c from w_c' + (b.wcE > 0 ? ' for E_c, owner rule' : '') + ')', sym: 'n', eq: '\\frac{E_{s}}{E_{c}}', sub: `\\frac{29{,}000}{${St().g(MR.Ec, 0)}}`, value: MR.n, unit: '', d: 3, ref: `${ED} Eq. 5.4.2.4-1, Art. 6.10.1.1.1b` });
-    return { errors: [], b, MR, regions, dead: D, base, p, ll, lf, hP, lldf: DF, steps: fw.steps.concat(DF.steps) };
+    const R0 = { errors: [], b, MR, regions, dead: D, base, p, ll, lf, hP, lldf: DF, steps: fw.steps.concat(DF.steps) };
+    return p.noCases ? R0 : cases(b0, p, R0) || R0;
+  }
+
+  /* cases(b0, p, R0) (RCURB, sb-ridot-curb PR, 2026-11-25; CLAUDE.md §4): RIDOT BDM 3.4.1.1.1 (Number of Design Lanes): with a sidewalk the
+     more severe of two cases governs: (1) the lanes from the whole roadway width, sidewalk included, no pedestrian load; (2) the lanes from
+     the curb-to-curb width, the pedestrian load on the sidewalks. AASHTO LRFD 10th Ed. Art. 3.6.1.6: where vehicles can mount the sidewalk,
+     the pedestrian load does not act with the vehicle load. Applied here to owner RIDOT and a sidewalk that is mountable (the 12 in rule or
+     as entered, xs.sidewalks.<side>.mount) and wider than its barrier (a walkable width): before, such a project took the lanes of case 1
+     and the pedestrian load of case 2 together. Returns null (not applicable) or R0 itself, unchanged (the deck, drawings, .lga export and
+     the Loads & LLDF tables read it as before: case 1's lanes and factors, the pedestrian load as entered), with .cases = { cite, sides,
+     c1 (case 1's result: the same, without the pedestrian load), c2 (case 2's: those sidewalks not mountable, their curb faces bound the
+     roadway, the pedestrian load as entered), NL, w, steps }. The analysis (engine/analysis.js) works the live load with each case and takes
+     the more severe at every station and effect. A non-mountable sidewalk, any other owner: null (R0 without .cases, as before). */
+  const CURB2 = { RIDOT: 'RIDOT BDM 3.4.1.1.1' };
+  function cases(b0, p, R0) {
+    const own = (R0.lf && R0.lf.o) || b0.owner, cite = CURB2[own]; if (!cite) return null;
+    const sides = ['L', 'R'].filter(sd => { const q = R0.ll[sd], f = sd === 'L' ? R0.base.fL : R0.base.fR; return q.mount && q.sw > f + 1e-9; });
+    if (!sides.length) return null;
+    const c1 = compute(b0, { ...p, noCases: true, dl: { ...p.dl, ped: 0 } }), dl2 = { ...p.dl };
+    sides.forEach(sd => { dl2['mount' + sd] = 'no'; dl2['mcase' + sd] = true; });
+    const c2 = compute(b0, { ...p, noCases: true, dl: dl2 });
+    if (!c1 || (c1.errors && c1.errors.length) || !c2 || (c2.errors && c2.errors.length)) return null;
+    const w = St().work('xs.case'), sdN = sd => (sd === 'L' ? 'left' : 'right'), g1 = c1.regions[0].geo, g2 = c2.regions[0].geo;
+    [[1, c1, g1], [2, c2, g2]].forEach(([k, C, G]) => {
+      w.add({ id: `w${k}`, label: `Case ${k}: roadway width for the design lanes (${k === 1 ? `between the barriers: the mountable ${sides.map(sdN).join(' and ')} sidewalk${sides.length > 1 ? 's' : ''} part of the roadway` : `curb to curb: the ${sides.map(sdN).join(' and ')} sidewalk curb${sides.length > 1 ? 's' : ''} bound the roadway`})`,
+        sym: `w_{${k}}`, eq: 'W_{deck} - r_{L} - r_{R}', sub: `${n2(G.Wdeck)} - ${n2(C.ll.L.r)} - ${n2(C.ll.R.r)}`, value: G.roadway, unit: 'ft', d: 2, ref: `${cite}; ${ED} Art. 3.6.1.1.1` });
+      w.add({ id: `NL${k}`, label: `Case ${k}: number of design lanes`, sym: `N_{L,${k}}`, eq: G.twoHalf ? '2' : `\\lfloor w_{${k}}/12 \\rfloor`, sub: G.twoHalf ? '' : `\\lfloor ${n2(G.roadway)}/12 \\rfloor`, value: G.NL, unit: '', d: 0, ref: `${ED} Art. 3.6.1.1.1`,
+        note: G.twoHalf ? 'A roadway 20 to 24 ft wide: two design lanes, each half the roadway width (3.6.1.1.1).' : '' });
+      w.add({ id: `PL${k}`, label: `Case ${k}: pedestrian load`, sym: `q_{PL,${k}}`, eq: '', sub: '', value: k === 1 ? 0 : nm(p.dl.ped) || 0, unit: 'psf', d: 0, ref: `${cite}; ${ED} Art. 3.6.1.6`,
+        note: k === 1 ? 'Ignored in case 1 (RIDOT BDM 3.4.1.1.1); vehicles can mount the sidewalk, so the pedestrian load does not act with them (AASHTO 3.6.1.6).' : 'As entered, on the sidewalks (RIDOT BDM 3.4.1.1.1, 3.4.1.6; AASHTO 3.6.1.6).' }); });
+    c1.case = 1; c2.case = 2;
+    R0.cases = { cite, sides, c1, c2, NL: [g1.NL, g2.NL], w: [g1.roadway, g2.roadway], steps: w.steps };
+    return R0;
   }
 
   /* girder(R, j): the loads of girder j (0-based) for the analysis and the cards: { label, type, cls, DC1, DC2, DW, PL, UT, UF, deck, haunch, sip,
@@ -341,11 +377,22 @@
       spans: spans.slice(), cont, skews: (xs.skews || []).slice(), regions, owner: lf.o, lf };
     const p = { gap: xs.lldf && xs.lldf.gap != null ? xs.lldf.gap : 4, kg: (xs.lldf && xs.lldf.kg) || 'max', skewV: (xs.lldf && xs.lldf.skewV) || 'all', skewVx: xs.lldf && xs.lldf.skewVx === 'taper' ? 'taper' : 'whole', extMin: xs.lldf && xs.lldf.extMin ? 'yes' : 'no', radius: 0,
       dl: { method: xs.dlMethod || 'massdot', ped: +sw.ped || 0, swL: +swL.w || 0, swThkL: swL.t != null ? swL.t : 8, swR: +swR.w || 0, swThkR: swR.t != null ? swR.t : 8,
+        ...(swL.mount === 'yes' || swL.mount === 'no' ? { mountL: swL.mount } : {}), ...(swR.mount === 'yes' || swR.mount === 'no' ? { mountR: swR.mount } : {}),   // RCURB: absent / 'auto': the 12 in rule
         medW: +med.w || 0, medThk: med.t != null ? med.t : 8, medJoint: med.joint ? 'yes' : 'no', wcA: xs.wcA, fenceL: swL.fence, fenceXL: swL.fenceX, fenceR: swR.fence, fenceXR: swR.fenceX,
         wsMode: ws.mode === 'thk' ? 'thk' : 'psf', wsThk: ws.thk, wsGam: ws.gam },
       extra: (xs.extra || []).map(r => ({ ...r })), ovl: (xs.overlays || []).map(r => ({ ...r })), edges: E, loadOverrides: xs.overrides || null, beamClass: xs.beamClass || null };
     return { b, p };
   }
 
-  window.SBDLoads = { STEEL_PLF, CATS, DIST, CLS, METHODS, parseDim, numRows, xsIn, edgeIn, bridgeEff, edgeLoads, llFaces, dead, steelWeight, compute, girder, segDC1, segSteps, fromModel };
+  /* caseSteps(R, js) (RCURB): the worked steps of the two live-load cases for the cross-section girders js: the lane steps of each case, then
+     case 2's faces, geometry and the distribution factors of those girders (ids prefixed 'c2.', so that they are apart from case 1's, which
+     are R's own steps). [] without cases. */
+  function caseSteps(R, js) {
+    const C = R && R.cases; if (!C) return [];
+    const c2 = C.c2, pre = q => ({ ...q, id: 'c2.' + q.id }), out = C.steps.slice();
+    out.push(...c2.steps.map(pre)); c2.regions.forEach(rg => { out.push(...rg.steps.map(pre)); (js || []).forEach(j => { if (rg.members[j]) out.push(...rg.members[j].steps.map(pre)); }); });
+    const pl = (c2.dead.steps || []).filter(q => (js || []).some(j => new RegExp(`\\.G${j + 1}\\.PL$`).test(q.id))); out.push(...pl.map(pre));
+    return out;
+  }
+  window.SBDLoads = { STEEL_PLF, CATS, DIST, CLS, METHODS, CURB2, parseDim, numRows, xsIn, edgeIn, bridgeEff, edgeLoads, llFaces, dead, steelWeight, compute, cases, caseSteps, girder, segDC1, segSteps, fromModel };
 })();
