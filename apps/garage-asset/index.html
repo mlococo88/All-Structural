@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garage Asset Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen inspection workstation. Left rail of filters, the model fills the rest, a details window floats over the model's right edge. */
+:root{
+  --bg:#e9ecef; --surface:#ffffff; --surface-2:#f3f5f7; --fg:#1b232d; --muted:#5a6472; --line:#d3d8de;
+  --accent:#1e5aa0; --accent-fg:#ffffff; --accent-soft:#dde8f5; --stage:#dde1e6; --shadow:0 10px 30px rgba(20,30,45,.16);
+  --good:#3d8c58; --fair:#c99a1e; --poor:#d6702a; --serious:#c23b34; --none:#aeb4bc;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-head:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11151a; --surface:#192028; --surface-2:#202833; --fg:#e4e9ef; --muted:#97a2b0; --line:#2c3641;
+  --accent:#6ea8ec; --accent-fg:#0c1622; --accent-soft:#1d2e44; --stage:#151b22; --shadow:0 10px 30px rgba(0,0,0,.45); --none:#6b737d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11151a; --surface:#192028; --surface-2:#202833; --fg:#e4e9ef; --muted:#97a2b0; --line:#2c3641;
+  --accent:#6ea8ec; --accent-fg:#0c1622; --accent-soft:#1d2e44; --stage:#151b22; --shadow:0 10px 30px rgba(0,0,0,.45); --none:#6b737d; color-scheme:dark}
+html,body{height:100%}
+body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.45}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{height:100%;display:grid;grid-template-columns:288px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:12px;
+  padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.bar{grid-column:1/-1;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand h1{font-family:var(--f-head);font-weight:600;font-size:20px;margin:0;letter-spacing:.01em}
+.brand .sub{color:var(--muted);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--muted);background:var(--surface)}
+.chip .dot{width:7px;height:7px;border-radius:50%;background:var(--none)}
+.chip.ok .dot{background:var(--good)}
+.chip.warn .dot{background:var(--poor)}
+.spacer{flex:1}
+aside.side{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:auto;min-height:0}
+.side section{padding:14px 16px;border-bottom:1px solid var(--line)}
+.side section:last-child{border-bottom:0}
+.side h2{font-family:var(--f-head);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px}
+.levels{display:flex;flex-direction:column;gap:4px}
+.lvl{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid transparent;background:none;border-radius:5px;padding:6px 8px;cursor:pointer}
+.lvl:hover{background:var(--surface-2)}
+.lvl[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.lvl .nm{font-weight:500}
+.lvl .meta{display:block;font-size:12px;color:var(--muted)}
+.rate{display:inline-grid;place-items:center;min-width:24px;height:22px;padding:0 5px;border-radius:4px;font-family:var(--f-mono);font-weight:500;font-size:12px;color:#fff;background:var(--none)}
+.rate.good{background:var(--good)} .rate.fair{background:var(--fair);color:#1d1606} .rate.poor{background:var(--poor)} .rate.serious{background:var(--serious)}
+.rate.none{color:var(--fg);background:var(--surface-2);border:1px solid var(--line)}
+.checks{display:flex;flex-direction:column;gap:6px}
+.checks label{display:flex;align-items:center;gap:8px;cursor:pointer}
+.swatch{width:12px;height:12px;border-radius:2px;border:1px solid rgba(0,0,0,.15)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:6px 12px;cursor:pointer;font-size:13px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.find{display:flex;gap:6px}
+.find input{flex:1;min-width:0;border:1px solid var(--line);border-radius:5px;padding:6px 8px;background:var(--surface-2);font-family:var(--f-mono);font-size:13px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:5px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:500}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.dist{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--surface-2);margin-bottom:8px}
+.dist span{display:block;height:100%}
+.distkey{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;font-size:13px;align-items:center;font-variant-numeric:tabular-nums}
+.distkey .n{text-align:right;font-family:var(--f-mono);font-size:12px}
+.attn{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.attn button{width:100%;display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;text-align:left;border:0;background:none;padding:5px 6px;border-radius:4px;cursor:pointer}
+.attn button:hover{background:var(--surface-2)}
+.attn .id{font-family:var(--f-mono);font-size:12px}
+.attn .t{display:block;color:var(--muted);font-size:12px}
+.note{color:var(--muted);font-size:12px;margin:8px 0 0}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+main.view{position:relative;min-width:0;min-height:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--stage)}
+#stage{position:absolute;inset:0}
+#stage canvas{display:block;touch-action:none}
+.overlay{position:absolute;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ov-tl{top:12px;left:12px}
+.ov-bl{bottom:12px;left:12px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:8px 10px;font-size:12px;display:flex;gap:10px 14px;max-width:calc(100% - 24px)}
+.ov-bl span{display:inline-flex;align-items:center;gap:6px}
+.ov-hint{position:absolute;right:12px;bottom:12px;font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:4px 8px}
+.planlabel{font-family:var(--f-head);font-weight:600;font-size:15px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:4px 10px}
+#tip{position:absolute;pointer-events:none;background:var(--fg);color:var(--bg);font-family:var(--f-mono);font-size:12px;padding:3px 7px;border-radius:4px;white-space:nowrap;transform:translate(12px,12px)}
+/* details window */
+#panel{position:absolute;top:12px;right:12px;bottom:12px;width:min(430px,calc(100% - 24px));background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:0}
+.p-head{padding:14px 16px 12px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:4px 12px}
+.p-head .pid{font-family:var(--f-mono);font-size:17px;font-weight:500;margin:0;word-break:break-all}
+.p-head .ptype{color:var(--muted);font-size:13px;grid-column:1}
+.p-head .close{grid-row:1/3;grid-column:2;align-self:start;border:1px solid var(--line);background:var(--surface);border-radius:5px;width:32px;height:32px;cursor:pointer;font-size:18px;line-height:1}
+.p-body{overflow:auto;padding:0 16px 16px;min-height:0}
+.p-sec{padding-top:16px}
+.p-sec h3{font-family:var(--f-head);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cond{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:12px}
+.cond .big{grid-row:1/4;width:58px;height:58px;border-radius:6px;display:grid;place-items:center;font-family:var(--f-mono);font-size:30px;font-weight:500;color:#fff;background:var(--none)}
+.cond .big.fair{color:#1d1606}.cond .big.none{color:var(--fg);background:var(--surface);border:1px dashed var(--line);font-size:20px}
+.cond .big.good{background:var(--good)}.cond .big.fair{background:var(--fair)}.cond .big.poor{background:var(--poor)}.cond .big.serious{background:var(--serious)}
+.cond .lbl{font-weight:600;font-size:15px}
+.cond .when{color:var(--muted);font-size:12px}
+dl.props{display:grid;grid-template-columns:minmax(110px,auto) 1fr;gap:6px 14px;margin:0;font-size:13px}
+dl.props dt{color:var(--muted)} dl.props dd{margin:0;min-width:0}
+.mono{font-family:var(--f-mono);font-size:12.5px}
+.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.photos button{padding:0;border:1px solid var(--line);border-radius:4px;overflow:hidden;aspect-ratio:4/3;background:var(--surface-2);cursor:zoom-in;max-width:100%}
+.photos img{width:100%;height:100%;object-fit:cover;display:block}
+.empty{color:var(--muted);font-size:13px;margin:0;border:1px dashed var(--line);border-radius:5px;padding:10px}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.hist li{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;border:1px solid var(--line);border-radius:5px;padding:8px 10px}
+.hist .h1{font-weight:500}
+.hist .h2{color:var(--muted);font-size:12px}
+.hist .h3{grid-column:2;font-size:13px}
+.tag{display:inline-block;font-size:11px;border:1px solid var(--line);border-radius:3px;padding:0 5px;margin:2px 4px 0 0;color:var(--muted)}
+.tag.ex{border-color:var(--fair);color:var(--fg)}
+.trend{width:100%;height:70px;display:block}
+form.insp{display:flex;flex-direction:column;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:12px}
+form.insp label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+form.insp input,form.insp select,form.insp textarea{border:1px solid var(--line);border-radius:5px;padding:6px 8px;background:var(--surface);color:var(--fg);font-size:14px}
+form.insp textarea{min-height:64px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+fieldset{border:1px solid var(--line);border-radius:5px;margin:0;padding:8px 10px}
+legend{font-size:12px;color:var(--muted);padding:0 4px}
+.defects{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+.defects label{flex-direction:row!important;align-items:center;gap:6px!important;color:var(--fg)!important;font-size:13px!important}
+.err{color:var(--serious);font-size:13px;margin:0}
+.ok{color:var(--good);font-size:13px;margin:0}
+#lightbox{position:fixed;inset:0;background:rgba(8,12,16,.86);display:grid;place-items:center;z-index:50;padding:24px}
+#lightbox figure{margin:0;max-width:min(1100px,100%);display:flex;flex-direction:column;gap:8px}
+#lightbox img{max-height:78vh;object-fit:contain;border-radius:4px}
+#lightbox figcaption{color:#e8edf2;font-size:13px}
+#lightbox .btn{position:absolute;top:calc(16px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px))}
+#csvbox{position:fixed;inset:0;background:rgba(8,12,16,.6);display:grid;place-items:center;z-index:50;padding:24px}
+#csvbox .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;width:min(720px,100%);display:flex;flex-direction:column;gap:10px}
+#csvbox textarea{width:100%;height:50vh;font-family:var(--f-mono);font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:8px}
+@media (max-width:820px){
+  html,body{height:auto}
+  .app{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 62vh auto}
+  main.view{grid-row:2}
+  aside.side{grid-row:3;overflow:visible}
+  #panel{position:fixed;inset:auto 0 0 0;top:18vh;width:auto;border-radius:12px 12px 0 0;z-index:40;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .ov-hint{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand"><h1>Garage Asset Model</h1><span class="sub">Example precast garage · 300 ft × 300 ft · 5 framed levels</span></div>
+    <span class="chip warn" title="The garage layout and member sizes are an example, not a real structure">Example garage</span>
+    <div class="spacer"></div>
+    <span class="chip" id="sync"><span class="dot"></span><span id="syncText">Connecting…</span></span>
+  </header>
+
+  <aside class="side" aria-label="Filters">
+    <section>
+      <h2>Levels</h2>
+      <div class="levels" id="levels"></div>
+    </section>
+    <section>
+      <h2>Show</h2>
+      <div class="checks">
+        <label><input type="checkbox" id="shCOL" checked> <span class="swatch" style="background:#a69d8f"></span> Columns (encased WF)</label>
+        <label><input type="checkbox" id="shBEAM" checked> <span class="swatch" style="background:#8892a0"></span> Inverted tees &amp; spandrels</label>
+        <label><input type="checkbox" id="shDT" checked> <span class="swatch" style="background:#c8ccd2"></span> Double tees</label>
+      </div>
+    </section>
+    <section>
+      <h2>Color by</h2>
+      <div class="seg" role="group" aria-label="Color by">
+        <button type="button" id="cbType" aria-pressed="false">Member type</button>
+        <button type="button" id="cbCond" aria-pressed="true">NBI rating</button>
+      </div>
+    </section>
+    <section>
+      <h2>Find a component</h2>
+      <form class="find" id="findForm">
+        <input id="findInput" list="idlist" placeholder="L3-4-CD-IT" autocomplete="off" spellcheck="false" aria-label="Component ID">
+        <button class="btn" type="submit">Go</button>
+      </form>
+      <datalist id="idlist"></datalist>
+      <p class="note">IDs read Level – grid – member. <span class="mono">L3-4-CD-IT</span> is the inverted tee on Level 3, line 4, between C and D.</p>
+    </section>
+    <section>
+      <h2 id="sumTitle">Condition · all levels</h2>
+      <div class="dist" id="dist"></div>
+      <div class="distkey" id="distkey"></div>
+    </section>
+    <section>
+      <h2>Needs attention (NBI ≤ 4)</h2>
+      <ul class="attn" id="attn"></ul>
+    </section>
+    <section>
+      <h2>Records &amp; photos</h2>
+      <p class="note" style="margin-top:0">Inspections and photos are saved in this browser first, so the app works with no signal. With GitHub sync on, they are copied to your private projects repository: one file per inspection, and each photo as a JPEG in a folder named after its component ID.</p>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" type="button" id="syncNow" hidden>Sync now</button>
+        <button class="btn" type="button" id="exLoad">Load example inspections</button>
+        <button class="btn" type="button" id="exRemove" hidden>Remove example inspections</button>
+      </div>
+      <p class="note" id="syncHelp">GitHub sync is off in this browser. Turn it on once in any tool's <b>Saved projects… → Cloud sync (GitHub)…</b> (steps in <a href="../../docs/github-sync-setup.md" target="_blank">docs/github-sync-setup.md</a>), then reload this page. Example inspections stay in this browser and are never uploaded.</p>
+    </section>
+    <section>
+      <h2>Export for Excel</h2>
+      <div class="row">
+        <button class="btn" type="button" id="expComp">Components + ratings</button>
+        <button class="btn" type="button" id="expInsp">Inspection log</button>
+      </div>
+      <p class="note">CSV files open directly in Excel. Opens in Excel; a SharePoint workbook link can come later.</p>
+    </section>
+  </aside>
+
+  <main class="view" id="view">
+    <div id="stage" aria-label="3D model of the garage"></div>
+    <div class="overlay ov-tl">
+      <div class="seg" role="group" aria-label="View">
+        <button type="button" id="vm3d" aria-pressed="true">3D</button>
+        <button type="button" id="vmPlan" aria-pressed="false">Floor plan</button>
+      </div>
+      <button class="btn" type="button" id="resetView">Reset view</button>
+      <span class="planlabel" id="planLabel" hidden></span>
+    </div>
+    <div class="ov-bl" id="legend"></div>
+    <div class="ov-hint" id="hint">Click a member for details · drag to orbit · right-drag to pan · scroll to zoom</div>
+    <div id="tip" hidden></div>
+
+    <section id="panel" hidden aria-label="Component details">
+      <div class="p-head">
+        <p class="pid" id="pId"></p>
+        <button class="close" type="button" id="pClose" aria-label="Close details">×</button>
+        <span class="ptype" id="pType"></span>
+      </div>
+      <div class="p-body" id="pBody"></div>
+    </section>
+  </main>
+</div>
+
+<div id="lightbox" hidden>
+  <button class="btn" type="button" id="lbClose">Close</button>
+  <figure><img id="lbImg" alt=""><figcaption id="lbCap"></figcaption></figure>
+</div>
+<div id="csvbox" hidden>
+  <div class="card">
+    <strong id="csvTitle">CSV</strong>
+    <p class="note" style="margin:0">Downloads aren't available in this view. Copy the text below and paste it into Excel or save it as a .csv file.</p>
+    <textarea id="csvText" readonly></textarea>
+    <div class="row"><button class="btn primary" type="button" id="csvCopy">Copy</button><button class="btn" type="button" id="csvClose">Close</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="../../shared/github-sync.js"></script>
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const el=(tag,props,...kids)=>{const e=document.createElement(tag);if(props)for(const k in props){if(k==="class")e.className=props[k];else if(k==="text")e.textContent=props[k];else if(k.startsWith("on"))e.addEventListener(k.slice(2),props[k]);else e.setAttribute(k,props[k]);}for(const c of kids){if(c!=null)e.append(c);}return e;};
+
+/* ---------------- Garage definition (example geometry) ---------------- */
+const XN=["1","2","3","4","5","6"], XL=[0,60,120,180,240,300];          // double tee span direction, 60 ft bays
+const ZN=["A","B","C","D","E","F","G","H","J","K","L"], ZL=ZN.map((_,i)=>i*30); // girder span direction, 30 ft bays
+const FTF=10.5;                                     // floor to floor, ft
+const elev=n=>(n-1)*FTF;
+const LEVELS=[1,2,3,4,5,6].map(n=>({n,name:n===6?"Level 6 (Roof)":"Level "+n,elev:elev(n),
+  note:n===1?"Slab on grade · columns only":n===6?"Roof deck · no columns above":"Deck + columns above"}));
+const GIRDER_D=3.0, DT_D=2.5;
+const TYPES={
+  COL:{name:"Column — concrete-encased WF",group:"COL"},
+  IT:{name:"Inverted tee girder",group:"BEAM"},
+  SP:{name:"L-shaped spandrel beam",group:"BEAM"},
+  DT:{name:"Double tee",group:"DT"}
+};
+const comps=[], byId=new Map();
+function add(c){comps.push(c);byId.set(c.id,c);}
+for(let n=1;n<=5;n++){
+  for(let xi=0;xi<6;xi++)for(let zi=0;zi<11;zi++){
+    const ext=(xi===0||xi===5||zi===0||zi===10);
+    add({id:`L${n}-${ZN[zi]}${XN[xi]}-COL`,type:"COL",level:n,x:XL[xi],z:ZL[zi],
+      grid:`${ZN[zi]}-${XN[xi]}`,y0:elev(n),y1:elev(n+1)-GIRDER_D,
+      props:[["Location",`Level ${n}, grid ${ZN[zi]}-${XN[xi]}${ext?" (perimeter)":" (interior)"}`],
+        ["Steel core",n<=2?"W14×90":"W14×68"],["Encasement","24 in × 24 in, f′c = 5,000 psi"],
+        ["Clear height",`${(FTF-GIRDER_D).toFixed(1)} ft (Level ${n} to underside of Level ${n+1} girder)`],
+        ["Supports",`Level ${n+1} girders at line ${XN[xi]}`]]});
+  }
+}
+for(let n=2;n<=6;n++){
+  for(let xi=0;xi<6;xi++)for(let zi=0;zi<10;zi++){
+    const t=(xi===0||xi===5)?"SP":"IT";
+    add({id:`L${n}-${XN[xi]}-${ZN[zi]}${ZN[zi+1]}-${t}`,type:t,level:n,x:XL[xi],z:ZL[zi]+15,flip:xi===5,
+      grid:`Line ${XN[xi]}, ${ZN[zi]} to ${ZN[zi+1]}`,
+      props:[["Location",`Level ${n}, line ${XN[xi]}, between ${ZN[zi]} and ${ZN[zi+1]}`],
+        ["Section",t==="IT"?"28IT36 precast prestressed inverted tee":"8 in L-spandrel, 78 in tall (42 in above deck)"],
+        ["Span","30 ft, bears on column tops"],["Concrete","f′c = 6,000 psi"],
+        ["Carries",t==="IT"?`Double tees from bays ${XN[xi-1]}–${XN[xi]} and ${XN[xi]}–${XN[xi+1]}`:`Double tees from bay ${xi===0?"1–2":"5–6"}`]]});
+  }
+  for(let b=0;b<5;b++)for(let k=0;k<25;k++){
+    const e0=b===0?0.42:0.75, e1=b===4?0.42:0.75;
+    const x0=XL[b]+e0, x1=XL[b+1]-e1;
+    const z=6+12*k, zi=Math.floor(z/30);
+    add({id:`L${n}-${XN[b]}${XN[b+1]}-DT${String(k+1).padStart(2,"0")}`,type:"DT",level:n,x:(x0+x1)/2,z,len:x1-x0,
+      grid:`Bay ${XN[b]}–${XN[b+1]}, tee ${k+1} of 25 from line A`,
+      props:[["Location",`Level ${n}, bay ${XN[b]}–${XN[b+1]}, tee ${k+1} of 25 counting from line A (near ${ZN[zi]}–${ZN[Math.min(zi+1,10)]})`],
+        ["Section","12DT30 pretopped, 12 ft wide × 30 in deep, 4 in flange"],
+        ["Span",`${(x1-x0).toFixed(1)} ft, line ${XN[b]} to line ${XN[b+1]}`],["Concrete","f′c = 6,000 psi, prestressed strand"],
+        ["Bears on",`${b===0?"Spandrel":"Inverted tee"} at line ${XN[b]}, ${b===4?"spandrel":"inverted tee"} at line ${XN[b+1]}`]]});
+  }
+}
+
+/* ---------------- NBI scale ---------------- */
+const NBI={9:["Excellent","Excellent condition"],8:["Very good","No problems noted"],7:["Good","Some minor problems"],
+  6:["Satisfactory","Structural elements show some minor deterioration"],5:["Fair","Primary elements sound; minor section loss, cracking, spalling or scour"],
+  4:["Poor","Advanced section loss, deterioration, spalling or scour"],3:["Serious","Loss of section or deterioration has seriously affected primary members; local failures possible"],
+  2:["Critical","Advanced deterioration; may need to close until corrective action is taken"],1:["Imminent failure","Major deterioration or section loss; closed, but corrective action may restore light service"],
+  0:["Failed","Out of service, beyond corrective action"]};
+const cat=r=>r==null?"none":r>=7?"good":r>=5?"fair":r===4?"poor":"serious";
+const CAT_LABEL={good:"Good (7–9)",fair:"Fair (5–6)",poor:"Poor (4)",serious:"Serious or worse (0–3)",none:"Not inspected"};
+const CAT_HEX={good:0x3d8c58,fair:0xc99a1e,poor:0xd6702a,serious:0xc23b34};
+const TYPE_HEX={COL:0xa69d8f,IT:0x8892a0,SP:0x7d8896,DT:0xc8ccd2};
+const PALE_HEX={COL:0xbdb7ad,IT:0xc3c8cf,SP:0xc3c8cf,DT:0xe0e2e5};
+const DEFECTS_COMMON=["Cracking","Spalling","Delamination","Exposed reinforcement","Corrosion staining","Efflorescence / leaching"];
+const DEFECTS={COL:["Rust staining from steel core","Encasement cracking at base","Vehicle impact damage","Bearing / corbel distress"],
+  IT:["Ledge cracking","Bearing pad distress","Dapped end cracking","Stem cracking"],
+  SP:["Ledge cracking","Bearing pad distress","Connection corrosion","Barrier cable anchor damage"],
+  DT:["Flange connector failure","Joint sealant failure","Exposed strand","Stem cracking at bearing","Topping wear / ponding"]};
+const ACTIONS=["None","Monitor","Routine maintenance","Repair within 1–2 years","Priority repair","Immediate action (shore / restrict)"];
+
+/* ---------------- Data: this browser (IndexedDB) + optional GitHub sync ----------------
+   Working copy: IndexedDB "garageAsset.v1" (stores inspections, photos, blobs). Works offline and from file://.
+   Sync (optional): the same Cloud sync settings as the other tools (bridgeSuite.v1.githubSync, set up once per browser in any
+   tool's Saved projects → Cloud sync (GitHub)…; read here, never written). Files in the PRIVATE projects repository:
+     garage-assets/<project>/inspections/<inspection id>.json      one file per inspection (append-only: never edited, so no conflicts)
+     garage-assets/<project>/photos/<component id>/<photo id>.jpg  the photo (resized to 2400 px max, JPEG)
+     garage-assets/<project>/photos/<component id>/<photo id>.json caption, date, component, inspection
+   Example records ("Load example inspections") stay in this browser and are never uploaded. */
+const PROJECT="example-garage", ROOT="garage-assets/"+PROJECT;
+let inspections=[], photos=[];
+const latest=new Map();
+const blobUrls=new Map();
+let idb=null;
+function idbOpen(){return new Promise((res,rej)=>{
+  if(!window.indexedDB)return rej(new Error("no indexedDB"));
+  const r=indexedDB.open("garageAsset.v1",1);
+  r.onupgradeneeded=()=>{const d=r.result;["inspections","photos","blobs"].forEach(n=>{if(!d.objectStoreNames.contains(n))d.createObjectStore(n,{keyPath:"id"});});};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function idbAll(store){return new Promise((res)=>{if(!idb)return res([]);const q=idb.transaction(store).objectStore(store).getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);});}
+function idbGet(store,id){return new Promise((res)=>{if(!idb)return res(null);const q=idb.transaction(store).objectStore(store).get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}
+function idbPut(store,v){return new Promise((res,rej)=>{if(!idb)return res(false);const t=idb.transaction(store,"readwrite");t.objectStore(store).put(v);t.oncomplete=()=>res(true);t.onerror=()=>rej(t.error);});}
+function idbDel(store,id){return new Promise((res)=>{if(!idb)return res(false);const t=idb.transaction(store,"readwrite");t.objectStore(store).delete(id);t.oncomplete=()=>res(true);t.onerror=()=>res(false);});}
+const newId=p=>p+"-"+new Date().toISOString().replace(/\D/g,"").slice(0,14)+"-"+Math.random().toString(36).slice(2,8);
+function recompute(){
+  latest.clear();
+  for(const i of inspections){
+    if(!byId.has(i.componentId)||typeof i.rating!=="number")continue;
+    const p=latest.get(i.componentId);
+    if(!p||String(i.date)>String(p.date)||(i.date===p.date&&String(i.createdAt||"")>String(p.createdAt||"")))latest.set(i.componentId,i);
+  }
+  refreshAll();
+}
+function setSync(state,text){const s=$("sync");s.className="chip "+(state||"");$("syncText").textContent=text;}
+async function loadLocal(){inspections=await idbAll("inspections");photos=await idbAll("photos");recompute();}
+async function saveInspection(doc){doc.id=newId("insp");doc.synced=false;await idbPut("inspections",doc);inspections.push(doc);recompute();scheduleSync();return doc.id;}
+async function savePhoto(meta,blob){meta.id=newId("photo");meta.synced=false;meta.hasBlob=true;await idbPut("blobs",{id:meta.id,blob});await idbPut("photos",meta);photos.push(meta);return meta.id;}
+
+/* --- GitHub --- */
+const GH=window.SharedGitHubSync||null;
+function ghSettings(){try{return GH?GH.settings(localStorage):null;}catch(e){return null;}}
+function ghOn(){const s=ghSettings();return !!(s&&GH.configured(s));}
+function ghHeaders(s,accept,json){const h={Accept:accept||"application/vnd.github+json",Authorization:"Bearer "+s.token,"X-GitHub-Api-Version":"2022-11-28"};if(json)h["Content-Type"]="application/json";return h;}
+const ghUrl=(s,path)=>`https://api.github.com/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${path.split("/").map(encodeURIComponent).join("/")}`;
+async function blobB64(blob){const b=new Uint8Array(await blob.arrayBuffer());let s="";for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s);}
+async function ghPutBinary(s,path,blob,message){ // the shared client's put() sends text only, so photos use this
+  const r=await fetch(ghUrl(s,path),{method:"PUT",headers:ghHeaders(s,null,true),body:JSON.stringify({message,content:await blobB64(blob),branch:s.branch||"main"}),cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer",mode:"cors"});
+  if(r.ok||r.status===422)return {ok:true}; // 422 = the file already exists (ids are unique, so it is this photo)
+  return {ok:false,status:r.status,message:r.status===401?"GitHub refused the token.":"GitHub answered "+r.status+"."};
+}
+async function ghGetBinary(s,path){
+  const r=await fetch(ghUrl(s,path)+"?ref="+encodeURIComponent(s.branch||"main"),{headers:ghHeaders(s,"application/vnd.github.raw+json"),cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer",mode:"cors"});
+  return r.ok?await r.blob():null;
+}
+const cleanStr=(v,n)=>String(v==null?"":v).slice(0,n);
+function cleanInspection(j,id){
+  if(!j||typeof j!=="object"||!byId.has(j.componentId))return null;
+  const r=Number(j.rating);if(!Number.isInteger(r)||r<0||r>9)return null;
+  return {id,componentId:j.componentId,level:byId.get(j.componentId).level,type:byId.get(j.componentId).type,date:cleanStr(j.date,10),inspector:cleanStr(j.inspector,80),rating:r,
+    defects:Array.isArray(j.defects)?j.defects.slice(0,30).map(d=>cleanStr(d,80)):[],notes:cleanStr(j.notes,2000),action:cleanStr(j.action,80),createdAt:cleanStr(j.createdAt,30),device:cleanStr(j.device,40),synced:true};
+}
+const fileOf=o=>{const c=Object.assign({},o);delete c.synced;delete c.hasBlob;delete c.example;return JSON.stringify(c,null,2)+"\n";};
+let syncing=false, syncTimer=null, lastSync=null;
+function scheduleSync(){clearTimeout(syncTimer);if(ghOn())syncTimer=setTimeout(syncNow,1500);}
+async function syncNow(){
+  if(syncing)return;const s=ghSettings();
+  if(!ghOn()){showSyncState();return;}
+  syncing=true;setSync("","Syncing with GitHub…");
+  const c=GH.client(s,fetch.bind(window));let err=null,up=0,down=0;
+  try{
+    // 1. upload what this browser has that GitHub does not
+    for(const i of inspections.filter(x=>!x.synced&&!x.example)){
+      const r=await c.put(`${ROOT}/inspections/${i.id}.json`,fileOf(Object.assign({},i,{device:s.device||""})),null,`Garage inspection ${i.componentId} ${i.date}`);
+      if(r.ok||r.kind==="conflict"){i.synced=true;await idbPut("inspections",i);up++;}else{err=r.message;break;}
+    }
+    if(!err)for(const p of photos.filter(x=>!x.synced&&!x.example)){
+      const b=await idbGet("blobs",p.id);if(!b)continue;
+      const base=`${ROOT}/photos/${p.componentId}/${p.id}`;
+      let r=await ghPutBinary(s,base+".jpg",b.blob,`Garage photo ${p.componentId}`);
+      if(r.ok)r=await c.put(base+".json",fileOf(p),null,`Garage photo ${p.componentId} (details)`);
+      if(r.ok||r.kind==="conflict"){p.synced=true;await idbPut("photos",p);up++;}else{err=r.message;break;}
+    }
+    // 2. download what other devices added
+    if(!err){
+      const t=await c.tree(ROOT);
+      if(!t.ok)err=t.message;
+      else{
+        const haveI=new Set(inspections.map(i=>i.id)),haveP=new Set(photos.map(p=>p.id));
+        for(const [path] of t.files){
+          let m=path.match(/\/inspections\/([A-Za-z0-9-]{1,80})\.json$/);
+          if(m&&!haveI.has(m[1])){const r=await c.raw(path);if(r.ok){let j=null;try{j=JSON.parse(r.text);}catch(e){}const v=cleanInspection(j,m[1]);if(v){await idbPut("inspections",v);inspections.push(v);down++;}}continue;}
+          m=path.match(/\/photos\/([A-Z0-9-]{1,40})\/([A-Za-z0-9-]{1,80})\.json$/);
+          if(m&&!haveP.has(m[2])&&byId.has(m[1])&&t.files.has(path.replace(/\.json$/,".jpg"))){const r=await c.raw(path);if(r.ok){let j={};try{j=JSON.parse(r.text)||{};}catch(e){}
+            const v={id:m[2],componentId:m[1],inspectionId:cleanStr(j.inspectionId,80)||null,caption:cleanStr(j.caption,200),date:cleanStr(j.date,10),createdAt:cleanStr(j.createdAt,30),synced:true,hasBlob:false};
+            await idbPut("photos",v);photos.push(v);down++;}}
+        }
+      }
+    }
+  }catch(e){err="GitHub could not be reached.";}
+  syncing=false;lastSync=new Date();
+  if(err)setSync("warn","Sync problem: "+err+" Records are kept here and sent later.");else showSyncState(up,down);
+  if(up||down)recompute();
+}
+function showSyncState(up,down){
+  if(!idb){setSync("warn","Browser storage unavailable · records are lost when the page closes");return;}
+  if(!ghOn()){setSync("warn","Saved in this browser only · GitHub sync off");return;}
+  const s=ghSettings(),pend=inspections.filter(i=>!i.synced&&!i.example).length+photos.filter(p=>!p.synced&&!p.example).length;
+  setSync(pend?"warn":"ok",`GitHub ${s.owner}/${s.repo}`+(pend?` · ${pend} waiting to upload`:` · synced ${lastSync?lastSync.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}):""}`)+(up||down?` (${up} sent, ${down} received)`:""));
+}
+async function photoBlobUrl(p){
+  if(blobUrls.has(p.id))return blobUrls.get(p.id);
+  let b=await idbGet("blobs",p.id);
+  if(!b&&ghOn()){const blob=await ghGetBinary(ghSettings(),`${ROOT}/photos/${p.componentId}/${p.id}.jpg`);if(blob){b={id:p.id,blob};await idbPut("blobs",b);}}
+  if(!b)return "";const u=URL.createObjectURL(b.blob);blobUrls.set(p.id,u);return u;
+}
+async function initData(){
+  try{idb=await idbOpen();}catch(e){idb=null;}
+  await loadLocal();showSyncState();
+  if(ghOn()){syncNow();setInterval(()=>{if(document.visibilityState==="visible")syncNow();},120000);}
+}
+
+/* ---------------- Example inspections (this browser only, never uploaded) ---------------- */
+function exampleRecords(){
+  let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+  const out=[];let n=0;
+  const add=(id,date,rating,defects,notes)=>{const c=byId.get(id);if(!c)return;
+    out.push({id:"ex-"+String(++n).padStart(3,"0"),componentId:id,type:c.type,level:c.level,date,inspector:"Example inspector",rating,defects,notes,
+      action:rating>=7?"None":rating==6?"Monitor":rating==5?"Routine maintenance":rating==4?"Repair within 1–2 years":"Priority repair",example:true,synced:false,createdAt:date+"T15:00:00Z"});};
+  let hist=0;
+  for(let xi=0;xi<6;xi++)for(let zi=0;zi<10;zi++){
+    if((xi*10+zi)%10===9)continue;
+    const t=(xi===0||xi===5)?"SP":"IT";const id=`L6-${XN[xi]}-${ZN[zi]}${ZN[zi+1]}-${t}`;
+    let r=rnd()<0.55?6:rnd()<0.6?5:7,d=[],note="";
+    if(t==="IT"&&(zi===4||zi===5)&&(xi===2||xi===3)){r=xi===3&&zi===5?3:4;d=["Ledge cracking","Corrosion staining","Spalling"];
+      note=r===3?"Ledge spall 3 ft long with exposed, corroded reinforcement under DT stem bearing. Drain nearby is clogged; ponding over joint.":"Diagonal ledge cracks up to 0.03 in at two DT bearings; rust staining from joint leakage above.";}
+    else if(r===5){d=t==="SP"?["Cracking","Connection corrosion"]:["Cracking","Efflorescence / leaching"];note=t==="SP"?"Hairline vertical cracks at 4–6 ft spacing; surface rust on DT-to-spandrel weld plate.":"Map cracking on ledge with light efflorescence at joint below.";}
+    else if(r===6){d=["Cracking"];note="Hairline cracks, no staining.";}
+    else note="No significant defects.";
+    add(id,"2024-10-16",r,d,note);
+    if(hist<18&&(r<=5||rnd()<0.15)){hist++;const r0=Math.min(7,r+1+(r<=4?1:0));add(id,"2021-09-22",r0,r0>=7?[]:["Cracking"],r0>=7?"No significant defects.":"Hairline cracking at ledge.");}
+  }
+  [["23",9,6],["23",10,5],["34",12,4],["34",13,4],["34",14,5],["45",3,6],["12",20,7],["56",7,6],["23",22,5],["45",18,6],["12",1,7],["56",25,6],["34",11,5],["45",4,7]].forEach(([b,k,r])=>{
+    const d=r<=4?["Flange connector failure","Joint sealant failure","Spalling"]:r===5?["Joint sealant failure","Cracking"]:r===6?["Topping wear / ponding"]:[];
+    add(`L6-${b}-DT${String(k).padStart(2,"0")}`,"2024-10-17",r,d,r<=4?"Two broken flange connectors; sealant missing full length of joint; flange spall 8 in × 12 in at connector.":r===5?"Sealant debonded along about 40% of joint; hairline flange cracks.":r===6?"Ponding near drain, worn traffic coating.":"No significant defects.");});
+  [["L1-A3-COL",5,["Vehicle impact damage","Spalling"],"Corner spall at bumper height, 6 in × 10 in, no steel exposed."],
+   ["L1-L4-COL",4,["Vehicle impact damage","Spalling","Exposed reinforcement"],"Impact spall exposing ties and WF flange tip at 2 ft above slab."],
+   ["L1-C1-COL",6,["Cracking"],"Hairline vertical crack in encasement."],
+   ["L1-F1-COL",5,["Rust staining from steel core","Cracking"],"Rust staining at base; encasement cracked along WF flange line, 2 ft long."],
+   ["L1-F6-COL",7,[],"No significant defects."],["L2-D3-COL",6,["Encasement cracking at base"],"Hairline cracks at base from deck drainage."],
+   ["L2-G4-COL",5,["Rust staining from steel core","Delamination"],"Delamination by sounding at base, about 1 sq ft."],
+   ["L2-A2-COL",7,[],"No significant defects."],["L2-L5-COL",6,["Vehicle impact damage"],"Scrape marks, minor surface loss."],
+   ["L3-E3-COL",7,[],"No significant defects."]].forEach(([id,r,d,n])=>add(id,"2024-10-18",r,d,n));
+  return out;
+}
+async function loadExamples(){
+  for(const e of exampleRecords()){if(!inspections.some(i=>i.id===e.id)){await idbPut("inspections",e);inspections.push(e);}}
+  recompute();renderStorage();
+}
+async function removeExamples(){
+  for(const e of inspections.filter(i=>i.example))await idbDel("inspections",e.id);
+  inspections=inspections.filter(i=>!i.example);recompute();renderStorage();
+}
+function renderStorage(){
+  const has=inspections.some(i=>i.example);
+  $("exLoad").hidden=has;$("exRemove").hidden=!has;
+  $("syncNow").hidden=!ghOn();$("syncHelp").hidden=ghOn();
+}
+
+/* ---------------- Three.js scene ---------------- */
+const stage=$("stage");
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+stage.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff,0x8a8f96,0.85));
+const sun=new THREE.DirectionalLight(0xffffff,0.55);sun.position.set(-200,400,150);scene.add(sun);
+const CENTER=new THREE.Vector3(150,26,150);
+const persp=new THREE.PerspectiveCamera(40,1,1,4000);
+persp.position.set(-235,250,560);
+const ortho=new THREE.OrthographicCamera(-200,200,200,-200,1,2000);
+ortho.position.set(150,600,150);ortho.up.set(0,0,-1);ortho.lookAt(150,0,150);
+const ctl3=new THREE.OrbitControls(persp,renderer.domElement);
+ctl3.target.copy(CENTER);ctl3.enableDamping=false;ctl3.maxPolarAngle=Math.PI*0.495;ctl3.update();
+const ctlP=new THREE.OrbitControls(ortho,renderer.domElement);
+ctlP.enableRotate=false;ctlP.screenSpacePanning=true;ctlP.target.set(150,0,150);ctlP.enabled=false;
+ctlP.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};
+ctlP.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_PAN};ctlP.update();
+let camera=persp;
+let needs=true;const req=()=>{needs=true;};
+ctl3.addEventListener("change",req);ctlP.addEventListener("change",req);
+
+function boxesGeo(boxes){
+  const pos=[],nor=[];
+  for(const b of boxes){
+    const g=new THREE.BoxGeometry(b[1]-b[0],b[3]-b[2],b[5]-b[4]).toNonIndexed();
+    g.translate((b[0]+b[1])/2,(b[2]+b[3])/2,(b[4]+b[5])/2);
+    pos.push(...g.attributes.position.array);nor.push(...g.attributes.normal.array);g.dispose();
+  }
+  const out=new THREE.BufferGeometry();
+  out.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));
+  out.setAttribute("normal",new THREE.Float32BufferAttribute(nor,3));
+  out.computeBoundingBox();out.computeBoundingSphere();return out;
+}
+const geoCache=new Map();
+function geoFor(c){
+  let key=c.type+(c.type==="DT"?c.len.toFixed(2):"");
+  if(geoCache.has(key))return geoCache.get(key);
+  let g;
+  if(c.type==="COL"){const h=c.y1-c.y0;g=boxesGeo([[-1,1,0,h,-1,1]]);}
+  else if(c.type==="IT"){const L=14.95;g=boxesGeo([[-0.667,0.667,-GIRDER_D,0,-L,L],[-1.167,-0.667,-GIRDER_D,-DT_D,-L,L],[0.667,1.167,-GIRDER_D,-DT_D,-L,L]]);}
+  else if(c.type==="SP"){const L=14.95;g=boxesGeo([[-0.333,0.333,-GIRDER_D,3.5,-L,L],[0.333,0.833,-GIRDER_D,-DT_D,-L,L]]);}
+  else{const L=c.len/2,W=5.96;g=boxesGeo([[-L,L,-0.333,0,-W,W],[-L,L,-DT_D,-0.333,-3.33,-2.67],[-L,L,-DT_D,-0.333,2.67,3.33]]);}
+  const edges=new THREE.EdgesGeometry(g,20);
+  const v={g,edges};geoCache.set(key,v);return v;
+}
+const matCache=new Map();
+function mat(hex){if(!matCache.has(hex))matCache.set(hex,new THREE.MeshLambertMaterial({color:hex}));return matCache.get(hex);}
+const ghostMat=new THREE.MeshBasicMaterial({color:0x8d96a1,transparent:true,opacity:0.07,depthWrite:false});
+const selMat=new THREE.MeshLambertMaterial({color:0x2f7de1,emissive:0x0d2d5c});
+const lineMat=new THREE.LineBasicMaterial({color:0x2a3038,transparent:true,opacity:0.35});
+const meshes=new Map();
+const root=new THREE.Group();scene.add(root);
+for(const c of comps){
+  const {g,edges}=geoFor(c);
+  const m=new THREE.Mesh(g,mat(TYPE_HEX[c.type]));
+  if(c.type==="COL")m.position.set(c.x,c.y0,c.z);
+  else{m.position.set(c.x,elev(c.level),c.z);if(c.flip)m.rotation.y=Math.PI;}
+  m.userData.id=c.id;
+  const ln=new THREE.LineSegments(edges,lineMat);m.add(ln);m.userData.line=ln;
+  root.add(m);meshes.set(c.id,m);
+}
+// ground slab
+const slab=new THREE.Mesh(new THREE.BoxGeometry(312,0.5,312),new THREE.MeshLambertMaterial({color:0xb7b4ac}));
+slab.position.set(150,-0.26,150);scene.add(slab);
+// grid bubbles
+const bubbles=new THREE.Group();scene.add(bubbles);
+function bubbleTex(txt,fg,bg){
+  const cv=document.createElement("canvas");cv.width=cv.height=128;const x=cv.getContext("2d");
+  x.fillStyle=bg;x.beginPath();x.arc(64,64,56,0,Math.PI*2);x.fill();
+  x.lineWidth=6;x.strokeStyle=fg;x.stroke();x.fillStyle=fg;x.font="600 60px 'IBM Plex Sans', system-ui, sans-serif";
+  x.textAlign="center";x.textBaseline="middle";x.fillText(txt,64,68);
+  const t=new THREE.CanvasTexture(cv);return t;
+}
+function buildBubbles(){
+  bubbles.children.slice().forEach(s=>{s.material.map.dispose();s.material.dispose();bubbles.remove(s);});
+  const cs=getComputedStyle(document.documentElement);
+  const fg=cs.getPropertyValue("--fg").trim()||"#1b232d", bg=cs.getPropertyValue("--surface").trim()||"#fff";
+  const mk=(t,x,z)=>{const s=new THREE.Sprite(new THREE.SpriteMaterial({map:bubbleTex(t,fg,bg),depthTest:false}));s.position.set(x,0,z);s.scale.set(11,11,1);s.renderOrder=5;bubbles.add(s);};
+  XN.forEach((t,i)=>{mk(t,XL[i],-16);mk(t,XL[i],316);});
+  ZN.forEach((t,i)=>{mk(t,-16,ZL[i]);mk(t,316,ZL[i]);});
+}
+
+/* ---------------- View state ---------------- */
+let level="all", mode="3d", colorBy="cond", selected=null;
+const show={COL:true,BEAM:true,DT:true};
+let pickables=[];
+function inScope(c){return level==="all"||c.level===level;}
+function applyStyle(){
+  pickables=[];
+  for(const c of comps){
+    const m=meshes.get(c.id);
+    const on=show[TYPES[c.type].group];
+    const inL=inScope(c);
+    if(!on||(mode==="plan"&&!inL)){m.visible=false;continue;}
+    m.visible=true;
+    if(!inL){m.material=ghostMat;m.userData.line.visible=false;continue;}
+    m.userData.line.visible=true;
+    if(c.id===selected)m.material=selMat;
+    else if(colorBy==="type")m.material=mat(TYPE_HEX[c.type]);
+    else{const l=latest.get(c.id);m.material=l?mat(CAT_HEX[cat(l.rating)]):mat(PALE_HEX[c.type]);}
+    pickables.push(m);
+  }
+  const by=level==="all"?0:elev(level);
+  bubbles.children.forEach(s=>s.position.y=mode==="plan"?by+4:0.5);
+  bubbles.visible=(mode==="plan"||level==="all"||level===1)||true;
+  slab.visible=(mode!=="plan"||level===1);
+  req();
+}
+function resize(){
+  const w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;
+  renderer.setSize(w,h,false);renderer.domElement.style.width=w+"px";renderer.domElement.style.height=h+"px";
+  persp.aspect=w/h;persp.updateProjectionMatrix();
+  const half=196, a=w/h;
+  if(a>=1){ortho.left=-half*a;ortho.right=half*a;ortho.top=half;ortho.bottom=-half;}
+  else{ortho.left=-half;ortho.right=half;ortho.top=half/a;ortho.bottom=-half/a;}
+  ortho.updateProjectionMatrix();req();
+}
+new ResizeObserver(resize).observe(stage);
+function themeBg(){
+  const cs=getComputedStyle(document.documentElement);
+  renderer.setClearColor(new THREE.Color(cs.getPropertyValue("--stage").trim()||"#dde1e6"));
+  buildBubbles();applyStyle();
+}
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",themeBg);
+new MutationObserver(themeBg).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+
+let anim=null;
+function flyTo(target,dist){
+  if(mode==="plan"){
+    const t0=ctlP.target.clone(),t1=new THREE.Vector3(target.x,0,target.z);
+    anim={t:0,step(k){const p=t0.clone().lerp(t1,k);ctlP.target.copy(p);ortho.position.set(p.x,600,p.z);ctlP.update();}};
+  }else{
+    const t0=ctl3.target.clone(),p0=persp.position.clone();
+    const off=p0.clone().sub(t0);if(dist)off.setLength(dist);
+    const t1=target.clone(),p1=t1.clone().add(off);
+    anim={t:0,step(k){ctl3.target.copy(t0.clone().lerp(t1,k));persp.position.copy(p0.clone().lerp(p1,k));ctl3.update();}};
+  }
+}
+function loop(){
+  requestAnimationFrame(loop);
+  if(anim){anim.t=Math.min(1,anim.t+0.06);const k=1-Math.pow(1-anim.t,3);anim.step(k);if(anim.t>=1)anim=null;needs=true;}
+  if(needs){needs=false;renderer.render(scene,camera);}
+}
+
+function setMode(m){
+  mode=m;
+  $("vm3d").setAttribute("aria-pressed",m==="3d");$("vmPlan").setAttribute("aria-pressed",m==="plan");
+  if(m==="plan"&&level==="all")level=2;
+  camera=m==="plan"?ortho:persp;ctl3.enabled=m!=="plan";ctlP.enabled=m==="plan";
+  $("hint").textContent=m==="plan"?"Click a member for details · drag to pan · scroll to zoom":"Click a member for details · drag to orbit · right-drag to pan · scroll to zoom";
+  refreshAll();
+}
+function resetView(){
+  anim=null;
+  if(mode==="plan"){ctlP.target.set(150,0,150);ortho.position.set(150,600,150);ortho.zoom=1;ortho.updateProjectionMatrix();ctlP.update();}
+  else{const y=level==="all"?26:elev(level)+4;ctl3.target.set(150,y,150);persp.position.set(-235,y+225,560);ctl3.update();}
+  req();
+}
+
+/* ---------------- Picking ---------------- */
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
+function pick(ev){
+  const r=renderer.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX-r.left)/r.width)*2-1,-((ev.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  const hit=ray.intersectObjects(pickables,false)[0];
+  return hit?hit.object.userData.id:null;
+}
+let down=null;
+renderer.domElement.addEventListener("pointerdown",e=>{down={x:e.clientX,y:e.clientY};});
+renderer.domElement.addEventListener("pointerup",e=>{
+  if(!down)return;const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);down=null;
+  if(moved>5)return;const id=pick(e);if(id)select(id);else closePanel();
+});
+let hoverQ=null;
+renderer.domElement.addEventListener("pointermove",e=>{
+  if(e.pointerType!=="mouse")return;
+  if(hoverQ)return;hoverQ=requestAnimationFrame(()=>{hoverQ=null;
+    const id=down?null:pick(e);const tip=$("tip");
+    if(!id){tip.hidden=true;renderer.domElement.style.cursor="";return;}
+    const l=latest.get(id);
+    tip.textContent=id+(l?`  ·  NBI ${l.rating}`:"  ·  not inspected");
+    const r=stage.getBoundingClientRect();tip.style.left=(e.clientX-r.left)+"px";tip.style.top=(e.clientY-r.top)+"px";tip.hidden=false;
+    renderer.domElement.style.cursor="pointer";
+  });
+});
+renderer.domElement.addEventListener("pointerleave",()=>{$("tip").hidden=true;});
+
+/* ---------------- Sidebar ---------------- */
+function rateChip(r){return el("span",{class:"rate "+cat(r),text:r==null?"–":String(r),title:r==null?"Not inspected":`NBI ${r} · ${NBI[r][0]}`});}
+function renderLevels(){
+  const box=$("levels");box.textContent="";
+  const mk=(key,name,meta,low)=>{
+    const b=el("button",{type:"button",class:"lvl","aria-pressed":String(level===key)},
+      el("span",null,el("span",{class:"nm",text:name}),el("span",{class:"meta",text:meta})),low);
+    b.addEventListener("click",()=>{level=key;if(selected&&key!=="all"&&byId.get(selected).level!==key)closePanel();if(mode==="plan"&&key==="all")setMode("3d");else{refreshAll();resetView();}});
+    box.append(b);
+  };
+  if(mode!=="plan")mk("all","All levels",`${comps.length} components`,el("span"));
+  for(const L of LEVELS.slice().reverse()){
+    const cs=comps.filter(c=>c.level===L.n);let low=null,insp=0;
+    for(const c of cs){const l=latest.get(c.id);if(l){insp++;if(low==null||l.rating<low)low=l.rating;}}
+    mk(L.n,L.name,`${insp} of ${cs.length} inspected`,rateChip(low));
+  }
+}
+function scopeComps(){return comps.filter(c=>inScope(c)&&show[TYPES[c.type].group]);}
+function renderSummary(){
+  const cs=scopeComps();const counts={good:0,fair:0,poor:0,serious:0,none:0};
+  for(const c of cs){const l=latest.get(c.id);counts[cat(l?l.rating:null)]++;}
+  $("sumTitle").textContent="Condition · "+(level==="all"?"all levels":LEVELS[level-1].name);
+  const dist=$("dist"),key=$("distkey");dist.textContent="";key.textContent="";
+  for(const k of ["good","fair","poor","serious","none"]){
+    if(counts[k])dist.append(el("span",{style:`width:${counts[k]/cs.length*100}%;background:var(--${k})`,title:`${CAT_LABEL[k]}: ${counts[k]}`}));
+    key.append(el("span",{class:"swatch",style:`background:var(--${k})`}),el("span",{text:CAT_LABEL[k]}),el("span",{class:"n",text:String(counts[k])}));
+  }
+  const list=$("attn");list.textContent="";
+  const bad=cs.filter(c=>{const l=latest.get(c.id);return l&&l.rating<=4;})
+    .sort((a,b)=>latest.get(a.id).rating-latest.get(b.id).rating||a.id.localeCompare(b.id));
+  if(!bad.length)list.append(el("li",{class:"note",text:"Nothing rated 4 or lower in this view."}));
+  for(const c of bad.slice(0,15)){
+    const l=latest.get(c.id);
+    list.append(el("li",null,el("button",{type:"button",onclick:()=>select(c.id,true)},rateChip(l.rating),
+      el("span",null,el("span",{class:"id",text:c.id}),el("span",{class:"t",text:`${TYPES[c.type].name.split(" —")[0]} · ${l.action||NBI[l.rating][0]}`})))));
+  }
+  if(bad.length>15)list.append(el("li",{class:"note",text:`and ${bad.length-15} more`}));
+}
+function renderLegend(){
+  const lg=$("legend");lg.textContent="";
+  if(colorBy==="type"){
+    [["COL","Column"],["IT","Inverted tee"],["SP","Spandrel"],["DT","Double tee"]].forEach(([k,n])=>
+      lg.append(el("span",null,el("span",{class:"swatch",style:`background:#${TYPE_HEX[k].toString(16).padStart(6,"0")}`}),n)));
+  }else{
+    for(const k of ["good","fair","poor","serious","none"])lg.append(el("span",null,el("span",{class:"swatch",style:`background:var(--${k})`}),CAT_LABEL[k]));
+  }
+}
+function refreshAll(){
+  applyStyle();renderLevels();renderSummary();renderLegend();
+  const pl=$("planLabel");
+  if(mode==="plan"){pl.hidden=false;pl.textContent="Plan · "+LEVELS[level-1].name;}
+  else if(level!=="all"){pl.hidden=false;pl.textContent=LEVELS[level-1].name+" isolated";}
+  else pl.hidden=true;
+  if(selected&&!$("panel").hidden&&!formOpen)renderPanel();
+}
+$("vm3d").onclick=()=>{setMode("3d");resetView();};
+$("vmPlan").onclick=()=>{setMode("plan");resetView();};
+$("resetView").onclick=resetView;
+$("cbType").onclick=()=>{colorBy="type";$("cbType").setAttribute("aria-pressed","true");$("cbCond").setAttribute("aria-pressed","false");refreshAll();};
+$("cbCond").onclick=()=>{colorBy="cond";$("cbCond").setAttribute("aria-pressed","true");$("cbType").setAttribute("aria-pressed","false");refreshAll();};
+for(const k of ["COL","BEAM","DT"])$("sh"+k).addEventListener("change",e=>{show[k]=e.target.checked;refreshAll();});
+const dl=$("idlist");for(const c of comps)dl.append(el("option",{value:c.id}));
+$("findForm").addEventListener("submit",e=>{e.preventDefault();const v=$("findInput").value.trim().toUpperCase();
+  if(byId.has(v))select(v,true);else{$("findInput").setCustomValidity("No component with that ID");$("findInput").reportValidity();}});
+$("findInput").addEventListener("input",e=>e.target.setCustomValidity(""));
+
+/* ---------------- Details window ---------------- */
+let formOpen=false;
+function center(c){
+  const m=meshes.get(c.id);const b=new THREE.Box3().setFromObject(m);return b.getCenter(new THREE.Vector3());
+}
+function select(id,fly){
+  const c=byId.get(id);if(!c)return;
+  selected=id;formOpen=false;
+  const L=c.level;
+  if((level!=="all"&&level!==L)||(fly&&level==="all"&&mode==="3d")){level=L;} // flying to a member inside the building: isolate its level so it can be seen
+  if(!show[TYPES[c.type].group]){show[TYPES[c.type].group]=true;$("sh"+TYPES[c.type].group).checked=true;}
+  refreshAll();renderPanel();$("panel").hidden=false;
+  if(fly)flyTo(center(c),mode==="plan"?null:140);
+  try{history.replaceState(null,"","#"+id);}catch(e){}
+}
+function closePanel(){
+  if(!selected)return;selected=null;formOpen=false;$("panel").hidden=true;applyStyle();
+  try{history.replaceState(null,"",location.pathname+location.search);}catch(e){}
+}
+$("pClose").onclick=closePanel;
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!$("lightbox").hidden)$("lightbox").hidden=true;else if(!$("csvbox").hidden)$("csvbox").hidden=true;else closePanel();}});
+
+function compInspections(id){return inspections.filter(i=>i.componentId===id&&typeof i.rating==="number").sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||"").localeCompare(String(a.createdAt||"")));}
+function compPhotos(id){return photos.filter(p=>p.componentId===id).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));}
+function fmtDate(d){if(!d)return "";const t=new Date(d+"T12:00:00");return isNaN(t)?String(d):t.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"});}
+
+function trendSvg(list){
+  const pts=list.slice().reverse();const NS="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(NS,"svg");svg.setAttribute("viewBox","0 0 360 70");svg.setAttribute("class","trend");svg.setAttribute("role","img");
+  svg.setAttribute("aria-label","Rating trend: "+pts.map(p=>`${p.date} NBI ${p.rating}`).join(", "));
+  const t0=new Date(pts[0].date).getTime(),t1=new Date(pts[pts.length-1].date).getTime();
+  const X=d=>40+(t1===t0?140:(new Date(d).getTime()-t0)/(t1-t0)*290), Y=r=>8+(9-r)/9*50;
+  for(const r of [9,5,0]){const g=document.createElementNS(NS,"line");g.setAttribute("x1",34);g.setAttribute("x2",340);g.setAttribute("y1",Y(r));g.setAttribute("y2",Y(r));g.setAttribute("stroke","var(--line)");svg.append(g);
+    const tx=document.createElementNS(NS,"text");tx.setAttribute("x",24);tx.setAttribute("y",Y(r)+4);tx.setAttribute("font-size","10");tx.setAttribute("fill","var(--muted)");tx.setAttribute("text-anchor","end");tx.textContent=r;svg.append(tx);}
+  const pl=document.createElementNS(NS,"polyline");pl.setAttribute("points",pts.map(p=>X(p.date)+","+Y(p.rating)).join(" "));
+  pl.setAttribute("fill","none");pl.setAttribute("stroke","var(--accent)");pl.setAttribute("stroke-width","2");svg.append(pl);
+  for(const p of pts){const c=document.createElementNS(NS,"circle");c.setAttribute("cx",X(p.date));c.setAttribute("cy",Y(p.rating));c.setAttribute("r",4);c.setAttribute("fill",`var(--${cat(p.rating)})`);svg.append(c);}
+  return svg;
+}
+
+function renderPanel(){
+  const c=byId.get(selected);if(!c)return;
+  $("pId").textContent=c.id;$("pType").textContent=TYPES[c.type].name;
+  const body=$("pBody");const keepScroll=body.scrollTop;body.textContent="";
+  const list=compInspections(c.id), l=list[0];
+  // condition
+  const r=l?l.rating:null;
+  body.append(el("div",{class:"p-sec"},el("h3",null,"Current condition"),
+    el("div",{class:"cond"},el("div",{class:"big "+cat(r),text:r==null?"–":String(r)}),
+      el("div",{class:"lbl",text:r==null?"Not yet inspected":`NBI ${r} · ${NBI[r][0]}`}),
+      el("div",{class:"when",text:r==null?"Add an inspection to rate this member.":NBI[r][1]}),
+      el("div",{class:"when",text:l?`Inspected ${fmtDate(l.date)}${l.inspector?" by "+l.inspector:""}${l.action&&l.action!=="None"?" · "+l.action:""}`:""}))));
+  // properties
+  const dlp=el("dl",{class:"props"});
+  dlp.append(el("dt",{text:"Component ID"}),el("dd",{class:"mono",text:c.id}));
+  for(const [k,v] of c.props)dlp.append(el("dt",{text:k}),el("dd",{text:v}));
+  body.append(el("div",{class:"p-sec"},el("h3",null,"Component information"),dlp));
+  // photos
+  const ph=compPhotos(c.id);
+  const addPhotoBtn=el("button",{class:"btn",type:"button",text:"Add photos"});
+  const fileIn=el("input",{type:"file",accept:"image/*",multiple:"",hidden:""});
+  addPhotoBtn.onclick=()=>fileIn.click();
+  const phMsg=el("p",{class:"note"});
+  fileIn.onchange=async()=>{const files=[...fileIn.files];if(!files.length)return;addPhotoBtn.disabled=true;
+    const res=await uploadPhotos(c.id,files,null,"",m=>phMsg.textContent=m);addPhotoBtn.disabled=false;phMsg.textContent=res;};
+  const canPhoto=!!idb;
+  const grid=el("div",{class:"photos"});
+  for(const p of ph){
+    const img=el("img",{alt:p.caption||"Photo of "+c.id,loading:"lazy"});
+    const b=el("button",{type:"button","aria-label":"Open photo"+(p.caption?": "+p.caption:"")},img);
+    photoBlobUrl(p).then(u=>{if(u)img.src=u;else{img.alt="Photo not available here (turn on GitHub sync to fetch it)";}});
+    b.onclick=async()=>{const u=await photoBlobUrl(p);if(!u)return;$("lbImg").src=u;$("lbImg").alt=p.caption||"";$("lbCap").textContent=`${c.id} · ${fmtDate(p.date)}${p.caption?" · "+p.caption:""}`;$("lightbox").hidden=false;};
+    grid.append(b);}
+  body.append(el("div",{class:"p-sec"},el("h3",null,el("span",{text:`Photos (${ph.length})`}),canPhoto?addPhotoBtn:null),fileIn,
+    ph.length?grid:el("p",{class:"empty",text:canPhoto?"No photos yet. Add photos from your phone or computer; they stay linked to this component.":"Photos need browser storage, which this browser has blocked."}),phMsg));
+  // history
+  const hs=el("div",{class:"p-sec"});
+  const addBtn=el("button",{class:"btn primary",type:"button",text:"Add inspection"});
+  addBtn.onclick=()=>{formOpen=true;hs.replaceWith(inspForm(c,l));};
+  hs.append(el("h3",null,el("span",{text:`Inspection history (${list.length})`}),addBtn));
+  if(list.length>=2)hs.append(trendSvg(list));
+  if(!list.length)hs.append(el("p",{class:"empty",text:"No inspections recorded for this component."}));
+  const ul=el("ul",{class:"hist"});
+  for(const i of list){
+    const tags=el("div",{class:"h3"});
+    (Array.isArray(i.defects)?i.defects:[]).forEach(d=>tags.append(el("span",{class:"tag",text:String(d)})));
+    if(i.example)tags.append(el("span",{class:"tag ex",text:"Example record"}));
+    ul.append(el("li",null,rateChip(i.rating),el("div",null,el("div",{class:"h1",text:`${fmtDate(i.date)} · ${NBI[i.rating]?NBI[i.rating][0]:""}`}),
+      el("div",{class:"h2",text:[i.inspector,i.action].filter(Boolean).join(" · ")})),
+      i.notes?el("div",{class:"h3",text:String(i.notes)}):null,tags.childNodes.length?tags:null));
+  }
+  hs.append(ul);body.append(hs);
+  body.scrollTop=keepScroll;
+}
+
+function inspForm(c,last){
+  const today=new Date();const iso=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const sel=el("select",{id:"fRating",required:""});
+  sel.append(el("option",{value:"",text:"Choose a rating"}));
+  for(let r=9;r>=0;r--)sel.append(el("option",{value:String(r),text:`${r} · ${NBI[r][0]} — ${NBI[r][1]}`}));
+  if(last)sel.value=String(last.rating);
+  const act=el("select",{id:"fAction"});ACTIONS.forEach(a=>act.append(el("option",{value:a,text:a})));
+  const fs=el("fieldset",null,el("legend",{text:"Defects observed"}));const dg=el("div",{class:"defects"});
+  [...DEFECTS_COMMON,...DEFECTS[c.type]].forEach((d,i)=>dg.append(el("label",null,el("input",{type:"checkbox",value:d,id:"fD"+i}),d)));fs.append(dg);
+  const files=el("input",{type:"file",accept:"image/*",multiple:"",id:"fPhotos"});
+  const msg=el("p",{class:"note"});
+  const save=el("button",{class:"btn primary",type:"submit",text:"Save inspection"});
+  const cancel=el("button",{class:"btn",type:"button",text:"Cancel"});
+  const f=el("form",{class:"insp"},
+    el("strong",{text:"New inspection"}),
+    el("div",{class:"two"},el("label",null,"Date",el("input",{type:"date",id:"fDate",value:iso,required:""})),
+      el("label",null,"Inspector",el("input",{type:"text",id:"fInsp",required:"",placeholder:"Name",maxlength:"80",value:lastInspector||""}))),
+    el("label",null,"NBI condition rating",sel),fs,
+    el("label",null,"Notes",el("textarea",{id:"fNotes",maxlength:"2000",placeholder:"Location on member, size of cracks or spalls, quantities"})),
+    el("label",null,"Recommended action",act),
+    el("label",null,"Photos (optional)",files),
+    el("div",{class:"row"},save,cancel),msg);
+  cancel.onclick=()=>{formOpen=false;renderPanel();};
+  f.addEventListener("submit",async e=>{
+    e.preventDefault();
+    const rating=parseInt(sel.value,10);if(isNaN(rating)){sel.focus();return;}
+    const doc={componentId:c.id,level:c.level,type:c.type,date:f.querySelector("#fDate").value,inspector:f.querySelector("#fInsp").value.trim(),
+      rating,defects:[...dg.querySelectorAll("input:checked")].map(x=>x.value),notes:f.querySelector("#fNotes").value.trim(),action:act.value,createdAt:new Date().toISOString()};
+    lastInspector=doc.inspector;
+    save.disabled=true;msg.className="note";msg.textContent="Saving…";
+    let inspId=null;
+    try{
+      inspId=await saveInspection(doc);
+    }catch(err){save.disabled=false;msg.className="err";msg.textContent="Couldn't save the inspection in this browser ("+(err&&err.name||"error")+"). Try again.";return;}
+    const fl=files.files?[...files.files]:[];
+    if(fl.length)msg.textContent=await uploadPhotos(c.id,fl,inspId,"",m=>msg.textContent=m);
+    formOpen=false;renderPanel();
+  });
+  setTimeout(()=>sel.focus(),0);
+  return el("div",{class:"p-sec"},f);
+}
+let lastInspector="";
+
+async function shrink(file){
+  try{
+    const bmp=await createImageBitmap(file);const s=Math.min(1,2400/Math.max(bmp.width,bmp.height));
+    const cv=document.createElement("canvas");cv.width=Math.round(bmp.width*s);cv.height=Math.round(bmp.height*s);
+    cv.getContext("2d").drawImage(bmp,0,0,cv.width,cv.height);
+    return await new Promise(r=>cv.toBlob(b=>r(b||file),"image/jpeg",0.85));
+  }catch(e){return file;}
+}
+async function uploadPhotos(cid,files,inspId,caption,progress){
+  let ok=0,fail=[];const date=new Date().toISOString().slice(0,10);
+  for(let i=0;i<files.length;i++){
+    progress(`Uploading photo ${i+1} of ${files.length}…`);
+    try{
+      const blob=await shrink(files[i]);
+      await savePhoto({componentId:cid,inspectionId:inspId||null,caption:caption||files[i].name.replace(/\.[^.]+$/,"").slice(0,200),date,createdAt:new Date().toISOString()},blob);
+      ok++;
+    }catch(err){fail.push(err&&err.code==="unsupported_type"?`${files[i].name} (format not supported, use JPEG or PNG)`:files[i].name);}
+  }
+  renderPanel();scheduleSync();
+  return `${ok} photo${ok===1?"":"s"} added.`+(fail.length?` Couldn't add: ${fail.join(", ")}.`:"");
+}
+$("lbClose").onclick=()=>{$("lightbox").hidden=true;};
+$("lightbox").addEventListener("click",e=>{if(e.target.id==="lightbox")$("lightbox").hidden=true;});
+
+/* ---------------- CSV export ---------------- */
+const q=v=>{const s=v==null?"":String(v);return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+const toCsv=rows=>rows.map(r=>r.map(q).join(",")).join("\r\n");
+function compCsv(){
+  const rows=[["ComponentID","MemberType","Level","Grid","Section","LatestNBI","Condition","LastInspected","Inspector","RecommendedAction","InspectionCount","PhotoCount"]];
+  for(const c of comps){const l=latest.get(c.id);const sec=(c.props.find(p=>p[0]==="Section"||p[0]==="Steel core")||[])[1]||"";
+    rows.push([c.id,TYPES[c.type].name,c.level,c.grid,sec,l?l.rating:"",l?NBI[l.rating][0]:"Not inspected",l?l.date:"",l?l.inspector:"",l?l.action:"",
+      inspections.filter(i=>i.componentId===c.id).length,photos.filter(p=>p.componentId===c.id).length]);}
+  return toCsv(rows);
+}
+function inspCsv(){
+  const rows=[["InspectionID","ComponentID","Level","MemberType","Date","Inspector","NBI","Condition","Defects","Notes","RecommendedAction","Example"]];
+  for(const i of inspections.slice().sort((a,b)=>String(a.componentId).localeCompare(String(b.componentId))||String(a.date).localeCompare(String(b.date)))){
+    const c=byId.get(i.componentId);
+    rows.push([i.id,i.componentId,c?c.level:"",c?TYPES[c.type].name:"",i.date,i.inspector,i.rating,NBI[i.rating]?NBI[i.rating][0]:"",(i.defects||[]).join("; "),i.notes,i.action,i.example?"yes":""]);}
+  return toCsv(rows);
+}
+async function offer(name,text){
+  try{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+text],{type:"text/csv"}));a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);return;}catch(e){}
+  $("csvTitle").textContent=name;$("csvText").value=text;$("csvbox").hidden=false;
+}
+$("expComp").onclick=()=>offer("Garage_Components.csv",compCsv());
+$("expInsp").onclick=()=>offer("Garage_Inspections.csv",inspCsv());
+$("csvClose").onclick=()=>{$("csvbox").hidden=true;};
+$("csvCopy").onclick=()=>{const t=$("csvText");navigator.clipboard.writeText(t.value).then(()=>{$("csvCopy").textContent="Copied";},()=>{t.select();});};
+
+/* ---------------- Start ---------------- */
+themeBg();resize();refreshAll();loop();
+const h=decodeURIComponent((location.hash||"").slice(1));
+if(byId.has(h))setTimeout(()=>select(h,true),50);
+$("syncNow").onclick=()=>syncNow();$("exLoad").onclick=loadExamples;$("exRemove").onclick=removeExamples;
+initData().then(renderStorage);
+})();
+</script>
+</body>
+</html>
