@@ -4,7 +4,7 @@
 // Headless Chromium, file:// (one localStorage for every tool, as Chrome / Edge):
 //   1. a new project: the card replaces the placeholder; it names the girder type and line shown;
 //   2. Send: reactions -> bridgeSuite.v1.superReactions, .updatedAt and the copy .by.psbeam (the same text, producer 'PS-Beam'); geometry
-//      -> .lldfGeom; section properties -> .psSection (+ .updatedAt); capacity -> .capacity (+ .updatedAt); Share project info -> .projectMeta;
+//      -> .lldfGeom; section properties -> .psSection (+ .updatedAt) (NOMCT 2026-11-25: "Send section properties to LL & DL"; the capacity send removed); Share project info -> .projectMeta;
 //      each payload = the page's own PSBHandoffs builder on the page's engine inputs and result (producedAt aside); no other key written;
 //   3. Receive: an lldf payload as LL & DL publishes it -> "new data" shown; Pull (confirm) -> the type shown gets DF auto off and the
 //      factors (saved), the adoption key .lldf.adopted.psbridge; dlLoads on a project that distributes DC2 / DW: refused, nothing changed;
@@ -40,16 +40,17 @@ try {
   let st = await p.evaluate(() => ({ a: localStorage.getItem('bridgeSuite.v1.superReactions'), c: localStorage.getItem('bridgeSuite.v1.superReactions.by.psbeam'), u: localStorage.getItem('bridgeSuite.v1.superReactions.updatedAt') }));
   assert.equal(st.a, st.c, 'copy by.psbeam = the channel text'); const sr = JSON.parse(st.a); assert.equal(sr.producer, 'PS-Beam'); assert.equal(sr.producerFile, 'apps/ps-bridge/index.html'); assert.equal(st.u, sr.producedAt);
   const own = await p.evaluate(() => { const PSB = window.PSBHandoffs, D = window.PSBDesign, P = PSBModel.load(localStorage).project, inp = D.inputs(P), R = PSBHoldDown.compute(JSON.parse(JSON.stringify(inp)));
-    return { sr: PSB.srPayload(inp, R).payload, sec: PSB.psSection(inp, R, 'T'), cap: PSB.capacity(inp, R, 'T').payload, geo: PSB.lldfGeom(inp, R, 'T').payload }; });
+    return { sr: PSB.srPayload(inp, R).payload, sec: PSB.psSection(inp, R, 'T'), geo: PSB.lldfGeom(inp, R, 'T').payload }; });
   const strip = (o, extra = []) => { const c = JSON.parse(JSON.stringify(o)); ['producedAt', 'producer', 'producerFile', 'schemaVersion', 'notes', ...extra].forEach(k => delete c[k]); return c; };
   assert.deepEqual(strip(sr), strip(own.sr)); assert.deepEqual(sr.notes, own.sr.notes); ok(`superReactions + .by.psbeam: the page's builder, producer PS-Beam (${sr.supports.length} supports, DC1 ${sr.supports[0].girders[0].DC1} kip)`);
-  await click('geoSend'); await click('secSend'); await click('capSend'); await click('pmShare');
-  const got = await p.evaluate(() => Object.fromEntries(['lldfGeom', 'psSection', 'capacity', 'projectMeta'].map(k => [k, JSON.parse(localStorage.getItem('bridgeSuite.v1.' + k))])));
-  assert.deepEqual(strip(got.lldfGeom), strip(own.geo)); assert.deepEqual(strip(got.psSection), strip(own.sec)); assert.deepEqual(strip(got.capacity), strip(own.cap));
+  await click('geoSend'); d = await click('secSend'); assert.match(d.at(-1) || '', /LL & DL Distribution can use them/); assert.ok(!/MCT/i.test(d.at(-1) || ''));
+  assert.equal(await p.locator('[data-ho="capSend"]').count(), 0, 'no capacity send'); assert.equal(await p.innerText('[data-ho="secSend"]'), 'Send section properties to LL & DL'); await click('pmShare');
+  const got = await p.evaluate(() => Object.fromEntries(['lldfGeom', 'psSection', 'projectMeta'].map(k => [k, JSON.parse(localStorage.getItem('bridgeSuite.v1.' + k))])));
+  assert.deepEqual(strip(got.lldfGeom), strip(own.geo)); assert.deepEqual(strip(got.psSection), strip(own.sec));
   assert.equal(got.projectMeta._schema, 'bridge-project-meta'); assert.equal(got.projectMeta.fields.projectName, await p.evaluate(() => PSBModel.load(localStorage).project.project.name));
-  assert.deepEqual(await keys(), ['bridgeSuite.v1.capacity', 'bridgeSuite.v1.capacity.updatedAt', 'bridgeSuite.v1.lldfGeom', 'bridgeSuite.v1.projectMeta', 'bridgeSuite.v1.projectMeta.updatedAt',
+  assert.deepEqual(await keys(), ['bridgeSuite.v1.lldfGeom', 'bridgeSuite.v1.projectMeta', 'bridgeSuite.v1.projectMeta.updatedAt',
     'bridgeSuite.v1.psSection', 'bridgeSuite.v1.psSection.updatedAt', 'bridgeSuite.v1.superReactions', 'bridgeSuite.v1.superReactions.by.psbeam', 'bridgeSuite.v1.superReactions.updatedAt']);
-  ok(`lldfGeom, psSection, capacity (${got.capacity.stationCount} stations), projectMeta: the page's builders; the old app's keys only`);
+  ok('lldfGeom, psSection ("Send section properties to LL & DL"), projectMeta: the page\'s builders; the old app\'s keys only; no capacity send');
   // 3. receive: lldf
   await p.evaluate(([a, b]) => { localStorage.setItem('bridgeSuite.v1.lldf', a); localStorage.setItem('bridgeSuite.v1.lldf.updatedAt', JSON.parse(a).producedAt); localStorage.setItem('bridgeSuite.v1.dlLoads', b); }, [JSON.stringify(LLDF), JSON.stringify(DLP)]);
   await p.click('#inTabs [data-itab="layout"]'); await p.click('#inTabs [data-itab="proj"]'); await p.waitForSelector('#psbHo');
