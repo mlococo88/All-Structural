@@ -23,3 +23,12 @@ Not an engineering calculation tool: no formulas, load or resistance factors, un
 - **After:** `member(..., M({ color: 0xc8102e }), SG, exInfo, 'exo');` plus a new "Existing house outline" checkbox (`data-g="exo"`, off by default) and `exoOn` in `applyMode()`.
 - **Governing provision:** n/a (display only; no computed values).
 - **How verified:** rendered headless; no console errors; outline hidden by default and shown when checked.
+
+## 2026-11-25 — Aerial photo draped on the terrain
+
+- **What:** New "Aerial photo" toggle (on by default). It loads MassGIS 2023 orthoimagery tiles from `tiles.arcgis.com/.../orthos2023/MapServer/tile/{z}/{y}/{x}` (public tile service, no use restrictions per MassGIS) into canvas textures. They are draped on the lidar-fit ground in three nested layers (z17 / z19 / z20). Each terrain vertex is mapped plan → ENU → lat/lon → Web Mercator pixel using the same site transform as the rest of the model (`SITE.geo`).
+- **Where:** `apps/loma-drive/index.html`, block `AERIAL PHOTO`. Anchor text: `orthos2023/MapServer/tile/`.
+- **Behaviour:** While the photo is shown, the neighbour massing and road ribbons (kind `ctx`) are hidden, because the photo shows the real buildings and streets. Inside the claude.ai viewer, outside images are blocked, so the tool shows a note and keeps the plain ground.
+- **No library added:** plain `Image` loads, with no new CDN dependency.
+- **Governing provision:** n/a (display only).
+- **How verified:** headless render with stand-in tiles that draw the MassGIS building outlines at their true lat/lon. The outlines land on the modelled neighbour footprints, and #3's outline lands under the new house. No console errors.
