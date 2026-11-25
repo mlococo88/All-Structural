@@ -119,7 +119,7 @@ test('old-app files: Export JSON (inputs), a bridge model; MIDAS demands, psb2 a
   const br = { v: 1, mode: 'mod', title: {}, spans: [120], nGirders: 5, S: 9, sel: { g: 2, s: 1 }, designs: { 'G2/S1': inp } };
   const b = LG.fromText(JSON.stringify(br), 'bridge.json'); assert.equal(b.ok, true); assert.equal(b.src.inputs, null);
   const cb = LG.convert(b.src); assert.equal(cb.ok, true); assert.ok(kinds(cb, 'kept').some(t => /"Design modules"/.test(t)));
-  assert.match(LG.fromText(JSON.stringify({ _schema: 'psbeam-external-demands', stations: [] })).error, /MIDAS demands file/);
+  assert.match(LG.fromText(JSON.stringify({ _schema: 'psbeam-external-demands', stations: [] })).error, /demands file of the old app \(psbeam-external-demands\), not a design/);   // NOMCT: reworded
   assert.match(LG.fromText(M.exportJSON(M.defaultProject())).error, /Import JSON/);
   assert.match(LG.fromText('{"a":1}').error, /Not a Prestressed Bridge Design/);
   assert.match(LG.fromText('nope').error, /Not a JSON file/);
@@ -166,7 +166,7 @@ test('MIDAS demands: kept in the import record and (batch D1) the demands of typ
   assert.deepEqual(J(r.project.spans.lengths), J(W.PBD.extSpans(ext).map(q => q.len)).map((x, i) => i === r.project.design.s - 1 ? rec.saved.L : x));
   assert.equal(LG.verify(r).same, true);   // batch D1: before, false (the built-in analysis)
   assert.deepEqual(J(r.project.demands), { T1: { src: 'midas', midas: { file: J(ext), name: 'old app design', at: r.project.demands.T1.midas.at }, span: ext._selSpan.idx } });
-  assert.ok(kinds(r, 'ok').some(t => /MIDAS demands .*Demands card/.test(t)));
+  assert.ok(kinds(r, 'ok').some(t => /Imported demands .*Demands card/.test(t)));   // NOMCT: reworded (no MIDAS in the text)
 });
 
 // PR 3a-4 (PS-17): an old bridge model's other girder × span designs restored as girder types

@@ -1,12 +1,14 @@
 // apps/ps-bridge (2026-11-14, planned item 12): the old app's bridgeSuite.v1.* hand-offs in the new app (engine/handoffs.js, ui/handoffs.js).
 //   Sent payloads, byte for byte: for every harness B design (tests/engine/psbridge-tab-cases.mjs) and new typed projects (one span; two spans
 //   made continuous), the new app's payload of the girder shown = the OLD page's own code on the same engine inputs: superReactions (the old
-//   page's bxSuperRxPayload), psSection, capacity and lldfGeom (the old page's code text, cut from "Prestressed Bridge Design.html" at its
+//   page's bxSuperRxPayload), psSection and lldfGeom (the old page's code text, cut from "Prestressed Bridge Design.html" at its
 //   anchors and run in the old page's compiled context, tests/engine/psbridge-source.mjs oldEngine; producedAt fixed on both sides): the same
 //   JSON text. Received payloads: lldf and dlLoads payloads as LL & DL Distribution publishes them (and the old app's refusals) are read by
 //   the new app exactly as the old page reads them (lldfResolveFor / dlResolveFor, lldfTheirsFor / dlTheirsFor), and a pull gives the new
 //   app's engine inputs = the old page's inputs after its own apply (applyLLDFTo / applyDLTo), so every result is the same. projectMeta:
 //   the mapping and the old app's "never blank, only what differs" rule. BridgeXfer copy = HANDOFF.md §5.
+//   NOMCT (2026-11-25): the capacity send (to the MCT rating) is removed, so its comparison is too; the dlLoads refusal's text names LL & DL's
+//   dead-load send without the MCT (the old text otherwise, compared below with that one phrase replaced).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -38,8 +40,6 @@ function oldCode(C) {
   return {
     sec: vm.runInContext(`(function(inp,R){ const psSecRef={current:''}; let payload=null; (()=>{ if(R.error||!R.cp||!R.g) return; ${cut('const cp=R.cp, g=R.g;', "localStorage.setItem('bridgeSuite.v1.psSection'")} })(); return payload; })`
       .replace('const payload=Object.assign(', 'payload=Object.assign('), C),
-    cap: vm.runInContext(`(function(inp,R){ const alert=()=>{}; ${cut('const publishCapacity=(silent)=>{', '/* ---- Capacity channel lock')}
-      localStorage.removeItem('bridgeSuite.v1.capacity'); const ok=publishCapacity(true); return ok ? localStorage.getItem('bridgeSuite.v1.capacity') : null; })`, C),
     geo: vm.runInContext(`(function(inp,R){ const alert=()=>{}; const g=R.error?null:R.g; const ext=inp.external; ${cut('const sendLLDF=(silent)=>{', '/* ---- Geometry channel lock')}
       localStorage.removeItem('bridgeSuite.v1.lldfGeom'); const ok=sendLLDF(true); return ok ? localStorage.getItem('bridgeSuite.v1.lldfGeom') : null; })`, C),
     sr: (inp, R) => C.bxSuperRxPayload(inp, R) };
@@ -58,7 +58,7 @@ function cases() {
 }
 const CASES = cases();
 
-test('sent payloads = the old page\'s code on the same inputs (superReactions, psSection, capacity, lldfGeom), every design', () => {
+test('sent payloads = the old page\'s code on the same inputs (superReactions, psSection, lldfGeom), every design', () => {
   let n = 0, nOld = 0, nSame = 0; const newLib = [], differ = [];
   for (const [name, P] of CASES) {
     const inp = D.inputs(P), Rn = W.PSBHoldDown.compute(J(inp)), Ro = O.computeAll(J(inp));
@@ -68,15 +68,13 @@ test('sent payloads = the old page\'s code on the same inputs (superReactions, p
       assert.equal(JSON.stringify(a), JSON.stringify(b), `${name}: superReactions (${tag})`); assert.ok(a.payload && a.payload._schema === 'bridge-super-reactions', name);
       const s1 = H.psSection(J(inp), R, NOW), s0 = C.sec(J(inp), R);
       assert.ok(s0, name + ': old psSection'); assert.equal(JSON.stringify(s1), JSON.stringify(s0), `${name}: psSection (${tag})`);
-      const c1 = H.capacity(J(inp), R, NOW), c0 = C.cap(J(inp), R);
-      assert.ok(c0 && c1.payload, name + ': capacity built ' + (c1.error || '')); assert.equal(JSON.stringify(c1.payload), c0, `${name}: capacity (${tag})`);
       const g1 = H.lldfGeom(J(inp), R, NOW), g0 = C.geo(J(inp), R);
       assert.ok(g0 && g1.payload, name + ': lldfGeom'); assert.equal(JSON.stringify(g1.payload), g0, `${name}: lldfGeom (${tag})`);
     };
     cmp(NC, Rn, 'the old code, this app\'s engine context');
     if (!Ro.error) { cmp(OC, Ro, 'the old page'); nOld++;
       // what the page sends (this app's result) against what the old app sent: the same text unless this app's results differ (§4 PRs)
-      const all = R => JSON.stringify([H.srPayload(J(inp), R), H.psSection(J(inp), R, NOW), H.capacity(J(inp), R, NOW).payload, H.lldfGeom(J(inp), R, NOW).payload]);
+      const all = R => JSON.stringify([H.srPayload(J(inp), R), H.psSection(J(inp), R, NOW), H.lldfGeom(J(inp), R, NOW).payload]);
       if (all(Rn) === all(Ro)) nSame++; else differ.push(name);
     } else newLib.push(name);
     n++;
@@ -89,7 +87,7 @@ test('sent payloads = the old page\'s code on the same inputs (superReactions, p
 test('a design with an input error sends nothing (as the old app)', () => {
   const P = M.newProject(); P.base.mat.fc = -1; const inp = D.inputs(P), R = O.computeAll(J(inp));
   if (!R.error) return;   // the engine computes it: nothing to check here
-  assert.equal(H.psSection(inp, R, NOW), null); assert.ok(H.capacity(inp, R, NOW).error); assert.ok(H.srPayload(inp, R).error);
+  assert.equal(H.psSection(inp, R, NOW), null); assert.ok(H.srPayload(inp, R).error);
 });
 
 // lldf payloads as LL & DL Distribution publishes them (lldf.html publishLLDF): governing / governingNeg with byBeam, and the old app's refusals
@@ -155,7 +153,7 @@ test('dlLoads: read as the old app reads it; a pull gives the old app\'s inputs 
       const raw = pay == null ? null : typeof pay === 'string' ? pay : JSON.stringify(pay), inp = D.inputs(P0);
       O.__store.clear(); if (raw != null) O.__store.set('bridgeSuite.v1.dlLoads', raw);
       const r0 = O.dlResolveFor(J(inp)), r1 = H.dlResolve(raw);
-      assert.equal(JSON.stringify(r1), JSON.stringify(r0), `${name} / ${pn}: resolve`);
+      assert.equal(JSON.stringify(r1), JSON.stringify(r0).replace(', and click \\"Send DL to MCT Loads\\" — then', ' and send its dead loads (DC2 / DW) — then'), `${name} / ${pn}: resolve`);
       if (r0.why) continue;
       assert.equal(JSON.stringify(H.dlTheirs(r1)), JSON.stringify(O.dlTheirsFor(r0)));
       const P = J(P0), c = BR.hasTypes(P) ? BR.shown(P) : null;

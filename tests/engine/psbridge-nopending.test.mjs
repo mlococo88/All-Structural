@@ -37,7 +37,7 @@ test('no "pending" review wording: the Auto design output tab (ui/autodesign.js 
   assert.match(html, /<li>Assumption \(<a href="#rp:rs\.adb" data-gotab="rpt">Report, §2, Auto design basis<\/a>\): a higher f′c or f′ci is not worse/);
 });
 
-test('no "pending" review wording: the MCT hand-off banner (ui/handoffs.js strings)', () => {
+test('no "pending" review wording: the Hand-offs card and banners (ui/handoffs.js strings)', () => {
   const src = fs.readFileSync(path.join(APP, 'ui/handoffs.js'), 'utf8');
   const html = src.split('\n').filter(l => !/^\s*(\/\*|\/\/|\*)/.test(l) && /<span|<p |<div |<h3/.test(l)).join('\n').replace(/\b(mct|geom)Pending\b/g, '');
   assert.ok(!/pending/i.test(html), (html.match(/.{0,80}pending.{0,40}/i) || [''])[0]);

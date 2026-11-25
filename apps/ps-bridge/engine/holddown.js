@@ -60,7 +60,8 @@
   const compute4 = inp => { const R = compute3(inp); return window.PSBApplic ? window.PSBApplic.apply(inp, R) : R; };
   // IMP-N (2026-11-23, engineer's decision; a note only, no value changes): imported demands are used as given and are assumed to include the
   // pedestrian load and a composite utility entered on the Cross-section tab (engine/demands.js assumed(): R.imp and one design warning)
-  const compute5 = inp => { const R = compute4(inp); return window.PSBDemands && window.PSBDemands.assumed ? window.PSBDemands.assumed(inp, R) : R; };
+  // NOMCT (2026-11-25): the moved engine's MIDAS wording reworded where it leaves the engine (engine/demands.js neutral; text only, no value)
+  const compute5 = inp => { const R = compute4(inp), D = window.PSBDemands; return D && D.assumed ? D.assumed(inp, D.neutral ? D.neutral(R) : R) : R; };
   // DD (2026-11-24, engineer request "Please fix the deck distribution steel"; §4): the deck's distribution reinforcement on the effective span
   // length of AASHTO LRFD 10th Ed. Art. 9.7.2.3 (engine/deckdist.js, with shared/deck.js distEff); a girder without the deck design: R as before
   const compute = inp => { const R = compute5(inp); return window.PSBDeckDist && R && R.deck ? window.PSBDeckDist.apply(inp, R) : R; };
