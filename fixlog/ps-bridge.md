@@ -9770,7 +9770,7 @@ None.
 - **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
 - **Other copies:** none.
 
-## 2026-11-25 — PR: claude/ps-ez-noint (PR link: below once open) (EZNI) — End zone & hold-down, bonded release-tension steel: the concrete tensile force worked by parts, no integral (display only; no value or verdict changed)
+## 2026-11-25 — PR: claude/ps-ez-noint (PR #1714: https://github.com/mlococo88/All-Structural/pull/1714) (EZNI) — End zone & hold-down, bonded release-tension steel: the concrete tensile force worked by parts, no integral (display only; no value or verdict changed)
 ### Request (engineer, 2026-11-25)
 "The end zone has integrals, this should be removed, there should be no need for calculus in this app output." Check 3 of the End zone & hold-down tab (AASHTO LRFD 10th Ed. 5.9.2.3.1b, Table 5.9.2.3.1b-1) showed `T_top = ∫_{f<0} (−f) b(y) dy = f_top = (−0.631), f_bot = 4.696 ksi = 107.7 kip` (and the same for T_bot), the substitution line garbled, with the note "… the tension area integrated over the section width at 240 strips (the engine's)".
 ### Where (every integral found in the PS app's output; the frozen `engine/pbd-*.js` untouched)
