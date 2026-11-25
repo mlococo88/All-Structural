@@ -270,7 +270,8 @@
     add({ id: 'Vln', label: 'Design lane shear at the support, per lane', sym: 'V_{ln}', eq: '\\frac{0.64\\,L}{2}', sub: `\\frac{0.64(${n(L, 2)})}{2}`, value: hl.Vln, unit: 'kip', d: 2 }, 0.64 * L / 2);
     add({ id: 'V', label: 'HL-93 shear with impact, per lane', sym: 'V_{LL+IM}', eq: '1.33\\max(V_{tr}, V_{td}) + V_{ln}', sub: `1.33\\max(${n(hl.Vtr, 2)}, ${n(hl.Vtd, 2)}) + ${n(hl.Vln, 2)}`, value: hl.V, unit: 'kip', d: 2 }, 1.33 * Math.max(hl.Vtr, hl.Vtd) + hl.Vln);
     // distribution factors (pbd-lldf-flexure.js distFactors; PS-35: a box beam or voided slab, types (f) / (g), engine/lldf-fg.js)
-    if (df.fg) fgSteps(add, inp, R); else {
+    // NX-1 (2026-11-25): a NEXT F with a cast-in-place deck, per stem as type (k) (engine/lldf-next.js): its steps ld.nx.*, dfmRaw, dfvRaw, skM, skV
+    if (df.fg) fgSteps(add, inp, R); else if (df.nx && window.PSBLldfNext) window.PSBLldfNext.steps(add, inp, R, { n, g, par }); else {
     const ts = +inp.ts, Sx = df.isNext ? df.Sf : inp.S;
     if (df.isNext) add({ id: 'Sf', label: 'NEXT beam: beam (flange) width used as S', sym: 'S', eq: '\\frac{b_{f}}{12}', sub: `\\frac{${n(G.btf, 2)}}{12}`, value: df.Sf, unit: 'ft', d: 3 }, G.btf / 12);
     if (!df.isNext || !df.kgOmitted) {
