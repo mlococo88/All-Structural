@@ -9964,3 +9964,34 @@ NEXT 24F, L 45 ft, flange 120 in, t_s 8 in, t_h 2 in, strands 16 / 16 / 12 strai
 The old `Prestressed Bridge Design.html` (frozen) keeps the old formula (open item).
 ### Open items
 Vertical curve, cross slope across the flange, camber tolerance, a t_h location setting: not added (engineer: not now). Hand-off `deck.haunch`: PR 3 (claude/ps-haunch-handoff). DC1 from the average haunch: PR 2 (claude/ps-haunch-dc1).
+
+## 2026-11-25 — PR: claude/ps-haunch-dc1 (PR #1724: https://github.com/mlococo88/All-Structural/pull/1724) (HDC) — DC1 carries the average haunch t_h + Δ_deck/3, two passes (CALCULATION CHANGE, §4) — NOT MERGED, engineer review; based on PR #1722
+### Request (engineer, 2026-11-25)
+"Both, two PRs"; DC1 from the uniform average haunch; no th-location setting, no vertical curve.
+### Where
+- `apps/ps-bridge/engine/haunch.js`: new `run(inp, chain)` (block "HDC"), exported. `engine/holddown.js`: the last step `compute7` (HP), then `const compute = inp => (window.PSBHaunch && window.PSBHaunch.run ? window.PSBHaunch.run(inp, compute7) : compute7(inp));`.
+- The engine value replaced (frozen `engine/pbd-section.js` compositeProps, anchors): `wdkHaunch:(beff*th/144)*(+inp.mat.wcdLoad||+inp.mat.wcd)` (NEXT) and `wdkHaunch:(g.btf*th/144)*(…)` (I-girders), and `wdk` = deck + haunch; replaced in pass 2 by wrapping `compositeProps` (restored after; as engine/rigid.js with distFactors).
+- Display: `engine/worked.js` loads() (new step `ld.havg`; `ld.whaunch` with t̄_h), `ui/loads.js` (the DC1 haunch row, topic ids), `engine/fields.js` (base.th help). Tests: `tests/engine/psbridge-haunch.test.mjs`, `tests/psbridge-compare.mjs` (the old page through the same run), `tests/smoke/ps-bridge-haunch.mjs`.
+### Before
+```
+w_h = (b · t_h / 144) · w_c,d,DL          // b = b_tf (I), b_eff (NEXT)
+```
+### After
+```
+k = 5 L⁴ / (12 · 384 E_c I_g);  β = b w_c,d,DL / 144;  Δ_0 = pass 1 afterDeck
+Δ = Δ_0 / (1 + kβ/3)   (Δ_0 ≥ 0)      Δ = Δ_0 / (1 − 2kβ/3)   (Δ_0 < 0; den ≤ 0: no balance, t_h kept + warning)
+t̄_h = t_h + Δ/3  (Δ ≥ 0),  t_h + 2|Δ|/3 (Δ < 0)
+w_h = (b · t̄_h / 144) · w_c,d,DL,  wdk = wdkDeck + w_h        // pass 2; R.hdc = { th, d0, d, tavg, add, b, wc, beta, k, w0, w, neg }
+```
+### Problem
+DC1 carried the minimum haunch over the whole span (unconservative): the haunch grows toward the bearings by the camber at deck placement.
+### Decision (pending engineer review)
+Δ_deck < 0: average t_h + 2|Δ|/3 (t_h at the bearings, PR #1722); no balance (2kβ/3 ≥ 1): t_h kept and a design warning.
+### Governing provision
+AASHTO LRFD 10th Ed. 3.5.1 (dead loads), 5.6.3.5.2 (camber); RIDOT BDM (April 2026) 9.4.6 (dead load on the calculated haunch depth, 2 in minimum).
+### Check case
+NEXT 24F, L 45 ft, b 120 in, t_s 8, t_h 2 in, strands 16/16/12 straight, w_NC 0, w_DC2 0.5, w_DW 0.3 klf: E_c 5112.4 ksi, I_g 56,032 in⁴, k 0.32209 in/klf, β 0.125; Δ_0 3.3458 → Δ 3.3015 in; t̄_h 3.1005 in; w_h 0.2500 → 0.3876 klf; Δ_dk 0.4026 → 0.4469 in; M_u 2335.2 → 2378.6 k-ft (flexure ratio 0.480 → 0.489); I_c, e_g, DF unchanged.
+### How verified
+`psbridge-haunch.test.mjs` (hand check, Δ < 0, no balance, box unchanged, section properties and e_g unchanged, steps); origin/main vs branch on 657 designs (495 changed, 32 verdict flips; the table in PR #1724); harness B with the old page through the same run; smoke `ps-bridge-haunch.mjs`.
+### Open items
+The exact parabolic haunch load (half the midspan moment increase of the uniform average); every result computed twice (auto design, Compare slower).
