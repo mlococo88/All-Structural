@@ -4,7 +4,7 @@
    support, 5.12.3.3.5 with the same table) asks for bonded reinforcement to carry the tensile force in the concrete computed on an uncracked
    section, at f_s = 0.5 f_y ≤ 30 ksi. The moved engine (engine/pbd-section.js releaseTensionForce, frozen byte for byte) sums that force
    over 240 horizontal strips at their mid-heights. This file replaces the strip sum by the exact sum, after computeAll, in the app's engine
-   call (engine/holddown.js compute, the last stage of its chain):
+   call (engine/holddown.js compute0: on each engine result, before the stages that run the chain more than once, UT-N and PL-A):
      the fibre stresses are linear over the depth (+ = compression); the tension zone runs from the tension fibre to c = h|f_t| / (|f_t| + |f_c|)
      (the whole depth when both fibres are in tension); the girder outline (halfPolygon, the one sectionWidthAt reads: voids ignored, as the
      engine) is cut into horizontal layers at its corners and at c; each layer is a trapezoid of widths b_a, b_b and thickness t:
