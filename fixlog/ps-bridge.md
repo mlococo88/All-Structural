@@ -9886,7 +9886,7 @@ None.
 - EZNI-1. Switch the engine (`releaseTensionForce`, frozen pbd-section.js) to the exact by-parts sum? Differences seen ≤ 0.039 kip; would change displayed T / A_s,req / D/C in the last digit in some designs.
 - EZNI-2. The engine's width of a NEXT beam below the flange is twice the distance to the outer stem face (`sectionWidthAt` takes the outermost edge), so the gap between the stems is counted as concrete: for bottom tension in a NEXT 36F, 73 in instead of 2 × 13 = 26 in (T over-stated about 2.8 times; conservative). Box beams and voided slabs: voids ignored (documented in the engine, conservative).
 
-## 2026-11-25 — PR: claude/ps-ez-exact (PR link: below once open) (EZX) — the concrete tensile force of 5.9.2.3.1b summed exactly by parts instead of 240 strips (§4 calculation change; pending engineer confirmation)
+## 2026-11-25 — PR: claude/ps-ez-exact (PR #1720: https://github.com/mlococo88/All-Structural/pull/1720) (EZX) — the concrete tensile force of 5.9.2.3.1b summed exactly by parts instead of 240 strips (§4 calculation change; pending engineer confirmation)
 ### Request (engineer, 2026-11-25: "Merge, then exact")
 After PR #1714 (EZNI) showed the by-parts sum beside the engine's 240-strip value, make the exact by-parts sum the value the engine uses: the tension force at release, top and bottom (bonded release-tension steel), and the tension force in the girder top near an interior support.
 ### Where
