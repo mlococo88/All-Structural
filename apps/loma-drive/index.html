@@ -409,8 +409,6 @@ function grade(X, Z) {
   const t = new T.Mesh(g, mat.grass); t.receiveShadow = true; t.userData.k = 'site';
   t.userData.info = { t: 'Ground surface', d: 'Fit to USGS 3DEP lidar spot elevations (NAVD88) and blended into the plans\' grade (avg. existing grade 27.50\') at the house. Approximate — not a survey.' };
   G.terrain.add(t); pickables.push(t); walkables.push(t);
-  // front walk from porch steps toward the street
-  slab([[17.4, -14.5], [22.8, -14.5], [22.8, -50], [17.4, -50]], null, grade(20, -50) - 0.3, grade(20, -14.5) + 0.06, mat.stone, G.terrain, { t: 'Front walk (illustrative)', d: 'Not shown on the permit set.' }, 'site', { walk: true });
 }
 
 // =================== FOUNDATION / BASEMENT ===================
@@ -1089,7 +1087,33 @@ label('Basement', 20, BASE + 4.5, 20, G.found); label('Attic', 20, PLATE2 + 4, 1
   });
 }
 
-// =================== NIGHT LIGHTING ===================
+// =================== DRIVEWAY & FRONT WALK (illustrative; not on the permit set) ===================
+const HARD = {};
+{
+  const pavT = tex(cvs(256, (g, n) => { g.fillStyle = '#7d7f80'; g.fillRect(0, 0, n, n); const bw = n / 4, bh = n / 8; for (let r = 0; r < 8; r++) for (let c = -1; c < 5; c++) { const v = 200 + rnd() * 45; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(c * bw + (r % 2) * bw / 2 + 2, r * bh + 2, bw - 4, bh - 4); } }), 2.67);
+  const flagT = tex(cvs(256, (g, n) => { g.fillStyle = '#6d7072'; g.fillRect(0, 0, n, n); [[0, 0, 150, 120], [150, 0, 106, 120], [0, 120, 90, 136], [90, 120, 166, 70], [90, 190, 166, 66]].forEach(([x, y, w, h]) => { const v = 190 + rnd() * 50; g.fillStyle = `rgb(${v},${v + 2},${v + 8})`; g.fillRect(x + 3, y + 3, w - 6, h - 6); }); }), 4);
+  const asphT = tex(cvs(256, (g, n) => { g.fillStyle = '#d9d9d9'; g.fillRect(0, 0, n, n); for (let i = 0; i < 12000; i++) { const v = 140 + rnd() * 115; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(rnd() * n, rnd() * n, 1.5, 1.5); } }), 6);
+  const gravT = tex(cvs(256, (g, n) => { g.fillStyle = '#fff'; g.fillRect(0, 0, n, n); for (let i = 0; i < 9000; i++) { const v = 150 + rnd() * 105; g.fillStyle = `rgb(${v},${v - 6},${v - 16})`; g.beginPath(); g.arc(rnd() * n, rnd() * n, 1 + rnd() * 2.2, 0, 7); g.fill(); } }), 4);
+  HARD.drive = { asphalt: ['Asphalt', M({ map: asphT, color: 0x3c3f42, roughness: 0.95 })], pavers: ['Concrete pavers', M({ map: pavT, color: 0xc9c0b4, roughness: 0.9 })], gravel: ['Crushed stone', M({ map: gravT, color: 0xd8d2c6, roughness: 1 })], concrete: ['Concrete', M({ map: concT, color: 0xe2e0db, roughness: 0.85 })] };
+  HARD.walk = { bluestone: ['Bluestone', M({ map: flagT, color: 0xb9c3cc, roughness: 0.8 })], brick: ['Brick', M({ map: pavT, color: 0xc0705a, roughness: 0.9 })], pavers: ['Concrete pavers', M({ map: pavT, color: 0xc9c0b4, roughness: 0.9 })], concrete: ['Concrete', M({ map: concT, color: 0xe2e0db, roughness: 0.85 })] };
+  // draped surface over a plan polygon (rectilinear pieces), following the ground
+  const drape = (X0, X1, Z0, Z1, lift, m, info, step = 1.5) => {
+    const nx = Math.max(1, Math.ceil((X1 - X0) / step)), nz = Math.max(1, Math.ceil((Z1 - Z0) / step)), pos = [], uvs = [], idx = [];
+    for (let i = 0; i <= nx; i++) for (let j = 0; j <= nz; j++) { const X = X0 + (X1 - X0) * i / nx, Z = Z0 + (Z1 - Z0) * j / nz, v = V(X, grade(X, Z) + lift, Z); pos.push(v.x, v.y, v.z); uvs.push(v.x, v.z); }
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const a = i * (nz + 1) + j, b = a + 1, c = a + nz + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(uvs, 2)); g.setIndex(idx); g.computeVertexNormals();
+    if (g.attributes.normal.getY(0) < 0) { for (let k = 0; k < idx.length; k += 3) { const t = idx[k + 1]; idx[k + 1] = idx[k + 2]; idx[k + 2] = t; } g.setIndex(idx); g.computeVertexNormals(); }
+    const mesh = new T.Mesh(g, m); mesh.receiveShadow = true; mesh.castShadow = false; mesh.userData.k = 'site'; mesh.userData.info = info; G.terrain.add(mesh); pickables.push(mesh); walkables.push(mesh); return mesh;
+  };
+  const dInfo = { t: 'Driveway (illustrative)', d: '12\' wide from Loma Drive along the south side of the house to the deck stair, with a flared apron at the street. Not on the permit set; layout and material are for visualization only.' };
+  const wInfo = { t: 'Front walkway (illustrative)', d: '4\'-6" walk from the driveway to the front porch steps. Not on the permit set.' };
+  HARD.dm = [drape(44.5, 56.5, -63, 20.5, 0.22, HARD.drive.asphalt[1], dInfo), drape(41.5, 59.5, -66, -60, 0.22, HARD.drive.asphalt[1], dInfo), drape(43.0, 58.0, -60, -57, 0.22, HARD.drive.asphalt[1], dInfo)];
+  // walk: from the bottom of the front steps (Z ≈ -14), west a bit then south to the driveway
+  const zs = -9.9 - (Math.max(2, Math.round((DK - grade(20, -13)) / 0.6)) - 1) * 0.92;
+  HARD.wm = [drape(17.75, 22.25, zs - 6.5, zs + 0.05, 0.25, HARD.walk.bluestone[1], wInfo, 1), drape(17.75, 44.6, zs - 6.5, zs - 2.0, 0.25, HARD.walk.bluestone[1], wInfo, 1)];
+}
+
+
 const LIGHTS = [];
 {
   const warm = 0xffd2a0;
@@ -1428,6 +1452,14 @@ const FIN = [
   ['Floors', 'wood', [['Natural oak', 0xffffff], ['Honey', 0xffd9a0], ['Gray wash', 0xc8c6c2], ['Walnut', 0x9c7c62]]],
 ];
 const finState = {};
+{ // driveway & walkway material rows (Style tab)
+  const mk = (lab, key, list, meshes) => {
+    const row = document.createElement('div'); row.className = 'frow'; const l = document.createElement('span'); l.textContent = lab; row.appendChild(l);
+    const r = document.createElement('div'); r.className = 'row'; row.appendChild(r); document.getElementById('fin').appendChild(row);
+    Object.entries(list).forEach(([k, [n, m]], i) => { const b = document.createElement('button'); b.className = 'b' + (i === 0 ? ' on' : ''); b.textContent = n; b.style.minHeight = '32px'; b.style.fontSize = '13px'; b.onclick = () => { meshes.forEach(x => x.material = m); r.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); }; r.appendChild(b); });
+  };
+  setTimeout(() => { mk('Driveway', 'drive', HARD.drive, HARD.dm); mk('Walkway', 'walk', HARD.walk, HARD.wm); }, 0);
+}
 const finEl = document.getElementById('fin');
 FIN.forEach(([lab, key, list]) => {
   const row = document.createElement('div'); row.className = 'frow'; const l = document.createElement('span'); l.textContent = lab; row.appendChild(l);

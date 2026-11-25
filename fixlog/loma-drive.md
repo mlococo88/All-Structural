@@ -53,3 +53,11 @@ Not an engineering calculation tool: no formulas, load or resistance factors, un
 - **Saved data:** new key `lomaDrive.ui.tab` (last open tab), prefixed per §5, wrapped in try/catch. No existing keys changed.
 - **Governing provision:** n/a (UI only).
 - **How verified:** headless screenshots of each tab at 1200×800 and 390×844; no page errors.
+
+## 2026-11-25 — Driveway and front walkway (illustrative)
+
+- **What:** A 12' driveway from Loma Drive along the south side of the house (plan X 44.5–56.5, Z −63 to 20.5), ending at the foot of the side-deck stair, with a flared apron at the street. A 4'-6" walkway leaves the driveway and runs along the front of the porch to the porch steps. Both are draped on the terrain and walkable in walk mode. The earlier straight walk from the steps to the street is removed. Material choices are on the Style tab: driveway in asphalt, pavers, crushed stone or concrete; walkway in bluestone, brick, pavers or concrete.
+- **Where:** `apps/loma-drive/index.html`, block `DRIVEWAY & FRONT WALK`, anchor text `const HARD = {};`. The swatch rows are added after `const finState = {};`.
+- **Assumptions (also in the tool's info text):** not shown on the permit set. The layout is for visualization only, and no lot lines, setbacks or curb-cut rules are checked. Checked clear of the nearest neighbouring building (about 30' south).
+- **Governing provision:** n/a (display only).
+- **How verified:** headless renders (aerial, south and site map views); no page errors.
