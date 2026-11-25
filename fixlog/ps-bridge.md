@@ -9964,7 +9964,7 @@ Engine test file lists: `'reltension'` added next to `'holddown'` in every test 
 - EZNI-2 (NEXT: the gap between the stems counted as concrete) is not touched here.
 - The frozen optimizer (pbd-optimize.js `optimizeStrands`, `sweepDesign`) still uses the strip sum; the app's Compare tab uses the app's engine call (engine/compare.js).
 
-## 2026-11-25 — PR: claude/ps-ez-next-stems (PR #1721: https://github.com/mlococo88/All-Structural/pull/1721) (EZN) — NEXT beams: the concrete tensile force of 5.9.2.3.1b counts the two stems only, not the gap between them (§4 calculation change; pending engineer confirmation)
+## 2026-11-25 — PR: claude/ps-ez-next-stems (PR #1721: https://github.com/mlococo88/All-Structural/pull/1721) (EZN) — NEXT beams: the concrete tensile force of 5.9.2.3.1b counts the two stems only, not the gap between them (§4 calculation change; approved by the engineer 2026-11-25)
 ### Request (engineer, 2026-11-25: "Fix NEXT stems only")
 EZNI open item 2: for a NEXT beam below the flange the engine's width (`sectionWidthAt`, the outermost edge of the outline at y) counts the gap between the two stems as concrete (NEXT 36F: 73 in instead of 2 × 13 = 26 in), over-stating the tension force there. NEXT shapes only; box beams and voided slabs keep their voids-ignored (conservative) basis.
 ### Where
@@ -9984,5 +9984,8 @@ f_top = 2.158 ksi, f_bot = −2.542 ksi at x = 60 ft. c = 36(2.542)/(2.542 + 2.1
 See the PR description: every NEXT design tried (library and MassDOT NEXT F and D, simple and 2 × 80 ft continuous, the tab design NEXT 36F with a topping). With A_s,prov = 0.62 in² no verdict changes (D/C stays above 1); a verdict can change NG → OK where A_s,prov lies between the new and old A_s,req (test: NEXT 36F with 25 in²).
 ### How verified
 `tests/engine/psbridge-ez-next-stems.test.mjs` (the widths; NEXT only; the hand check; other shapes unchanged; the NG → OK case); `tests/engine/psbridge-ez-noint.test.mjs` (the fine strip check on `widthAt`); before / after in Node: only R.relSteel, R.cont.svc.Ttop / AsTop, their checks and R.relT differ, on NEXT designs only; psbridge tests, check-syntax, the full engine suite, `tests/smoke/ps-bridge-ez-noint.mjs`.
+### Decisions
+- EZN-a (approved by the engineer 2026-11-25): "NEXT" is `G.isNext` (the library NEXT and MassDOT NEXT F and D); the MassDOT stems are read from the drawn outline (tapered, with fillets and the 0.75 in bottom chamfers).
+- The change table of PR #1721 (the NEXT reductions; a NEXT verdict can change NG → OK) approved by the engineer 2026-11-25 with the merge.
 ### Saved data
 None.
