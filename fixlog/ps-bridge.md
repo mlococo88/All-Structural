@@ -9802,7 +9802,7 @@ Built-in new project: Girders & strands → Girder types shows the two types (In
 - GSUB-c. On narrow panels (below 720 px) the Strands sub-tab stacks rows, figure, draped strands; the strand editor stays full width below.
 - GSUB-d. A link that names the tab in general (the output tabs' "Girders & strands tab" note, the Report's assumptions) opens Girder types; one about a card or a field opens its sub-tab and scrolls to it (a field is focused).
 
-## 2026-11-25 — PR: claude/ps-wide-inputs (PR pending) (WIDE) — "Widen inputs" (the input panel over the whole width) and the input-tab figures opened enlarged (display only)
+## 2026-11-25 — PR: claude/ps-wide-inputs (PR #1719: https://github.com/mlococo88/All-Structural/pull/1719) (WIDE) — "Widen inputs" (the input panel over the whole width) and the input-tab figures opened enlarged (display only)
 ### Request (engineer, 2026-11-25)
 See the input-tab graphics and input boxes bigger. A second window was considered and not chosen, since two copies of the app would overwrite each other's saved project.
 ### Where / Before / After
