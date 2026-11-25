@@ -40,3 +40,18 @@ sync, records persist across a reload.
 - No edit or delete of a synced inspection (append-only by design); a correction is a new inspection.
 - Microsoft 365 (SharePoint / Excel) storage instead of GitHub, if wanted.
 - Offline use on a tablet beyond the browser's own storage (no service worker: not possible from `file://`).
+
+## 2026-11-25 — Table view (engineer request)
+
+**What changed**: a third view button, **Table**, beside 3D and Floor plan (`index.html`: button `#vmTable`, `#tableView`,
+`TV_COLS` / `renderTable()`, `setMode`).
+- One row per member, for the level chosen in the Levels list and the member types ticked under Show. Columns: Component ID, Member,
+  Level, Grid / location, Section, NBI, Condition, Last inspected, Inspector, Defects (latest), Recommended action, Inspections, Photos.
+- Click a column heading to sort (again to reverse; blanks always last). Filter box searches every column and the latest notes;
+  condition filter (each NBI band, Not inspected, Needs attention ≤ 4).
+- Click a row (or Enter) to open the same details window; the selected row is highlighted. The table refreshes after each save or sync.
+- The last view used is remembered in this browser: new key `garageAsset.v1.view` (`3d` / `plan` / `table`).
+- Details window raised above the table (`#panel` z-index 4).
+
+**How verified**: `node tests/check-syntax.mjs`; Playwright from `file://`: 1,255 rows; sort by NBI puts `L6-4-FG-IT` (3) first;
+Needs attention filter 7 rows; row click opens its details; view remembered after reload; no horizontal page scroll at 400 px.
