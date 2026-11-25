@@ -122,6 +122,7 @@ test('worked steps: the engine\'s values; A_v,min, s_x, s_xe and Eq. 5.7.3.4.2-2
     out.pairs.forEach(p => near(p.shown, p.engine, 1e-9 * Math.max(1, Math.abs(p.engine)), p.id));
     Object.entries(out.paths).forEach(([id, p]) => { const s = out.steps.find(q => q.id === id); if (s && typeof s.value === 'number') assert.equal(s.value, at(R, p), id + ' = ' + p); });
     assert.equal(st('xg').value, R.wShear.x, 'the steps work the governing station');
+    out.steps.forEach(q => assert.ok(!/pending/i.test(q.note || ''), q.id + ': no "pending" wording in the app (engineer\'s rule E0)'));
     assert.ok(st('AvMin'), 'A_v,min step');
     if (eq2) {
       assert.match(st('beta').ref, /Eq\. 5\.7\.3\.4\.2-2$/); assert.match(st('beta').eq, /\\frac\{51\}\{39 \+ s_\{xe\}\}/); assert.match(st('beta').note, /less than A_v,min/);
