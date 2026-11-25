@@ -21,6 +21,8 @@
     { key: 'fgj', title: 'Box beam / slab: I and J (types f / g)', ref: A + '4.6.2.2.1, Eqs. C4.6.2.2.1-2, C4.6.2.2.1-3', ids: /^ld\.(fgI|Jtw|Jtb|Jtt|JtT|JyT|Jb0|Jh0|JA0|Jst|JhJ|JA|JIx|JIy|JIp|Jc|J|IJ)$/, res: /^ld\.J$/ },
     { key: 'int', title: 'Interior girder equations', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', ids: /^ld\.(k|m1|m2|v1|v2)$/ },
     { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid|rigXbar|rigXext|rigSx2|eM1|eM2|eV1|eV2|f48)$/ },
+    // NX-1 (2026-11-25): a NEXT F, per stem as type (k) (engine/lldf-next.js, steps ld.nx.*)
+    { key: 'nx', title: 'NEXT F beam: distribution per stem (type (k)), exterior stem candidates', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, C4.6.2.2.2d', ids: /^ld\.nx\./, res: /^ld\.nx\.gMi$/ },
     { key: 'df', title: 'Distribution factors used', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^ld\.(dfmRaw|dfvRaw|c1|skM|skV|lo\.\w+|dfm|dfv)$/, res: /^ld\.dfm$/ },   // lo.*: LL-O, the distribution options (engine/lldf-opt.js; only with one on)
     // AP-B (2026-11-23): the ranges of applicability of the distribution factor equations (engine/applicability.js, steps ld.ap.*)
     { key: 'ap', title: 'Line-girder analysis: ranges of applicability of the distribution factors', ref: A + '4.6.2.2, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.2e-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, 4.6.2.2.3c-1', ids: /^ld\.ap\./, res: /^ld\.ap\.r$/ },
@@ -81,7 +83,8 @@
       const out = fg.out.length ? `<div class="alert" id="fgRange"><b>Outside the range of applicability (PS-35)</b><ul>${fg.out.map(o => `<li>${k.esc(o.text)}</li>`).join('')}</ul>The equations are used all the same (flagged here, in the design warnings and the Report): check the factors (refined analysis, 4.6.3, or enter them on the Loads tab).</div>` : '';
       h += k.card(`Live load distribution factors: ${ext ? 'exterior' : 'interior'} ${window.PSBLldfFG.kindOf(R.g)}, type (${fg.type}) (PS-35${R.g.box && R.g.box.solid ? ', PS-36' : ''})`, k.kv(rows) + out
         + `<p class="note" id="fgNote">${inp.loads.dfAuto ? `AASHTO LRFD 10th Ed. equations for concrete beams in multibeam decks, cross-section type (${fg.type}) of Table 4.6.2.2.1-1 (Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1; skew 4.6.2.2.2e, 4.6.2.2.3c): the multiple presence is in the equations; no lever rule or rigid-section check. I and J of the section to which traffic is applied (4.6.2.2.1); J ${jsrc}. The moved engine's type (k) factors are not used (DF<sub>M</sub> ${k.fx(fg.engine.dfm, 4)}, DF<sub>V</sub> ${k.fx(fg.engine.dfv, 4)}: K<sub>g</sub> / 12 L t<sub>s</sub>³ does not apply to adjacent beams).` : 'Distribution factors entered on the Loads tab (the type (f) / (g) values are shown for reference).'} Position and skew from the bridge (<a href="#" data-goin="gird@card-design">Design girder card</a>); J override: <a href="#" data-goin="loads">Loads tab</a>.</p>`);
-    } else {
+    } else if (df.nx && window.PSBLldfNext) h += window.PSBLldfNext.card(ctx);   // NX-1: a NEXT F, per stem (engine/lldf-next.js)
+    else {
     // PS-42 (engineer decision 2026-11-14): a MassDOT NEDBT with no topping keeps the engine's type (k) factors, flagged next to the DF
     const SCn = window.PSBSections, nt = SCn && SCn.noTopText ? SCn.noTopText(inp) : '';
     h += k.card(`Live load distribution factors: ${ext ? 'exterior' : 'interior'} girder${df.isNext ? ' (NEXT)' : ''}`, k.kv(dfr)
@@ -191,7 +194,7 @@
     if (!A || !A.cells || !A.cells.length) return window.PSBBridge && window.PSBBridge.hasTypes(ctx.P) ? k.card('Dead loads and distribution factors of every girder line', '<p class="note">Shown once every girder type × line is computed (the Summary tab runs them).</p>') : '';
     const P = ctx.P, d = window.PSBDesign.sel(P), DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P));
     const go = (c, tab, st) => `<a class="wk" href="#" data-sumgo="${c.k}|${c.g}|${tab}|${k.esc(st)}|" title="Worked: ${tab === 'lds' ? 'Loads &amp; LLDF' : tab === 'sec' ? 'Section properties' : 'Stresses'} tab with this girder type and line">§</a>`;
-    const meth = R => { const df = R.df || {}; if (R.useExt) return 'imported'; if (df.fg) { const lf = window.PSBLldfOpt ? window.PSBLldfOpt.label(R) : ''; return `type (${df.fg.type}), ${df.ext ? 'exterior' : 'interior'}${lf ? '; ' + lf : ''}`; } const lo = window.PSBLldfOpt ? window.PSBLldfOpt.label(R) : '', t = df.ext ? 'exterior: lever rule, e, rigid section' : `interior: equations${df.isNext ? ' (NEXT)' : ''}`; return lo ? `${t}; ${lo}` : t; };
+    const meth = R => { const df = R.df || {}; if (R.useExt) return 'imported'; if (df.fg) { const lf = window.PSBLldfOpt ? window.PSBLldfOpt.label(R) : ''; return `type (${df.fg.type}), ${df.ext ? 'exterior' : 'interior'}${lf ? '; ' + lf : ''}`; } const lo = window.PSBLldfOpt ? window.PSBLldfOpt.label(R) : '', nxl = df.nx && window.PSBLldfNext ? window.PSBLldfNext.label(R) : '', t = nxl ? nxl : df.ext ? 'exterior: lever rule, e, rigid section' : `interior: equations${df.isNext ? ' (NEXT)' : ''}`; return lo ? `${t}; ${lo}` : t; };
     const cs = A.cells.slice().sort((a, b) => a.s - b.s || a.g - b.g);
     const rows = cs.map(c => { const R = c.R, on = c.g === d.g && c.s === d.s, lab = k.esc((P.types[c.k] || {}).label || '');
       if (!R || R.error) return `<tr><td>${c.s}</td><td class="lft">G${c.g}</td><td class="lft">${lab}</td><td class="lft" colspan="9">engine error${R && R.error ? ': ' + k.esc(R.error) : ''}</td></tr>`;

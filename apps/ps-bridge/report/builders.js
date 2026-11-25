@@ -146,7 +146,7 @@
         ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird@types|Girders & strands tab]].'), ...planFig(P, X), ...snapFig(P, X)]),
       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
-      { ...sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...loNotes(P), ...impNotes(P), ...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...secNotes(B)]), key: 'rs.asm' }];   // rs.asm (2026-11-23): the Basis of design section links here
+      { ...sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...loNotes(P), ...impNotes(P), ...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...nxNotes(B), ...secNotes(B)]), key: 'rs.asm' }];   // rs.asm (2026-11-23): the Basis of design section links here
     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
     return { title: 'Project, basis and assumptions', subs };
   }
@@ -362,6 +362,13 @@
     return [note(`• Live-load distribution (PS-35${B.R.g.box && B.R.g.box.solid ? ', PS-36' : ''}): ${window.PSBLldfFG ? window.PSBLldfFG.kindOf(B.R.g) : 'box beam'}, AASHTO LRFD 10th Ed. cross-section type (${f.type}) of Table 4.6.2.2.1-1 (Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1; skew 4.6.2.2.2e, 4.6.2.2.3c), not the I-girder type (k) of the old app; I = ${fx(f.I, 0)} in⁴ (${f.Isrc === 'composite' ? 'composite section' : 'girder'}), J = ${fx(f.J, 0)} in⁴ (${src}).${f.out.length ? ` Outside the range of applicability: ${f.out.map(o => o.text).join('; ')}.` : ''} (see [[rs.lds]])`, !!f.out.length)];
   }
 
+  /* nxNotes(B): NX-1 (2026-11-25): a NEXT F design: its live-load distribution per stem as type (k), the beam's factor the sum of its stems',
+     and the interpretations it rests on (fix log NX-1; the Loads & LLDF section works it) */
+  function nxNotes(B) {
+    const q = B.R && B.R.df && B.R.df.nx; if (!q) return [];
+    return [note(`• Live-load distribution (NX-1): NEXT F, each stem a type (k) stringer of AASHTO LRFD 10th Ed. Table 4.6.2.2.1-1 at the stem spacing S = S$_{b}$ / 2 (Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1; skew 4.6.2.2.2e, 4.6.2.2.3c), not the whole beam as types (i)/(j) of the old app; the beam's factor = the sum of its two stems' (an exterior beam: its exterior stem, the largest of the lever rule, e × g and the rigid cross-section, plus its interior stem). Interpretations (fix log NX-1): the sum of the stems (NX-D1), K$_{g}$ of one stem = half the beam's (NX-D2), the rigid-section check on the stems (NX-D3), d$_{e}$ of the exterior stem = the beam's d$_{e}$ − the stem offset (NX-D4). MassDOT LRFD Bridge Manual 3.5.4.3 as context. (see [[rs.lds]])`)];
+  }
+
   /* ---------- 3–14. the result tabs ---------- */
   function tabSec(B, k, X) {
     const [ui, wk] = TABS[k], U = window[ui], FT = window.PSBReportTab;
@@ -542,7 +549,7 @@
           ['Design load multiplier m on HL-93 (LL+IM)', `${fx(OL.mLL, 2)} (Strength I, Service I and Service III; not on the live-load deflection, fatigue or the load rating)`, k('ld.mLL')]])]),
       sub('ll', 'Live load', [kv([['Design live load', ld.llAuto === false ? 'entered $M_{LL}$ and $V_{LL}$ per lane (Loads tab)' : 'HL-93: the design truck or the design tandem, with the design lane load (3.6.1.2)', k('ld.M')],
         ['Dynamic load allowance IM', '33 % on the truck and the tandem, not on the lane load; 15 % on the fatigue truck (Table 3.6.2.1-1)', k('ld.M')],
-        ['Distribution factors $DF_{M}$ / $DF_{V}$', `${V('dfm', 3)} / ${V('dfv', 3)} (${ld.dfAuto === false ? 'entered' : `computed, Art. 4.6.2.2${R.df && R.df.fg ? `, cross-section type (${plain(R.df.fg.type)})` : ''}`}; ${ld.pos === 'exterior' ? 'exterior' : 'interior'} girder)`, k('ld.dfm')],
+        ['Distribution factors $DF_{M}$ / $DF_{V}$', `${V('dfm', 3)} / ${V('dfv', 3)} (${ld.dfAuto === false ? 'entered' : `computed, Art. 4.6.2.2${R.df && R.df.fg ? `, cross-section type (${plain(R.df.fg.type)})` : R.df && R.df.nx ? ', NEXT F per stem as type (k), two stems per beam' : ''}`}; ${ld.pos === 'exterior' ? 'exterior' : 'interior'} girder)`, k('ld.dfm')],
         ['Design lanes $N_{L}$, skew', `${fx(+ld.NL, 0)}, ${fx(+ld.skew, 1)}°`]])]),
       sub('an', 'Analysis method', [kv([['Method', 'Line-girder analysis of each girder type on its line, at the analysis stations along the span: the girder and DC1 on the bare girder, DC2, DW and LL+IM on the composite section; the live load per girder by the distribution factors'],
         ['Spans', cont ? 'made continuous for composite loads (5.12.3.3): the girder and DC1 on the simple span; DC2, DW and live load on the continuous unit; restraint moments as switched on the Bridge layout tab' : 'simple spans', k(cont ? 'an.pier.Mu' : 'an.MuS')],

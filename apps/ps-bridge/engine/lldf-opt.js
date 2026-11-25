@@ -17,8 +17,8 @@
          this girder type's own section, span and slab (its K_g, or I and J) and the interior girder spacing S_int = the largest spacing
          of the bridge's interior lines (engine/design.js lineS; equal bays: S). The Steel Bridge app compares with the largest interior
          factor of the region in the same way. Not raised: the fatigue factor (as the Steel Bridge app, whose policy step raises g_M and
-         g_V only). A bridge with two girders has no interior line: no change. A NEXT beam: the engine gives every beam the interior
-         equations, so nothing is raised.
+         g_V only). A bridge with two girders has no interior line: no change. A NEXT beam: the engine gave every beam the interior
+         equations, so nothing was raised; a NEXT F per stem (NX-1, engine/lldf-next.js) is compared as any other girder.
      (b) skewV 'ext' (P.xs.lldf.skewV === 'ext'): "Shear skew correction: Exterior girders only". For an INTERIOR girder line of an
          I-girder / bulb tee (type k) or a NEXT beam:   DF_V = g_V   (the correction c_V of Table 4.6.2.2.3c-1 not applied; before: c_V g_V).
          Exterior lines: unchanged. Box beams and deck slabs (types f / g, adjacent beams): NOT changed by this option (the correction

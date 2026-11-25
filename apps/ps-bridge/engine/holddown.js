@@ -38,7 +38,10 @@
   // correction on the exterior girders only; engine/lldf-opt.js, which also applies PS-19 itself); no inputs.lldf (both off): engine0 itself
   const engine = inp => (window.PSBLldfOpt && inp && inp.lldf ? window.PSBLldfOpt.run(inp, engine0) : engine0(inp));
   // PS-35 (2026-11-14): a box beam or voided slab gets the type (f) / (g) distribution factors (engine/lldf-fg.js); every other shape the engine's
-  const compute0 = inp => apply(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));
+  const engineFG = inp => (window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));
+  // NX-1 (2026-11-25, engineer-approved §4 change): a NEXT F with a cast-in-place deck gets the per-stem type (k) factors (engine/lldf-next.js);
+  // every other shape the factors as before
+  const compute0 = inp => apply(inp, window.PSBLldfNext ? window.PSBLldfNext.run(inp, engineFG) : engineFG(inp));
   // PS-34 (2026-11-14): the pier compression block checked against the family's thickness (engine/pierblock.js; a warning only)
   const compute1 = inp => { const R = compute0(inp); return window.PSBPierBlock ? window.PSBPierBlock.apply(inp, R) : R; };
   // E1-D4 / E1-D5 (engineer decisions 2026-11-21): the engine's load rating with φ_s = 1.0 for shear and the positive-moment dead-load

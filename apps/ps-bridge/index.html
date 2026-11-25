@@ -49,6 +49,7 @@
     'engine/model.js',
     'engine/rigid.js',       // PS-19: the exterior rigid-section factor on the real girder lines (unequal bays; an engine addition, §4)
     'engine/lldf-fg.js',     // PS-35: box beams and voided slabs, live-load distribution types (f) / (g) (an app-side override of distFactors, §4)
+    'engine/lldf-next.js',   // NX-1: NEXT F beams, live-load distribution per stem as type (k) (an app-side override of distFactors, §4)
     'engine/lldf-opt.js',    // LL-O: the two optional distribution options (exterior not less than interior; shear skew correction on the exterior girders only), off by default (§4)
     'engine/ut.js',          // UT-N: utilities on the noncomposite section (DW factors) and the future utility allowance (γ 1.25 / 0), as the Steel Bridge app (§4)
     'engine/pl.js',          // PL-A: the pedestrian live load (3.6.1.6) added to the engine's live load for a girder that has one (§4)
@@ -493,6 +494,7 @@
         + lineTypeCard()   // 2026-11-14: the girder type of each line (the Girders & strands tab's line boxes, the same data)
         + IN.cards('xsec', P)
         + lldfOptCard()   // LL-O (2026-11-23): the two optional live-load distribution options (P.xs.lldf, engine/lldf-opt.js)
+        + nxLineCard()    // NX-1 (2026-11-25): the factor of each NEXT F girder line (per stem; engine/lldf-next.js)
         + DLUI.card(P),   // PR 3a-3: DC2 / DW to each girder line (PS-9)
       gird: GS.pane(P, ui, V, sk),   // GSUB (2026-11-25): the sub-tabs (ui/girdsubs.js): Girder types, Section, Strands (the strand pattern beside the rows; strand editing, batch G5), Reinforcement   // 2026-11-15: the "Girder library PR 4" placeholder removed (the library is in the Girder shape card, PS-37)
       mat: TY.scopeBar(P, ui, 'mat') + IN.cards('mat', V),
@@ -511,6 +513,13 @@
       <div class="fRow"><label for="i_xs.lldf.skewV">${esc(T.skewV)}</label><select id="i_xs.lldf.skewV" data-path="xs.lldf.skewV" data-lo="skewV">${opt('all', T.all, !o.skewExt)}${opt('ext', T.ext, o.skewExt)}</select></div>
       <div class="fRow"><label for="i_xs.lldf.extMin">${esc(T.extMin)}</label><select id="i_xs.lldf.extMin" data-path="xs.lldf.extMin" data-lo="extMin">${opt('false', 'No', !o.extMin)}${opt('true', 'Yes', o.extMin)}</select></div>
       <p class="note" id="lldfOptNote">${LO.noteHTML(P)}</p></div></section>`;
+  }
+  /* NX-1 (2026-11-25): the Cross-section tab's card of a bridge with NEXT F lines: each line's rule and DF_M / DF_V (the cell results, cellR),
+     when the inputs have no error; '' without a NEXT F line. Display only. */
+  function nxLineCard() {
+    const NX = window.PSBLldfNext; if (!NX || !BR.hasTypes(P)) return '';
+    const ok = !window.PSBInputCheck.collect(P).errors.length;
+    try { return NX.xsCard(P, ok ? (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g)) : null); } catch (e) { console.warn(e); return ''; }
   }
   /* 2026-11-14 (equal spacing, the Steel Bridge app's EQSP, apps/steel-bridge/ui/loads.js equalRows): W_cc and the worked step
      S = W_cc / (N_b − 1); every bay takes S (M.applyEqual on each change); the deck width out to out shown */
@@ -666,6 +675,7 @@
     const t = e.target, go = t.closest('[data-goin]');
     if (go) { e.preventDefault(); goIn(go.dataset.goin, panelTop); return; }   // GSUB: 'tab@target'
     { const gb = t.closest('[data-gsub]'); if (gb) { e.preventDefault(); gsubTo(gb.dataset.gsub); return; } }   // GSUB: a Girders & strands sub-tab
+    { const sg = t.closest('[data-sumgo]'); if (sg) { e.preventDefault(); const [k, g, tab, st] = sg.dataset.sumgo.split('|'); if (k !== '' && P.types && P.types[+k]) pick(+k, +g); gotoStep(tab, st); return; } }   // NX-1: the Cross-section tab's NEXT F line card: that type and line, its tab at the worked step
     { const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }   // PS-35: an input note's link to an output tab (the Loads input tab's J note)
     if (LGUI.onClick(e, lgCtx)) return;
     if (DMUI.onClick(e, P, ui, dmCtx)) return;   // batch D1

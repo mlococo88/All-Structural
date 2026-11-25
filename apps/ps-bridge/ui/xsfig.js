@@ -96,7 +96,7 @@
     const m = model(P, s), out = { kind: 'int', note: '', cases: [], m };
     if (m.errors.length || !df) { out.note = m.errors.join(' '); return out; }
     if (df.fg) { out.kind = 'fg'; out.note = `Box beams and slabs, cross-section type (${df.fg.type}) (PS-35): the distribution factors are the AASHTO equations of Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1 with the multiple presence in them; no lever rule and no rigid-section check, so no wheels are placed.`; return out; }
-    if (df.isNext) { out.kind = 'next'; out.note = 'NEXT beams, cross-section types (i) / (j): the engine uses the AASHTO equations on the beam width; it applies no lever rule and no rigid-section check, so no wheels are placed.'; return out; }
+    if (df.isNext) { out.kind = 'next'; out.note = df.nx ? `NEXT F beams, per stem as type (k) (NX-1): ${df.nx.ext ? 'the exterior stem\'s lever rule (hinge at the first interior stem), e × g and rigid cross-section (with the stems as the girders) are worked on the Loads & LLDF tab (steps ld.nx.*), plus the interior stem' : 'an interior beam takes twice the interior stem\'s factor'}; no wheels are placed on this figure (it shows the beams).` : 'NEXT beams, cross-section types (i) / (j): the engine uses the AASHTO equations on the beam width; it applies no lever rule and no rigid-section check, so no wheels are placed.'; return out; }
     if (!df.ext) { out.note = `G${g} is an interior girder: the distribution factors are the AASHTO equations (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1); no lever rule or rigid-section check, so no wheels are placed.`; return out; }
     out.kind = 'ext';
     const nb = m.nb, side = g === nb && g !== 1 ? 'R' : 'L', dir = side === 'L' ? 1 : -1;   // dir: inboard (+x for the left girder)

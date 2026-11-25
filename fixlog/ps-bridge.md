@@ -9930,3 +9930,159 @@ Before (main, src midas) and after (converted table): every engine result, worke
 - NOMCT-d. Kept entries keep the stored values' input warnings (span length, continuity) reworded, plus a warning to re-enter.
 ### Other tools with MCT / MIDAS links (not changed, one tool per PR)
 lldf.html ("Send DL to MCT Loads" and its MCT links), apps/steel-bridge ("Import MIDAS (.lga)" / "Export to MIDAS (.lga)", demand-file notes), apps/midas-model-inspector, tools.html, the old "Prestressed Bridge Design.html" (frozen), the root index.html (the MCT Generator).
+## 2026-11-25 — PR: claude/ps-next-lldf (PR #1726: https://github.com/mlococo88/All-Structural/pull/1726) (NX-1) — NEXT F beams: live-load distribution per stem as type (k), exterior beams with the lever rule, e and the rigid section (CALCULATION CHANGE, §4; engineer-approved)
+### Request (engineer, 2026-11-25; §4 change approved)
+The app treated each NEXT F beam as one beam (AASHTO LRFD Table 4.6.2.2.1-1 types (i)/(j) on the beam width) and gave the exterior beams the interior factor; on a real 2-NEXT-24F-per-side, 40 ft wide bridge it gave 0.809 on every line. Type (i) is for integral decks; a NEXT F carries a cast-in-place deck on its flange. Distribute per stem as type (k) at the stem spacing, add the two stems' factors per beam, give the exterior beams the lever rule, the e factors and the rigid-section check with the multiple presence handled per Art. 3.6.1.1.2, the skew corrections, the ranges of applicability, every candidate worked.
+### Problem
+- `distFactors` (frozen `engine/pbd-lldf-flexure.js`, branch `if(g.isNext){`) computes g_M = max(0.06 + (S_f/14)^0.4 (S_f/L)^0.3 k, 0.075 + (S_f/9.5)^0.6 (S_f/L)^0.2 k) and g_V = max(0.36 + S_f/25, 0.2 + S_f/12 − (S_f/35)²) with S_f = b_f/12 (the beam width) and K_g of the whole beam, and returns `ext:false` for every line: no lever rule, no e factor, no rigid section. Less conservative than the per-stem method for NEXT F (test project: interior 0.853 → 0.984, exterior 0.853 → 1.012 for moment).
+### Where / what changed (the frozen `engine/pbd-*.js` untouched)
+- New `apps/ps-bridge/engine/lldf-next.js` (`window.PSBLldfNext`), loaded after `engine/lldf-fg.js` (index.html script list). `run(inp, inner)` calls `inner(inp)` with the global `distFactors` wrapped for that call (restored after), the engine/lldf-fg.js pattern; for a girder with `kind(g) === 'F'` (a NEXT F: the old library's NEXT xxF, a MassDOT NEXT F, a custom NEXT) and `t_s > 0` it replaces the engine's result with `compute(inp, g, cp, df0)`; every other shape gets the engine's result unchanged. NEXT D (MassDOT `fam: 'nextd'`) and a NEXT F with `t_s = 0`: unchanged, with a design warning (`warnText`).
+- `compute` (equations cited, not copied; AASHTO LRFD 10th Ed. (2024)):
+  - S = S_b / 2 (S_b = `inputs.S`, the line's beam ℄ spacing), N_st = 2 N_b; e_g = h + t_h + t_s/2 − y_b (the engine's); K_g,beam = n (I + A e_g²) (Eq. 4.6.2.2.1-1), K_g = K_g,beam / 2.
+  - Interior stem: g_M1 = 0.06 + (S/14)^0.4 (S/L)^0.3 (K_g/12 L t_s³)^0.1; g_M2 = 0.075 + (S/9.5)^0.6 (S/L)^0.2 (K_g/12 L t_s³)^0.1 (Table 4.6.2.2.2b-1, type k); g_V1 = 0.36 + S/25; g_V2 = 0.2 + S/12 − (S/35)² (Table 4.6.2.2.3a-1); g_M,int = max(g_M1, g_M2), g_V,int = max(g_V1, g_V2).
+  - Exterior stem (exterior beams): d_e,st = d_e − c, c = stemCC/2 = 30 in = 2.5 ft; lever rule, one lane, m = 1.2: g_lever = 1.2 Σ 0.5 (S_lev + x_w)/S_lev, x_w = d_e,st − 2, d_e,st − 8 (x_w > −S_lev), S_lev = 2c = 5 ft (4.6.2.2.2d, 4.6.2.2.3b, 3.6.1.1.2); e_M = 0.77 + d_e,st/9.1 (Table 4.6.2.2.2d-1), e_V = 0.6 + d_e,st/10 (Table 4.6.2.2.3b-1), times g_M2 / g_V2; rigid section R = m (N_L/N_st + X_ext Σe/Σx²) on the stems at the beam lines ± c (`inputs.rigidX` for unequal bays), e_j = X_ext + d_e,st − 5 − 12 j, m = 1.2/1.0/0.85/0.65, the largest over 1 … N_L (Eq. C4.6.2.2.2d-1); g_M,ext = max(e_M g_M2, g_lever, R), g_V,ext = max(e_V g_V2, g_lever, R).
+  - Per beam: interior g = 2 g_int; exterior g = g_ext + g_int. Skew: r_M = 1 − c₁ (tan θ)^1.5, c₁ = 0.25 (K_g/12 L t_s³)^0.25 (S/L)^0.5 (θ < 30°: 0; θ ≤ 60°) (Table 4.6.2.2.2e-1); c_V = 1 + 0.20 (12 L t_s³/K_g)^0.3 tan θ (Table 4.6.2.2.3c-1), stem K_g and S; DF_M = r_M g_M, DF_V = c_V g_V.
+  - Fields the engine reads: `dfm`, `dfv`; fatigue (pbd-compute.js `dfFatAuto = df.ext ? max(df.lever, df.rigid1) : df.m1`): `m1 = 2 g_M1,st`, `lever = g_lever,st + g_M1,st`, `rigid1 = R₁,st + g_M1,st`. `df.nx` holds every stem value; `df.Sf = S_b`; `df.Kg` = the stem's.
+- `engine/holddown.js` (anchor `const compute0`):
+  - Before: `const compute0 = inp => apply(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));`
+  - After: `const engineFG = inp => (window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));` `const compute0 = inp => apply(inp, window.PSBLldfNext ? window.PSBLldfNext.run(inp, engineFG) : engineFG(inp));`
+- `engine/worked.js` `loads()` (anchor `if (df.fg) fgSteps(add, inp, R); else {`): After: `if (df.fg) fgSteps(add, inp, R); else if (df.nx && window.PSBLldfNext) window.PSBLldfNext.steps(add, inp, R, { n, g, par }); else {`. The steps `ld.nx.*` (S_b, S, N_st, e_g, K_g,beam, K_g, g_M1, g_M2, g_V1, g_V2, g_M,int, g_V,int; exterior: d_e,st, g_lever, e_M, e_M g_M2, e_V, e_V g_V2, x̄, X_ext, Σx², R_1 … R_NL, R, g_M,ext, g_V,ext) and `ld.dfmRaw`, `ld.dfvRaw` (the per-beam conversion), `ld.c1`, `ld.skM`, `ld.skV`; `ld.dfm`, `ld.dfv` follow as before.
+- `engine/worked-stress.js` (anchor `else if (dfA && L0.ext) add({ id: 'fat.df',`): two branches before it for `L0.nx` (exterior: (max(g_lever, R₁) + g_M1)/1.2; interior: 2 g_M1/1.2).
+- `engine/applicability.js` `of()`: for `df.nx` the items S = the stem spacing, N_b = N_st, K_g = the stem's, d_e = d_e,st (same type (k) ranges; a FAIL and its warning as before). Before: `it('S', next ? 'Beam width …' : 'Girder spacing', …, next ? df.Sf : +inp.S, …)` etc.; after: an `if (nx)` line before each.
+- `engine/lldf-opt.js`: header comment only (a NEXT F is now compared as any girder by "Exterior not less than interior").
+- `ui/loads.js`: TOPICS `nx` (ids `ld.nx.*`); the card `PSBLldfNext.card(ctx)` for `df.nx` (Before: `} else {` / After: `} else if (df.nx && window.PSBLldfNext) h += window.PSBLldfNext.card(ctx); else {`): the stems table (#nxStems), the exterior candidates with the governing one shaded (#nxCand), the per-beam conversion, each value linked to its step; the every-line table's method text (`PSBLldfNext.label`).
+- `ui/xsfig.js` `lldf()`: the NEXT note says the per-stem method (no wheels drawn, as before).
+- `ui/shear.js`: the Strength note's DF_V linked to `ld.dfv` (Loads & LLDF tab).
+- `index.html`: the script; the Cross-section tab card `nxLineCard()` → `PSBLldfNext.xsCard(P, …)` (#nxLines: each NEXT F line, its rule, DF_M and DF_V, § to the step with that type and line).
+- `report/builders.js`: `nxNotes(B)` in §2 Assumptions; the "Distribution factors" row says "NEXT F per stem as type (k), two stems per beam".
+- Tests: new `tests/engine/psbridge-lldf-next.test.mjs` (9 tests); `lldf-next` in `psbridge-tabs.test.mjs` and the script list of `psbridge-model.test.mjs`; harness B (`tests/psbridge-compare.mjs`) puts `engine/lldf-next.js` in the old page for a NEXT F design (the PS-35 pattern) and logs before / after.
+### Shared code (CLAUDE.md §3)
+The PS app's distribution factors are its own (`engine/pbd-lldf-flexure.js` and its app-side modules); not shared with `lldf.html` or `shared/*` (no shared file changed; `lldf.html` and `Prestressed Bridge Design.html` unchanged).
+### Saved data (CLAUDE.md §5)
+None: no key, field or format added or changed; no setting.
+### Governing provisions
+AASHTO LRFD 10th Ed. (2024): Table 4.6.2.2.1-1 (type k), Art. 4.6.2.2.1 (K_g, Eq. 4.6.2.2.1-1; d_e), 4.6.2.2.2b and Table 4.6.2.2.2b-1, 4.6.2.2.2d and Table 4.6.2.2.2d-1, Eq. C4.6.2.2.2d-1, 4.6.2.2.2e and Table 4.6.2.2.2e-1, 4.6.2.2.3a and Table 4.6.2.2.3a-1, 4.6.2.2.3b and Table 4.6.2.2.3b-1, 4.6.2.2.3c and Table 4.6.2.2.3c-1, 3.6.1.1.2 and Table 3.6.1.1.2-1, 3.6.1.4.3b (fatigue, m removed). Context: MassDOT LRFD Bridge Manual (Hundredth Anniversary Ed.) 3.5.4.3. Owner of record RIDOT: RIDOT Bridge Design Manual (April 2026) has no NEXT LLDF provision (see Owner guidance).
+### Check case (by hand; the test project, built from scratch)
+4 NEXT 24F at 10 ft (b_f = 120 in), overhangs 5 ft (40.0 ft out to out), simple span 45 ft, 8 in CIP deck, 2 in haunch, barriers 14 in, 5 ft × 8 in sidewalks (mountable: the traffic face stays the barrier's), d_e = 5 − 14/12 = 3.833 ft, N_L = 3, RIDOT, 24 × 0.6 in strands; f′c 8.5 ksi (w_c 0.145), deck 4.0 ksi (0.150).
+- Section at 120 in (half way between 96 and 144 in): A = (972 + 1,164)/2 = 1,068 in², I = (51,905 + 60,159)/2 = 56,032 in⁴, y_b = (14.94 + 16.10)/2 = 15.52 in. E_c = 120,000 w_c² f′c^0.33: 5,112.4 / 4,266.2 ksi, n = 1.19835.
+- e_g = 24 + 2 + 8/2 − 15.52 = 14.480 in; K_g,beam = 1.19835 (56,032 + 1,068 × 14.48²) = 335,489 in⁴; K_g = 167,744 in⁴; K_g / 12 L t_s³ = 167,744 / (12 × 45 × 512) = 0.60671, ^0.1 = 0.95126.
+- S = 10/2 = 5.0 ft, N_st = 8. g_M1 = 0.06 + 0.66244 × 0.51729 × 0.95126 = 0.38596; g_M2 = 0.075 + 0.68039 × 0.64439 × 0.95126 = 0.49206; g_V1 = 0.36 + 5/25 = 0.56000; g_V2 = 0.2 + 5/12 − (5/35)² = 0.59626.
+- Interior beam (G2, G3): DF_M = 2 × 0.49206 = **0.98412**; DF_V = 2 × 0.59626 = **1.19252**.
+- Exterior stem: d_e,st = 3.8333 − 2.5 = 1.3333 ft. Lever rule (S_lev = 5 ft): x_w = −0.6667 ft (ordinate (5 − 0.6667)/5 = 0.86667) and −6.6667 ft (past the hinge: 0): g_lever = 1.2 × 0.5 × 0.86667 = 0.52000. e_M = 0.77 + 1.3333/9.1 = 0.91652, e_M g_M2 = 0.45098; e_V = 0.6 + 1.3333/10 = 0.73333, e_V g_V2 = 0.43726. Rigid: stems at −2.5, 2.5, …, 32.5 ft, x̄ = 15, X_ext = 17.5, Σx² = 1,050 ft²; R₁ = 1.2 (1/8 + 17.5 × 13.8333/1,050) = 0.42667; R₂ = 1.0 (2/8 + 17.5 × 15.6667/1,050) = 0.51111; R₃ = 0.85 (3/8 + 17.5 × 5.5/1,050) = 0.39667; R = 0.51111 (2 lanes). g_M,ext = max(0.45098, 0.52000, 0.51111) = 0.52000 (lever); g_V,ext = max(0.43726, 0.52000, 0.51111) = 0.52000 (lever).
+- Exterior beam (G1, G4): DF_M = 0.52000 + 0.49206 = **1.01206**; DF_V = 0.52000 + 0.59626 = **1.11626**.
+- Skew 35° (tan θ = 0.70021): c₁ = 0.25 × 0.60671^0.25 × (5/45)^0.5 = 0.07355; r_M = 1 − 0.07355 × 0.70021^1.5 = 0.95691; c_V = 1 + 0.2 × (1/0.60671)^0.3 × 0.70021 = 1.16269. Interior DF_M 0.94171, DF_V 1.38653; exterior DF_M 0.96845, DF_V 1.29786.
+- Fatigue (÷ 1.2): interior 2 × 0.38596 / 1.2 = 0.64326; exterior (max(0.52, 0.42667) + 0.38596)/1.2 = 0.75497.
+- Before (the engine, every line): S_f = 10 ft, K_g,beam: DF_M = 0.075 + (10/9.5)^0.6 (10/45)^0.2 (335,489/276,480)^0.1 = **0.85326**, DF_V = 0.2 + 10/12 − (10/35)² = **0.95170**, DF_fat 0.52294; skew 35°: 0.79142 / 1.07746.
+### How verified
+- `tests/engine/psbridge-lldf-next.test.mjs`: the hand check above (interior, exterior, moment, shear, skew 0 and 35°, 15°, fatigue); every other shape, NEXT D and NEXT F without a deck byte-identical with and without the module (SHA-256 of every result: the harness B designs on every line and the 38 recorded + 600 seeded parity cases); applicability on the stem values and a FAIL with t_s = 4 in; unequal bays; the worked steps = the engine values (pairs to 1e-9); the Loads & LLDF card, the Cross-section tab card, the Report (no "pending" wording).
+- Branch vs origin/main in Node over 785 designs (the harness B designs on every line, the recorded and seeded parity cases, the test project at 0° and 35°): 692 unchanged (every non-NEXT design), 93 changed, all NEXT F (table below).
+### Designs whose DF or a check verdict / ratio changes (before → after; verdict flips first)
+| # | Design (line, position) | DF_M | DF_V | DF_fat | Verdict | Checks that flip | Largest ratio |
+|---|---|---|---|---|---|---|---|
+| 1 | shape_NEXT_28F (int) | 0.7639 → 0.8883 | 0.8144 → 1.0405 | 0.4736 → 0.5866 | FAIL → FAIL | Flexure: PASS 0.9483 → FAIL 1.0395; Shear: PASS 0.7162 → FAIL 1.0756 | 7.1746 → 7.1746 |
+| 2 | shape_NEXT_32F (int) | 0.7500 → 0.8734 | 0.8144 → 1.0405 | 0.4575 → 0.5682 | FAIL → FAIL | Long. reinf (5.7.3.5): PASS 0.9835 → FAIL 1.0782 | 7.9350 → 7.9350 |
+| 3 | seed024:shape_NEXT_28F,ext,CTDOT,cont2r,debond (ext) | 0.8752 → 0.9560 | 1.0824 → 1.1228 | 0.4955 → 0.5860 | FAIL → FAIL | LLDF range of applicability (4.6.2.2): (none) → FAIL 1.5000 (new check) | 10.1707 → 10.5525 |
+| 4 | seed026:next_skew,ext,approx,debond,hand (ext) | 0.8012 → 0.8312 | 0.9487 → 1.0130 | 0.5193 → 0.5780 | FAIL → FAIL | LLDF range of applicability (4.6.2.2): (none) → FAIL 2.5000 (new check) | 4.2413 → 4.2413 |
+| 5 | seed057:shape_NEXT_28F,ext,approx,cont3 (ext) | 0.7484 → 0.8759 | 0.9517 → 1.0363 | 0.4278 → 0.5524 | FAIL → FAIL | Fatigue I (strand): PASS 0.8268 → FAIL 1.0677; Srv comp (bot, −M, 5.12.3.3.5): PASS 0.9776 → FAIL 1.0564 | 11.6036 → 12.2735 |
+| 6 | seed123:shape_NEXT_28F,ext,CTDOT,debond (ext) | 0.8277 → 0.8977 | 0.8839 → 0.9778 | 0.5074 → 0.5955 | FAIL → FAIL | Srv III tens: PASS 0.9795 → FAIL 1.1486; Long. reinf (5.7.3.5): PASS 0.9674 → FAIL 1.0125 | 4.7363 → 4.7363 |
+| 7 | seed124:shape_NEXT_32F (int) | 0.9369 → 1.0738 | 0.9517 → 1.1925 | 0.5704 → 0.6978 | FAIL → FAIL | Srv tens (top): FAIL 1.0120 → PASS 0.9614; Shear: PASS 0.7271 → FAIL 1.0652 | 8.7487 → 8.7487 |
+| 8 | seed192:shape_NEXT_36F,ext,RIDOT,rate,hand,deck (ext) | 0.8561 → 0.9373 | 0.8839 → 1.0022 | 0.5193 → 0.6696 | FAIL → FAIL | Min reinf: PASS 0.9917 → FAIL 1.0113 | 2.7109 → 2.7109 |
+| 9 | seed222:shape_NEXT_28F,ext,RIDOT (ext) | 0.7833 → 0.7924 | 0.8144 → 0.8581 | 0.4856 → 0.5517 | FAIL → FAIL | LLDF range of applicability (4.6.2.2): (none) → FAIL 2.5000 (new check) | 99.0000 → 99.0000 |
+| 10 | seed223:shape_NEXT_32F,ext,cont2r,midas+,hand,deck (ext) | 0.7431 → 0.8839 | 0.9517 → 1.0472 | 0.4181 → 0.5614 | FAIL → FAIL | Fatigue I (strand): PASS 0.8776 → FAIL 1.1784 | 14.2177 → 14.2177 |
+| 11 | seed251:next_skew,ext,CTDOT,cont2r,rate,deck (ext) | 0.7465 → 0.8255 | 0.9532 → 1.0455 | 0.4625 → 0.5575 | FAIL → FAIL | LL deflection: PASS 0.9968 → FAIL 1.1023; LLDF range of applicability (4.6.2.2): (none) → FAIL 1.5000 (new check) | 21.8835 → 21.8835 |
+| 12 | seed255:shape_NEXT_28F,ext,cont2r,hand (ext) | 0.7434 → 0.8950 | 0.9517 → 1.0581 | 0.4250 → 0.6154 | FAIL → FAIL | Min reinf: PASS 0.9343 → FAIL 1.0093; Fatigue I (strand): PASS 0.8733 → FAIL 1.2644 | 11.0382 → 11.8965 |
+| 13 | seed258:shape_NEXT_36F,ext,rate (ext) | 0.7970 → 0.8273 | 0.8144 → 0.8856 | 0.4890 → 0.5675 | FAIL → FAIL | Srv tens (top): FAIL 1.0044 → PASS 0.9914; Flexure: PASS 0.9866 → FAIL 1.0071; LLDF range of applicability (4.6.2.2): (none) → FAIL 1.5000 (new check) | 9.2854 → 9.2854 |
+| 14 | seed286:shape_NEXT_24F,approx,debond (int) | 0.7557 → 0.8795 | 0.8144 → 1.0405 | 0.4720 → 0.5848 | FAIL → FAIL | Flexure: PASS 0.9314 → FAIL 1.0243; Shear: PASS 0.7201 → FAIL 1.1017 | 3.1311 → 3.1311 |
+| 15 | seed291:shape_NEXT_36F,MassDOT,cont3,debond,hand,deck (int) | 0.9589 → 1.0973 | 1.0824 → 1.3412 | 0.5479 → 0.6720 | FAIL → FAIL | Srv III top tens (pier, 5.12.3.3.5): PASS 0.9756 → FAIL 1.0495 | 99.0000 → 99.0000 |
+| 16 | seed321:shape_NEXT_28F,CTDOT,deck (int) | 0.8477 → 1.0319 | 1.2536 → 1.6023 | — | FAIL → FAIL | LL deflection: PASS 0.9131 → FAIL 1.1114 | 9.4567 → 9.4567 |
+| 17 | seed341:next_skew,ext,RIDOT,cont2 (ext) | 0.7548 → 0.8957 | 1.0347 → 1.1717 | 0.4508 → 0.6302 | FAIL → FAIL | Srv comp (bot, −M, 5.12.3.3.5): PASS 0.9321 → FAIL 1.0087 | 8.1998 → 8.8200 |
+| 18 | seed385:shape_NEXT_24F,ext,approx,RIDOT,cont4,deck (ext) | 0.6864 → 0.7990 | 1.0068 → 1.0634 | 0.3868 → 0.5071 | FAIL → FAIL | Deck comp: PASS 0.8804 → FAIL 1.0037; LLDF range of applicability (4.6.2.2): (none) → FAIL 2.5000 (new check) | 160.3015 → 160.3015 |
+| 19 | seed386:next_skew,ext,approx,CTDOT (ext) | 0.7648 → 0.8585 | 1.0353 → 1.1241 | 0.4614 → 0.5609 | FAIL → FAIL | LLDF range of applicability (4.6.2.2): (none) → FAIL 1.5000 (new check) | 8.2297 → 8.6760 |
+| 20 | seed418:shape_NEXT_24F,ext,RIDOT,cont2,hand (ext) | 0.6269 → 0.7637 | 0.8144 → 0.9132 | 0.3700 → 0.5129 | FAIL → FAIL | Min reinf: PASS 0.9982 → FAIL 1.0194; Fatigue I (strand): PASS 0.8964 → FAIL 1.2426 | 10.6753 → 11.6359 |
+| 21 | seed423:shape_NEXT_36F,ext,CTDOT,cont4,debond (ext) | 0.6965 → 0.8517 | 0.8839 → 1.0022 | 0.3960 → 0.5987 | FAIL → FAIL | Fatigue I (strand): PASS 0.7001 → FAIL 1.0585 | 47.3040 → 47.3040 |
+| 22 | seed431:next_skew,ext,approx,hand,deck (ext) | 0.7718 → 0.8622 | 1.0324 → 1.1204 | 0.4662 → 0.5636 | FAIL → FAIL | LLDF range of applicability (4.6.2.2): (none) → FAIL 1.5000 (new check) | 99.0000 → 99.0000 |
+| 23 | seed456:shape_NEXT_36F,approx,MassDOT (int) | 0.8625 → 0.9941 | 0.8839 → 1.1169 | 0.5232 → 0.6435 | FAIL → FAIL | Srv III tens: PASS 0.9204 → FAIL 1.1913; Shear: PASS 0.8266 → FAIL 1.1762 | 2.5073 → 2.5073 |
+| 24 | seed486:shape_NEXT_28F,approx,CTDOT,cont3r,rate,hand (int) | 0.6903 → 0.8095 | 0.8839 → 1.1169 | 0.3989 → 0.5008 | FAIL → FAIL | Fatigue I (strand): PASS 0.8212 → FAIL 1.0309 | 9.6645 → 10.3517 |
+| 25 | seed487:shape_NEXT_32F,approx,MassDOT,hand,deck (int) | 1.0631 → 1.2090 | 1.0824 → 1.3412 | 0.6358 → 0.7729 | FAIL → FAIL | Shear: PASS 0.7709 → FAIL 1.0929 | 99.0000 → 99.0000 |
+| 26 | seed521:next_skew (int) | 0.8023 → 0.9509 | 0.9484 → 1.2173 | 0.5202 → 0.6401 | FAIL → FAIL | Srv tens (top): FAIL 1.0207 → PASS 0.9641; Flexure: PASS 0.9715 → FAIL 1.0712; Shear: PASS 0.7751 → FAIL 1.1663 | 18.8011 → 18.8011 |
+| 27 | seed550:shape_NEXT_24F,MassDOT,cont4,debond (int) | 0.5516 → 0.6738 | 0.9895 → 1.3160 | 0.3386 → 0.4315 | FAIL → FAIL | Srv comp (bot, −M, 5.12.3.3.5): PASS 0.9145 → FAIL 1.0206 | 99.0000 → 99.0000 |
+| 28 | seed553:shape_NEXT_32F,cont3r,debond,deck (int) | 0.7151 → 0.8360 | 0.8839 → 1.1169 | 0.4129 → 0.5169 | FAIL → FAIL | Srv comp (bot, −M, 5.12.3.3.5): PASS 0.9556 → FAIL 1.0171 | 8.3527 → 8.8759 |
+| 29 | seed555:shape_NEXT_36F,ext,cont4r,deck (ext) | 0.7097 → 0.8235 | 1.0964 → 1.2043 | 0.4500 → 0.5543 | FAIL → FAIL | LLDF range of applicability (4.6.2.2): (none) → FAIL 1.5000 (new check) | 99.0000 → 99.0000 |
+| 30 | seed583:shape_NEXT_24F,MassDOT,debond (int) | 0.7871 → 0.9132 | 0.8839 → 1.1169 | 0.4810 → 0.5951 | FAIL → FAIL | Min reinf: PASS 0.9874 → FAIL 1.0396 | 5.8596 → 5.8596 |
+| 31 | seed588:shape_NEXT_36F,ext,approx,CTDOT,hand (ext) | 0.7320 → 0.7649 | 0.8144 → 0.8581 | 0.4406 → 0.5259 | FAIL → FAIL | LLDF range of applicability (4.6.2.2): (none) → FAIL 2.5000 (new check) | 7.1253 → 7.1253 |
+| 32 | TEST PROJECT skew 35° G2 (int) | 0.7914 → 0.9417 | 1.0775 → 1.3865 | 0.5229 → 0.6433 | PASS → FAIL | Shear: PASS 0.6738 → FAIL 1.0847 | 1.0000 → 1.0847 |
+| 33 | TEST PROJECT skew 35° G3 (int) | 0.7914 → 0.9417 | 1.0775 → 1.3865 | 0.5229 → 0.6433 | PASS → FAIL | Shear: PASS 0.6738 → FAIL 1.0847 | 1.0000 → 1.0847 |
+| 34 | TEST PROJECT skew 35° G1 (ext) | 0.7914 → 0.9684 | 1.0775 → 1.2979 | 0.5229 → 0.7550 | PASS → FAIL | Shear: PASS 0.6738 → FAIL 1.0386 | 1.0000 → 1.0386 |
+| 35 | TEST PROJECT skew 35° G4 (ext) | 0.7914 → 0.9684 | 1.0775 → 1.2979 | 0.5229 → 0.7550 | PASS → FAIL | Shear: PASS 0.6738 → FAIL 1.0386 | 1.0000 → 1.0386 |
+| 36 | TAB: NEXT 36F with a 6 in topping, no draped strands G2 (int) | 0.7624 → 0.8868 | 0.9517 → 1.1925 | 0.4287 → 0.5350 | FAIL → FAIL | — | 12.6710 → 13.4208 |
+| 37 | TAB: NEXT 36F with a 6 in topping, no draped strands G3 (int) | 0.7624 → 0.8868 | 0.9517 → 1.1925 | 0.4287 → 0.5350 | FAIL → FAIL | — | 12.6710 → 13.4208 |
+| 38 | TAB: NEXT 36F with a 6 in topping, no draped strands G4 (int) | 0.7624 → 0.8868 | 0.9517 → 1.1925 | 0.4287 → 0.5350 | FAIL → FAIL | — | 12.6710 → 13.4208 |
+| 39 | TAB: NEXT 36F with a 6 in topping, no draped strands G1 (ext) | 0.7624 → 0.8834 | 0.9517 → 1.0363 | 0.4287 → 0.5530 | FAIL → FAIL | — | 12.6710 → 13.4004 |
+| 40 | TAB: NEXT 36F with a 6 in topping, no draped strands G5 (ext) | 0.7624 → 0.8834 | 0.9517 → 1.0363 | 0.4287 → 0.5530 | FAIL → FAIL | — | 12.6710 → 13.4004 |
+| 41 | next_skew (int) | 0.7018 → 0.8361 | 0.8784 → 1.1412 | 0.4451 → 0.5539 | FAIL → FAIL | — | 8.6384 → 8.6384 |
+| 42 | shape_NEXT_24F (int) | 0.7835 → 0.9093 | 0.8144 → 1.0405 | 0.4955 → 0.6117 | FAIL → FAIL | — | 6.3459 → 6.3459 |
+| 43 | shape_NEXT_36F (int) | 0.7396 → 0.8623 | 0.8144 → 1.0405 | 0.4451 → 0.5539 | FAIL → FAIL | — | 8.6384 → 8.6384 |
+| 44 | seed022:shape_NEXT_24F,ext,debond,hand (ext) | 0.9849 → 1.0508 | 1.0824 → 1.1588 | 0.5851 → 0.7074 | FAIL → FAIL | — | 5.9507 → 5.9507 |
+| 45 | seed027:shape_NEXT_36F (int) | 0.9299 → 1.0663 | 1.0824 → 1.3412 | 0.5255 → 0.6462 | FAIL → FAIL | — | 7.4619 → 7.9645 |
+| 46 | seed055:shape_NEXT_24F,MassDOT (int) | 0.8180 → 0.9765 | 0.8790 → 1.1422 | 0.5930 → 0.7237 | FAIL → FAIL | — | 7.0982 → 7.0982 |
+| 47 | seed058:shape_NEXT_32F,RIDOT,debond (int) | 0.7500 → 0.8734 | 0.8144 → 1.0405 | 0.4575 → 0.5682 | FAIL → FAIL | — | 5.5107 → 5.5107 |
+| 48 | seed060:shape_NEXT_36F,ext,approx,MassDOT,cont2,midas+,hand (ext) | 0.5817 → 0.7394 | 0.8629 → 0.9802 | 0.3354 → 0.4931 | FAIL → FAIL | — | 21.1120 → 21.1120 |
+| 49 | seed088:shape_NEXT_24F,ext,CTDOT,rate,hand,deck (ext) | 0.7835 → 0.8752 | 0.8144 → 0.9408 | 0.4955 → 0.6559 | FAIL → FAIL | — | 99.0000 → 99.0000 |
+| 50 | seed090:shape_NEXT_28F,approx,RIDOT,cont3,rate,hand (int) | 0.7912 → 0.9176 | 0.9517 → 1.1925 | 0.4609 → 0.5720 | FAIL → FAIL | — | 99.0000 → 99.0000 |
+| 51 | seed091:shape_NEXT_32F,approx,rate (int) | 0.7987 → 0.9256 | 0.9517 → 1.1925 | 0.4773 → 0.5908 | FAIL → FAIL | — | 2.3893 → 2.4210 |
+| 52 | seed093:shape_NEXT_36F,CTDOT,debond (int) | 0.8408 → 0.9707 | 0.8144 → 1.0405 | 0.5292 → 0.6504 | FAIL → FAIL | — | 9.9690 → 9.9690 |
+| 53 | seed116:next_skew,approx,RIDOT,debond (int) | 0.8814 → 1.0332 | 1.1728 → 1.4790 | 0.5255 → 0.6462 | FAIL → FAIL | — | 99.0000 → 99.0000 |
+| 54 | seed121:shape_NEXT_24F,MassDOT,rate,deck (int) | 1.0640 → 1.2100 | 0.9859 → 1.2453 | 0.6900 → 0.8352 | FAIL → FAIL | — | 7.5512 → 7.5512 |
+| 55 | seed126:shape_NEXT_36F,approx,CTDOT,debond,rate (int) | 0.9265 → 1.0627 | 0.8839 → 1.1169 | 0.5766 → 0.7049 | FAIL → FAIL | — | 8.6562 → 8.6562 |
+| 56 | seed154:shape_NEXT_24F,ext,CTDOT,rate (ext) | 0.8543 → 0.9119 | 0.8839 → 0.9778 | 0.5343 → 0.6109 | FAIL → FAIL | — | 3.3259 → 3.3259 |
+| 57 | seed157:shape_NEXT_32F,CTDOT,cont2 (int) | 0.7635 → 0.8879 | 0.9517 → 1.1925 | 0.4363 → 0.5437 | FAIL → FAIL | — | 15.2552 → 15.2552 |
+| 58 | seed159:shape_NEXT_36F,ext,cont3r,debond (ext) | 0.8388 → 0.8306 | 0.9517 → 0.9388 | 0.4882 → 0.5871 | FAIL → FAIL | — | 6.3135 → 6.3135 |
+| 59 | seed161:next_skew,approx (int) | 0.8777 → 1.0289 | 1.1742 → 1.4812 | 0.5229 → 0.6432 | FAIL → FAIL | — | 7.7685 → 8.3674 |
+| 60 | seed187:shape_NEXT_24F,CTDOT,debond (int) | 0.9517 → 1.1295 | 1.0280 → 1.3102 | 0.6827 → 0.8268 | FAIL → FAIL | — | 6.2830 → 6.2830 |
+| 61 | seed189:shape_NEXT_28F,CTDOT (int) | 0.6964 → 0.8160 | 0.8144 → 1.0405 | 0.4268 → 0.5328 | FAIL → FAIL | — | 3.3384 → 3.3384 |
+| 62 | seed190:shape_NEXT_32F,cont2r,debond (int) | 0.7111 → 0.8620 | 1.1044 → 1.4281 | 0.4555 → 0.5658 | FAIL → FAIL | — | 6.3667 → 6.9598 |
+| 63 | seed206:next_skew,MassDOT,cont2r,deck (int) | 0.7548 → 0.8918 | 1.0347 → 1.3206 | 0.4508 → 0.5604 | FAIL → FAIL | — | 10.7860 → 10.7860 |
+| 64 | seed220:shape_NEXT_24F,approx,rate (int) | 0.9832 → 1.1234 | 1.0824 → 1.3412 | 0.5841 → 0.7136 | FAIL → FAIL | — | 5.0159 → 5.4838 |
+| 65 | seed225:shape_NEXT_36F,ext,hand,deck (ext) | 0.8009 → 0.9077 | 0.8839 → 1.0022 | 0.4765 → 0.6450 | FAIL → FAIL | — | 8.2575 → 8.2575 |
+| 66 | seed253:shape_NEXT_24F,approx,cont3r (int) | 0.8254 → 0.9543 | 1.0824 → 1.3412 | 0.4634 → 0.5749 | FAIL → FAIL | — | 34.7548 → 34.7548 |
+| 67 | seed256:shape_NEXT_32F,MassDOT,debond,hand (int) | 0.8171 → 0.9454 | 0.8839 → 1.1169 | 0.4928 → 0.6087 | FAIL → FAIL | — | 2.6989 → 3.0531 |
+| 68 | seed288:shape_NEXT_28F,MassDOT,hand (int) | 0.8764 → 1.0089 | 0.8144 → 1.0405 | 0.5686 → 0.6957 | FAIL → FAIL | — | 8.2171 → 8.2171 |
+| 69 | seed289:shape_NEXT_32F,CTDOT,debond,rate (int) | 0.6805 → 0.8296 | 1.0199 → 1.3285 | 0.4487 → 0.5580 | FAIL → FAIL | — | 5.8808 → 6.2216 |
+| 70 | seed296:next_skew,debond,rate (int) | 0.8777 → 1.0289 | 1.1742 → 1.4812 | 0.5229 → 0.6432 | FAIL → FAIL | — | 7.4869 → 8.0858 |
+| 71 | seed319:shape_NEXT_24F,debond (int) | 0.9834 → 1.1235 | 0.8839 → 1.1169 | 0.6440 → 0.7824 | FAIL → FAIL | — | 5.7299 → 5.7299 |
+| 72 | seed324:shape_NEXT_36F,cont2r,debond,midas+ (int) | 0.7272 → 0.8490 | 0.8839 → 1.1169 | 0.4198 → 0.5248 | FAIL → FAIL | — | 7.2493 → 7.2493 |
+| 73 | seed352:shape_NEXT_24F,ext,approx,RIDOT (ext) | 1.0693 → 1.0759 | 0.9517 → 1.0472 | 0.6934 → 0.7196 | FAIL → FAIL | — | 7.5711 → 7.5711 |
+| 74 | seed355:shape_NEXT_32F,MassDOT,cont3r,debond,hand,deck (int) | 0.7117 → 0.8324 | 0.8839 → 1.1169 | 0.4110 → 0.5147 | FAIL → FAIL | — | 7.4458 → 7.8698 |
+| 75 | seed357:shape_NEXT_36F,approx,MassDOT (int) | 0.9311 → 1.0676 | 0.8839 → 1.1169 | 0.5794 → 0.7081 | FAIL → FAIL | — | 2.1781 → 2.1781 |
+| 76 | seed390:shape_NEXT_36F,MassDOT,debond,rate,hand (int) | 0.8056 → 0.9330 | 0.9161 → 1.1670 | 0.4793 → 0.5931 | FAIL → FAIL | — | 99.0000 → 99.0000 |
+| 77 | seed451:shape_NEXT_24F,ext,CTDOT,hand (ext) | 0.7795 → 0.8455 | 0.8144 → 0.9132 | 0.5030 → 0.5893 | FAIL → FAIL | — | 6.7116 → 6.7116 |
+| 78 | seed453:shape_NEXT_28F,ext (ext) | 0.9904 → 1.0537 | 1.0824 → 1.1588 | 0.5830 → 0.7061 | FAIL → FAIL | — | 7.4838 → 7.4838 |
+| 79 | seed454:shape_NEXT_32F,approx,CTDOT (int) | 0.7622 → 0.8866 | 0.8839 → 1.1169 | 0.4495 → 0.5589 | FAIL → FAIL | — | 7.2586 → 7.2586 |
+| 80 | seed476:next_skew,approx,MassDOT,rate,hand (int) | 0.7889 → 0.9402 | 0.8684 → 1.1255 | 0.5373 → 0.6598 | FAIL → FAIL | — | 2.7915 → 2.7915 |
+| 81 | seed489:shape_NEXT_36F,CTDOT (int) | 0.7925 → 0.9190 | 0.8839 → 1.1169 | 0.4657 → 0.5776 | FAIL → FAIL | — | 5.3046 → 5.7455 |
+| 82 | seed517:shape_NEXT_24F,cont3r,rate,hand,deck (int) | 0.8166 → 0.9449 | 1.0824 → 1.3412 | 0.4586 → 0.5693 | FAIL → FAIL | — | 33.8460 → 34.1665 |
+| 83 | seed519:shape_NEXT_28F,debond (int) | 0.7699 → 0.8948 | 0.8144 → 1.0405 | 0.4773 → 0.5909 | FAIL → FAIL | — | 1.7890 → 1.7890 |
+| 84 | seed520:shape_NEXT_32F,approx,deck (int) | 0.7603 → 0.9299 | 1.0895 → 1.4051 | 0.5239 → 0.6443 | FAIL → FAIL | — | 99.0000 → 99.0000 |
+| 85 | seed522:shape_NEXT_36F,ext,approx,debond (ext) | 1.0034 → 1.0449 | 0.9517 → 1.0581 | 0.6181 → 0.7263 | FAIL → FAIL | — | 2.1951 → 2.1951 |
+| 86 | seed552:shape_NEXT_28F,approx,rate,deck (int) | 0.8435 → 0.9736 | 0.9517 → 1.1925 | 0.5121 → 0.6308 | FAIL → FAIL | — | 5.2094 → 5.2094 |
+| 87 | seed566:next_skew,ext,RIDOT,cont2 (ext) | 0.7187 → 0.8582 | 0.9587 → 1.1066 | 0.4382 → 0.6230 | FAIL → FAIL | — | 9.7473 → 10.6728 |
+| 88 | seed585:shape_NEXT_28F,RIDOT (int) | 0.8850 → 1.0181 | 0.8839 → 1.1169 | 0.5533 → 0.6782 | FAIL → FAIL | — | 7.8662 → 7.8662 |
+| 89 | seed586:shape_NEXT_32F,RIDOT,hand,deck (int) | 0.7001 → 0.8199 | 0.8144 → 1.0405 | 0.4176 → 0.5223 | FAIL → FAIL | — | 99.0000 → 99.0000 |
+| 90 | TEST PROJECT skew 0° G2 (int) | 0.8533 → 0.9841 | 0.9517 → 1.1925 | 0.5229 → 0.6433 | PASS → PASS | — | 1.0000 → 1.0000 |
+| 91 | TEST PROJECT skew 0° G3 (int) | 0.8533 → 0.9841 | 0.9517 → 1.1925 | 0.5229 → 0.6433 | PASS → PASS | — | 1.0000 → 1.0000 |
+| 92 | TEST PROJECT skew 0° G1 (ext) | 0.8533 → 1.0121 | 0.9517 → 1.1163 | 0.5229 → 0.7550 | PASS → PASS | — | 1.0000 → 1.0000 |
+| 93 | TEST PROJECT skew 0° G4 (ext) | 0.8533 → 1.0121 | 0.9517 → 1.1163 | 0.5229 → 0.7550 | PASS → PASS | — | 1.0000 → 1.0000 |
+The per-check ratios of every row: in the PR.
+### Decisions (pending engineer review)
+- NX-D1. The beam's factor = the sum of its two stems' factors (MassDOT 3.5.4.3 item 3): interior 2 g_int, exterior g_ext + g_int (the exterior stem's governing candidate plus the interior stem's equation). The stems' governing load cases may differ (e.g. lever one lane on the outer stem, two lanes on the inner): conservative.
+- NX-D2. K_g of one stem = K_g,beam / 2 (one stem with half the flange: half A and half I about the same centroid, so the same e_g; MassDOT's 3.7.6 NEXT D K_g values, 62,100 in⁴ for a 28D, are of the order of one stem below the flange: about 66,000 in⁴ by hand for one 20 in deep stem, twice that for two). The whole-beam K_g would raise the K_g term by 2^0.1 = 1.072 (test project: interior DF_M 0.98412 → 1.04399). Less conservative of the two readings.
+- NX-D3. The rigid cross-section check (C4.6.2.2.2d) is applied to the NEXT exterior stem with the stems as the girders (4.6.2.2.2d makes it mandatory for steel beam-slab bridges with diaphragms; the app applies it to every type (k) exterior girder; MassDOT 3.5.4.3 item 2 has the "pile cap analogy" investigated). Conservative.
+- NX-D4. d_e of the exterior stem = the app's d_e (beam ℄ to the traffic face, computed from the cross-section or entered) − the stem offset c = 2.5 ft; the lever rule hinges at the first interior stem, S_lev = the actual stem spacing 5.0 ft (MassDOT item 2), while the equations use the uniform S = S_b / 2.
+- NX-D5. NEXT D is not changed (engine whole-beam factors, with a design warning): MassDOT takes type (i) with its own K_g (3.7.6); RIDOT BDM 2.4.6.3 does not allow NEXT D without the State Bridge Engineer's approval. A NEXT F with t_s = 0 is not changed either (warning).
+- NX-D6. The shear skew correction c_V on every line over the whole span, and the moment skew with the engine's θ (the larger skew), as the engine does for type (k).
+### Open items (raised, not changed)
+- NX-O1. 4.6.2.2.2d lets a negative d_e outside the range be limited to −1.0 ft; the app (I-girders, and now the NEXT stems) flags d_e < −1.0 as an applicability FAIL instead (10 seeded designs with an entered d_e of 0 or 1 ft get d_e,st < −1.0). Apply the limit?
+- NX-O2. MassDOT 3.5.4.2 distributes DC1, DC2, DW and PL to NEXT beams per stem; the app distributes them per girder line (unchanged).
+- NX-O3. RIDOT BDM Table 5-1: NEXT Type F support skew up to 15°; no warning is given above it.
+### Owner guidance
+- RIDOT BDM (April 2026): no NEXT LLDF provision; 2.4.6.3 (NEXT D needs the State Bridge Engineer's approval); 3.4.1.1.2 (m of Table 3.6.1.1.2-1 not applied with the approximate-method distribution factors, "already included in the equations"; m = 1.2 removed for fatigue); 3.4.1.1.1 (with sidewalks, two lane cases: sidewalk as travel way without pedestrian load, and curb to curb with it); 4.4.1 (refined analysis where the 4.6.2 ranges are not met). Question for the engineer: does RIDOT 3.4.1.1.2 also mean no m on the lever rule and the rigid section (AASHTO 3.6.1.1.2 and C4.6.2.2.2d apply it there; the app applies it, the more conservative reading)?
