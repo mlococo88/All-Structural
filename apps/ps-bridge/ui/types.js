@@ -59,7 +59,7 @@
     if (D.checks(P).errors.length || window.PSBModel.validate(P).errors.length) return '';
     const TABN = { layout: 'Bridge layout', xsec: 'Cross-section', gird: 'Girders & strands' };
     let dv = []; try { dv = D.driven(P); } catch (e) { dv = []; }
-    return box('design', `Shown on the output tabs: ${esc(P.types[c.k].label)} on line G${c.g}, span ${c.s}`, 'chosen above the output tabs', `<div class="kv">${dv.map(q => `<div><span>${esc(q.label)}</span><span data-dv="${esc(q.key)}">${esc(typeof q.value === 'number' ? fmt(q.value, q.d == null ? 2 : q.d) : String(q.value))}${q.unit ? ' ' + esc(q.unit) : ''} <a href="#" data-goin="${q.where}" title="Entered on the ${esc(TABN[q.where])} tab">${esc(TABN[q.where])}</a></span></div>`).join('')}</div>
+    return box('design', `Shown on the output tabs: ${esc(P.types[c.k].label)} on line G${c.g}, span ${c.s}`, 'chosen above the output tabs', `<div class="kv">${dv.map(q => `<div><span>${esc(q.label)}</span><span data-dv="${esc(q.key)}">${esc(typeof q.value === 'number' ? fmt(q.value, q.d == null ? 2 : q.d) : String(q.value))}${q.unit ? ' ' + esc(q.unit) : ''} <a href="#" data-goin="${q.where === 'gird' ? 'gird@card-types' : q.where}" title="Entered on the ${esc(TABN[q.where])} tab">${esc(TABN[q.where])}</a></span></div>`).join('')}</div>
       <p class="note">The bridge gives each girder type on each line these values (the old app's "Preliminary designer" bridge values, PBD.applyBridge, plus continuity, skew and the overhang).</p>`);
   }
   function scopeBar(P, ui, tab) {
@@ -75,7 +75,7 @@
     // 2026-11-15 (batch B): a plain line as the steel app's #gBar ("Girder type … on line … checked on …; every line in the Summary"), not a boxed band
     return `<div class="tyOut"><label for="tyOutT">Girder type</label><select id="tyOutT" data-ty="otype">${ks.map(k => `<option value="${k}"${k === c.k ? ' selected' : ''}>${esc(P.types[k].label)} (span ${P.types[k].span})</option>`).join('')}</select>
       <label for="tyOutL">on line</label><select id="tyOutL" data-ty="oline">${lines.map(g => `<option value="${g}"${g === c.g ? ' selected' : ''}>G${g} (${g === 1 || g === P.xs.nb ? 'exterior' : 'interior'})</option>`).join('')}</select>
-      <span>${lines.length > 1 ? `checked on ${lines.map(g => 'G' + g).join(', ')}; ` : ''}every line in the <a href="#" data-gotab="sum">Summary</a> · <a href="#" data-goin="gird" title="The girder types and their lines (Girders & strands tab)">Girder types</a></span></div>`;
+      <span>${lines.length > 1 ? `checked on ${lines.map(g => 'G' + g).join(', ')}; ` : ''}every line in the <a href="#" data-gotab="sum">Summary</a> · <a href="#" data-goin="gird@card-types" title="The girder types and their lines (Girders & strands tab)">Girder types</a></span></div>`;
   }
   /* mark(root, P, ui): the fields a type has of its own */
   function mark(root, P, ui) {
@@ -114,7 +114,7 @@
   function onClick(e, P, ui) {
     const BR = B(), b = e.target.closest('[data-ty]'); if (!b || b.tagName === 'SELECT' || (b.tagName === 'INPUT')) return null;
     const t = b.dataset.ty, k = +b.dataset.k; e.preventDefault();
-    if (t === 'edit') { ui.scope = P.types[k].id; return { ui: true, note: `Showing ${P.types[k].label}'s inputs: the Girders & strands, Materials and Loads tabs now edit this type only.` }; }
+    if (t === 'edit') { ui.scope = P.types[k].id; ui.gsub = 'sec'; return { ui: true, note: `Showing ${P.types[k].label}'s inputs: the Girders & strands, Materials and Loads tabs now edit this type only (Girders & strands: from the Section sub-tab).` }; }   // GSUB (2026-11-25): ui.gsub, the Section sub-tab
     if (t === 'copy') { const j = BR.addType(P, k, { label: `${P.types[k].label} copy` }); return { note: `${P.types[j].label}: a new type of span ${P.types[j].span}, a copy of ${P.types[k].label} (no line yet: tick its lines).` }; }
     if (t === 'del') { const ks = BR.spanTypes(P, P.types[k].span), to = ks.find(j => j !== k); if (to == null) return null;
       const lab = P.types[k].label, toLab = P.types[to].label, L = BR.typeLines(P, k);

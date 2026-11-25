@@ -143,7 +143,7 @@
       sub('b', 'Bridge and the design girder', [kv([['Spans', `${P.spans.lengths.map(L => OK().fx(+L, 2)).join(' + ')} ft (${P.spans.continuity === 'composite' && nS > 1 ? 'made continuous for composite loads, 5.12.3.3' : 'simple spans'})`],
         ['Girders', `${P.xs.nb}; bays ${(P.xs.bays || []).map(x => OK().fx(+x, 2)).join(', ')} ft; overhangs ${OK().fx(+P.xs.ohL, 2)} / ${OK().fx(+P.xs.ohR, 2)} ft`], ['Support skews', `${(P.xs.skews || []).map(x => OK().fx(+x, 1)).join(', ')}°`],
         ['Design girder', `${plain(inp.proj && inp.proj.girderId)} in span ${sel.s}: ${plain(inp.girder)}, L = ${V0(X, 'L', 2)} ft, S = ${OK().fx(+inp.S, 3)} ft, ${inp.loads.pos === 'exterior' ? 'exterior' : 'interior'} girder`],
-        ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].'), ...planFig(P, X), ...snapFig(P, X)]),
+        ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird@types|Girders & strands tab]].'), ...planFig(P, X), ...snapFig(P, X)]),
       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
       { ...sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...loNotes(P), ...impNotes(P), ...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...secNotes(B)]), key: 'rs.asm' }];   // rs.asm (2026-11-23): the Basis of design section links here
@@ -480,7 +480,7 @@
     const out = [], worked = B.multi ? B.units.map(u => ({ k: u.k, g: u.g, s: u.s, label: u.label, R: u.R })) : [B.cell && B.all ? { k: B.cell.k, g: B.cell.g, s: B.cell.s, label: B.P.types[B.cell.k].label, R: B.R } : { k: null, g: null, s: B.sel.s, label: null, R: B.R }];
     if (E.low) { const z = E.low; out.push([`Load rating: lowest HL-93 inventory rating factor (${plain(z.n)})`, z.v >= 1 ? 'RF ≥ 1' : 'RF < 1', `RF ${z.path ? rec(z, z.path, 3) : fx(z.v, 3)}, ${who(z)}; a rating factor is not a design check`, see(z)]); }
     E.off.forEach(gp => out.push([`${gp.name} checks`, 'off', 'switched off for this project: no check made', '—']));
-    if (BR && BR.hasTypes && BR.hasTypes(B.P)) { const un = BR.unassigned(B.P); if (un.length) out.push(['Girder lines with no girder type', 'not checked', un.map(q => `G${q.g}/S${q.s}`).join(', '), '[[tab:in:gird|Girders & strands tab]]']); }
+    if (BR && BR.hasTypes && BR.hasTypes(B.P)) { const un = BR.unassigned(B.P); if (un.length) out.push(['Girder lines with no girder type', 'not checked', un.map(q => `G${q.g}/S${q.s}`).join(', '), '[[tab:in:gird@card-types|Girders & strands tab]]']); }
     E.errs.forEach(c => out.push([`${plain(c.label)} on G${c.g}, span ${c.s}`, 'engine error', `not computed: ${plain(c.R && c.R.error)}`, '—']));
     worked.forEach(z => {
       const R = z.R;

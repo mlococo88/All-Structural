@@ -15,7 +15,7 @@ const { b, p, errs } = await openPage(path.join(REPO, 'apps/ps-bridge/index.html
 const rows = () => p.evaluate(() => PSBModel.load(localStorage).project.base.rows.map(r => ({ n: r.n, y: r.y, nd: r.nd, dbnd: r.dbnd })));
 try {
   await p.waitForFunction(() => window.PSBStrandEdit && document.getElementById('out').innerText.length > 50, null, { timeout: 120000 });
-  await p.click('#inTabs [data-itab="gird"]'); await p.waitForSelector('#strandEditHost svg');
+  await p.click('#inTabs [data-itab="gird"]'); await p.click('#gSubs [data-gsub="str"]'); await p.waitForSelector('#strandEditHost svg');   // GSUB: the Strands sub-tab
   const r0 = await rows(), i0 = r0.findIndex(r => r.y === 2);
   await p.click(`#strandEditHost circle[data-se="pick"][data-ri="${i0}"]`); await p.waitForSelector('#seRow');
   assert.match(await p.textContent('#seRow'), new RegExp(`Row ${i0 + 1}: ${r0[i0].n} strands at y = 2 in`)); ok('a strand clicked: its row opens');
