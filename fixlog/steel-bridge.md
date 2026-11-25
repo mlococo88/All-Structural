@@ -12042,3 +12042,14 @@ None.
 - **Not flipped (left as they are, listed):** `fx.a6.ok` (a list of six conditions, several relations); `sp.DT3.<k>` "1.13 \gt 0.00 \le \min(8(0.625), 5.0) = 5.00" (two relations); `ts<k>.gap` "1.75 \le 2.75 \le 2.63" (a chained range: 2.75 above the upper limit); `wt<k>.pa` / `pt` (the requirement "A_1/A_2 ≥ 0.5" is in sym, the sub has no relation: "… = 0.444").
 - **Decisions (pending engineer review):** NGREL-1 (shared): on in this app only. NGREL-2: equal numbers as printed keep "≤". NGREL-3: chained ranges and multi-condition steps (above) are not rewritten.
 - **Found, not changed:** the Report's plain text ends a failing comparison with "…, NG NG" (the step's value "NG" and the text report's own " NG" for ok false; shared/report.js text()); display only, not touched here.
+
+
+## 2026-11-25 — PR: claude/sb-cf10-tests-sblk (PR #1713: https://github.com/mlococo88/All-Structural/pull/1713) (SBLK-T) — three CF10 tests brought in step with #1711's `cf.type` step   [tests only; no tool code changed]
+- **Problem:** after #1711 (SBLK) `engine/crossframes.js` `typeStep(w, R)` always writes `cf.type` (CF10's comparison of d against d_min) where `typeRecStep` wrote none, and CF10's § links to it. Three tests still asserted the old state and failed on main.
+- **Where / Before / After:**
+  - `tests/engine/xf-cf10-depth.test.mjs`, test "projects saved before girder types and equal depths…": before `assert.ok(!R.steps.some(s => s.id === 'cf.type'), 'equal depths: no SB-22 step');` → after: the `cf.type` step is SBLK's comparison (its note has no SB-22, its value is 'cross-frame' or 'diaphragm').
+  - same file, test "the hand check: Interior D = 60, Exterior 66…": before `assert.ok(!R.steps.some(s => s.id === 'cf.type'), 'no section recommended: no step');` → after: `cf.type` is SBLK's comparison with value 'cross-frame' and no SB-22 note.
+  - `tests/engine/xf-cf10-notes.test.mjs`: the built-in project's CF10 Item cell ends `[[cf.type]]` (before `[[cf.dg]]`) and the ratio cell's key is `cf.type` (before `cf.dg`); the comment above updated.
+- **Governing provision:** none changed (no tool code changed).
+- **Check case:** built-in project, G1: CF10 Item cell "Intermediate bracing. Recommended: K (bottom)-frame (S/h = 2.19). In use: X-frame. [[cf.type]]".
+- **How verified:** `node tests/engine/run.mjs xf-cf10-depth.test.mjs xf-cf10-notes.test.mjs`: 7 / 7 pass (3 failed on main before).

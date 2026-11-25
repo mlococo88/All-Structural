@@ -30,7 +30,7 @@ test('projects saved before girder types and equal depths: the section as before
     const { I, Env, TR } = rec(P, gi), b = before(I.p, Env);
     assert.equal(TR.ch, b.ch); assert.equal(TR.w, b.w); assert.ok(!TR.grp, 'one section');
     if (TR.req != null) assert.ok(Math.abs(TR.req - b.req) < 1e-12, `req ${TR.req} = ${b.req}`);
-    const R = CF.compute(I.p, Env); assert.ok(!R.steps.some(s => s.id === 'cf.type'), 'equal depths: no SB-22 step'); assert.ok(!/SB-22/.test(CF.checks(R).find(c => c.id === 'CF10').note));
+    const R = CF.compute(I.p, Env); const ty = R.steps.find(s => s.id === 'cf.type'); assert.ok(ty && !/SB-22/.test(ty.note) && /^(cross-frame|diaphragm)$/.test(ty.value), 'equal depths: no SB-22 step (cf.type is SBLK\'s CF10 comparison, #1711)'); assert.ok(!/SB-22/.test(CF.checks(R).find(c => c.id === 'CF10').note));
   }
   const { TR } = rec(sh, 0); assert.equal(TR.deep, false); assert.equal(TR.w, 'W27x84'); assert.equal(TR.rec, 'rolled diaphragm W27x84', 'equal D = 30: 0.75 × 31.88 = 23.91 in → W27x84 (W24x76 is 23.90)');
   assert.ok(!('req' in rec(M.defaultProject(), 0).TR), 'saved before girder types: no SB-22 fields');
@@ -41,7 +41,7 @@ test('the hand check: Interior D = 60, Exterior 66 (req 50.91 in) and 54 (46.41 
     const { I, Env, TR } = rec(two(60, De), gi), b = before(I.p, Env);
     assert.ok(Math.abs(TR.req - req) < 5e-3, `${De}: ${TR.req}`); assert.equal(TR.deep, true); assert.match(TR.rec, /^K \(bottom\)-frame/);
     assert.equal(TR.ch, undefined); assert.equal(TR.w, undefined); assert.equal(b.ch, undefined); assert.equal(b.w, undefined, 'before: none either (0.75 × d ≥ 41.91 in > W36x135 35.6 in)');
-    const R = CF.compute(I.p, Env); assert.ok(!R.steps.some(s => s.id === 'cf.type'), 'no section recommended: no step');
+    const R = CF.compute(I.p, Env); const ty = R.steps.find(s => s.id === 'cf.type'); assert.ok(ty && !/SB-22/.test(ty.note) && ty.value === 'cross-frame', 'no section recommended: no SB-22 step (cf.type is SBLK\'s CF10 comparison, #1711)');
   }
 });
 

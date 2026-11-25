@@ -28,9 +28,9 @@ test('CF10: the recommendation and the bracing in use, in the Report Item cell a
   const it = B.frm.C.find(c => c.id === 'CF10').items[0];
   assert.equal(row[1], `Intermediate bracing. Recommended: ${it.cells[2]}. In use: ${it.cells[3]}. [[cf.type]]`);
   assert.match(row[1], /G1–G2, G5–G6: rolled diaphragm W30x99; G2–G3, G4–G5: rolled diaphragm W36x135; G3–G4: rolled diaphragm W36x135\. In use: X-frame\./);
-  // the built-in project (saved before girder types): no cf.type step, the link goes to d (cf.dg); the ratio cell's dead cf.type link too
+  // the built-in project (saved before girder types): SBLK (#1711) works CF10's comparison in cf.type, so the link and the ratio cell go there (cf.dg before)
   const b = ckSub(M.defaultProject(), 0), r0 = b.sub.items.find(i => i.type === 'table').rows.find(r => /^CF10 /.test(r[0]));
-  assert.equal(r0[1], 'Intermediate bracing. Recommended: K (bottom)-frame (S/h = 2.19). In use: X-frame. [[cf.dg]]'); assert.equal(r0[4].key, 'cf.dg');
+  assert.equal(r0[1], 'Intermediate bracing. Recommended: K (bottom)-frame (S/h = 2.19). In use: X-frame. [[cf.type]]'); assert.equal(r0[4].key, 'cf.type');
   assert.equal(FUI.recStep(new Set(['cf.dg'])), 'cf.dg'); assert.equal(FUI.recStep(new Set(['cf.dg', 'cf.type'])), 'cf.type');
   assert.equal(FUI.ckRec({ id: 'CF11' }, { cells: ['a', 'b', 'c', 'd'] }), null);
 });
