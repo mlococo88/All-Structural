@@ -38,7 +38,12 @@
   // correction on the exterior girders only; engine/lldf-opt.js, which also applies PS-19 itself); no inputs.lldf (both off): engine0 itself
   const engine = inp => (window.PSBLldfOpt && inp && inp.lldf ? window.PSBLldfOpt.run(inp, engine0) : engine0(inp));
   // PS-35 (2026-11-14): a box beam or voided slab gets the type (f) / (g) distribution factors (engine/lldf-fg.js); every other shape the engine's
-  const compute0 = inp => apply(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));
+  // EZX (2026-11-25, engineer "Merge, then exact"; §4): the concrete tensile force of 5.9.2.3.1b (release, top and bottom) and near an
+  // interior support (5.12.3.3.5) summed exactly by parts instead of the engine's 240 strips (engine/reltension.js): R.relSteel, R.cont.svc
+  // and their two checks; the engine's strip values kept in R.relT.strip. Applied to each engine result here, before the stages that run
+  // the chain more than once (UT-N, PL-A: their present / absent states then compare the same values)
+  const relT = (inp, R) => (window.PSBRelTension ? window.PSBRelTension.apply(inp, R) : R);
+  const compute0 = inp => apply(inp, relT(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp)));
   // PS-34 (2026-11-14): the pier compression block checked against the family's thickness (engine/pierblock.js; a warning only)
   const compute1 = inp => { const R = compute0(inp); return window.PSBPierBlock ? window.PSBPierBlock.apply(inp, R) : R; };
   // E1-D4 / E1-D5 (engineer decisions 2026-11-21): the engine's load rating with φ_s = 1.0 for shear and the positive-moment dead-load
@@ -58,10 +63,6 @@
   const compute5 = inp => { const R = compute4(inp); return window.PSBDemands && window.PSBDemands.assumed ? window.PSBDemands.assumed(inp, R) : R; };
   // DD (2026-11-24, engineer request "Please fix the deck distribution steel"; §4): the deck's distribution reinforcement on the effective span
   // length of AASHTO LRFD 10th Ed. Art. 9.7.2.3 (engine/deckdist.js, with shared/deck.js distEff); a girder without the deck design: R as before
-  const compute6 = inp => { const R = compute5(inp); return window.PSBDeckDist && R && R.deck ? window.PSBDeckDist.apply(inp, R) : R; };
-  // EZX (2026-11-25, engineer "Merge, then exact"; §4): the concrete tensile force of 5.9.2.3.1b (release, top and bottom) and near an
-  // interior support (5.12.3.3.5) summed exactly by parts instead of the engine's 240 strips (engine/reltension.js): R.relSteel, R.cont.svc
-  // and their two checks; the engine's strip values kept in R.relT.strip
-  const compute = inp => { const R = compute6(inp); return window.PSBRelTension ? window.PSBRelTension.apply(inp, R) : R; };
+  const compute = inp => { const R = compute5(inp); return window.PSBDeckDist && R && R.deck ? window.PSBDeckDist.apply(inp, R) : R; };
   window.PSBHoldDown = { NAME, FRAC, apply, compute, fracOf };
 })();
