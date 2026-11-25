@@ -66,7 +66,7 @@
     let kv = '';
     if (!D().checks(P).errors.length && !window.PSBModel.validate(P).errors.length) {
       const TABN = { layout: 'Bridge layout', xsec: 'Cross-section', gird: 'Girders & strands' };
-      kv = `<div class="kv">${D().driven(P).map(q => `<div><span>${esc(q.label)}</span><span data-dv="${esc(q.key)}">${esc(fmt(q.value, q.d == null ? 2 : q.d))}${q.unit ? ' ' + esc(q.unit) : ''} <a href="#" data-goin="${q.where}" title="Entered on the ${esc(TABN[q.where])} tab">${esc(TABN[q.where])}</a></span></div>`).join('')}</div>`;
+      kv = `<div class="kv">${D().driven(P).map(q => `<div><span>${esc(q.label)}</span><span data-dv="${esc(q.key)}">${esc(fmt(q.value, q.d == null ? 2 : q.d))}${q.unit ? ' ' + esc(q.unit) : ''} <a href="#" data-goin="${q.where === 'gird' ? 'gird@card-design' : q.where}" title="Entered on the ${esc(TABN[q.where])} tab">${esc(TABN[q.where])}</a></span></div>`).join('')}</div>`;
     }
     return card('design', 'Design girder', 'one design (no girder types)', `${s('design.g', 'Girder', gOpts, d.g, 'The girder line designed (G1 = left exterior). With girder types (PS-8, Girders &amp; strands tab) every type is checked on its own lines.')}
       ${s('design.s', 'Span', sOpts, d.s, 'The span designed (spans on the Bridge layout tab).')}${kv}
@@ -132,15 +132,22 @@
     );
     return card('assume', 'Assumptions', '', `<ul class="note asm">${items.map(t => `<li>${t}</li>`).join('')}</ul>`);
   }
-  /* cards(tab, P): the HTML of the tab's girder-design cards */
-  function cards(tab, P, R) {
+  /* the Straight strand rows card (after the Girder shape card) */
+  const rowsCard = P => card('rows', 'Straight strand rows', 'y from the soffit; debonding entered only (auto-design never adds it, PS-12)', table('base.rows', P)
+    + `<p class="note">${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0)} straight strands + ${+P.base.harp.n || 0} draped = ${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0) + (+P.base.harp.n || 0)} strands. Debonding rules (5.9.4.3.3) are checked as warnings of the design.</p>`
+    + `<p class="note" id="rowsFitNote">Each row is drawn and checked as a contiguous group of strands on the 2 in grid, centred on the girder ℄. A strand centre must be inside the concrete, at least 2 in from its edges (PS-28) and at least 1.25 in from the face of a void (PS-39; 1.5 in before, PS-33).${rowModelNote(P.base)}</p>`);
+  /* cards(tab, P, R, only): the HTML of the tab's girder-design cards; only (optional, GSUB 2026-11-25: the sub-tabs of the Girders & strands
+     tab, ui/girdsubs.js): a test of the card id ('design', 'shape', 'rows', 'draped', ...), the cards it passes only, each the same HTML */
+  function cards(tab, P, R, only) {
     if (!P.base) return '';
     let h = '';
+    const want = id => !only || only(id);
     if (tab === 'proj') return assumptions(P);
-    if (tab === 'gird' && !(window.PSBBridge && window.PSBBridge.hasTypes(P))) h += designCard(P);   // PR 3a-1: with girder types, ui/types.js
+    if (tab === 'gird' && want('design') && !(window.PSBBridge && window.PSBBridge.hasTypes(P))) h += designCard(P);   // PR 3a-1: with girder types, ui/types.js
     if (tab === 'own') h += ownerCard(P, R);
     F().CARDS.filter(c => c.tab === tab).forEach(c => {
       if (c.when && !c.when(P.base, P)) return;
+      if (!want(c.id)) { if (c.id === 'shape' && want('rows')) h += rowsCard(P); return; }   // GSUB: the rows card follows the shape card
       let body = c.fields.filter(f => !f.when || f.when(P.base, P)).map(f => field(f, P)).join('');
       // PR A (engineer 2026-11-14): a standard box beam / voided slab of the CTDOT plates: the "to be confirmed" note (engine/sections.js tbcNote)
       const tbc = c.id === 'shape' && window.PSBSections && window.PSBSections.tbcNote ? window.PSBSections.tbcNote(P.base.girder) : '';
@@ -148,9 +155,7 @@
       const ntp = c.id === 'shape' && window.PSBSections && window.PSBSections.noTopText ? window.PSBSections.noTopText(P.base) : '';
       h += card(c.id, c.title, c.ref, body + (c.note ? `<p class="note">${c.note(P.base, P)}</p>` : '') + (tbc ? `<p class="note" id="secTbcNote"><b>${tbc}</b></p>` : '')
         + (ntp ? `<div class="alert" id="secNoTopNote">${ntp} Worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>.</div>` : ''));
-      if (c.id === 'shape') h += card('rows', 'Straight strand rows', 'y from the soffit; debonding entered only (auto-design never adds it, PS-12)', table('base.rows', P)
-        + `<p class="note">${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0)} straight strands + ${+P.base.harp.n || 0} draped = ${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0) + (+P.base.harp.n || 0)} strands. Debonding rules (5.9.4.3.3) are checked as warnings of the design.</p>`
-        + `<p class="note" id="rowsFitNote">Each row is drawn and checked as a contiguous group of strands on the 2 in grid, centred on the girder ℄. A strand centre must be inside the concrete, at least 2 in from its edges (PS-28) and at least 1.25 in from the face of a void (PS-39; 1.5 in before, PS-33).${rowModelNote(P.base)}</p>`);
+      if (c.id === 'shape' && want('rows')) h += rowsCard(P);
     });
     if (tab === 'dd') h = card('diaph', 'Diaphragms (DC1 point loads)', 'entered once (PS-14)', table('base.loads.diaph', P) + '<p class="note">Point loads on the non-composite simple span of the design girder, from the left ℄ bearing; the same diaphragms apply to every girder line (PS-14).</p>') + h;
     if (tab === 'loads') h += card('veh', 'Legal / permit vehicles', 'MBE 6A.4.4, 6A.4.5, Strength I', table('base.rateVeh', P) + '<p class="note">Fully factored live-load moment and shear per vehicle (DF, IM, MPF and the LRFR live-load factor applied, from your own analysis); the app supplies the capacity and the dead loads.</p>')

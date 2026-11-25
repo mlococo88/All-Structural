@@ -93,7 +93,7 @@
   function card(P) {
     if (!window.PSBVizKit) return '';
     return `<section class="sec" id="psbPlan"><div class="secHead">Plan</div><div class="secBody"><div id="gfx_plan"></div>
-      <p class="note">Spans and skews: this tab. Girder lines, bays and overhangs: <a href="#" data-goin="xsec">Cross-section tab</a>. Girder types on the lines: <a href="#" data-goin="gird">Girders &amp; strands tab</a>. Diaphragms: <a href="#" data-goin="dd">Diaphragms / deck tab</a>. In 3D: <a href="#" data-gotab="3d">3D view</a>; the cross-section: <a href="#" data-gotab="lds">Loads &amp; LLDF</a>.</p></div></section>`;
+      <p class="note">Spans and skews: this tab. Girder lines, bays and overhangs: <a href="#" data-goin="xsec">Cross-section tab</a>. Girder types on the lines: <a href="#" data-goin="gird@card-types">Girders &amp; strands tab</a>. Diaphragms: <a href="#" data-goin="dd">Diaphragms / deck tab</a>. In 3D: <a href="#" data-gotab="3d">3D view</a>; the cross-section: <a href="#" data-gotab="lds">Loads &amp; LLDF</a>.</p></div></section>`;
   }
   /* mount(slot, P, o): the plan as a detail card (PSBVizKit.detCard: drawn at the slot's width, hover read-out, print width), with the
      True scale / Width ×2 choice (STATE.vex, the page session only); o = { id, title, seg (default true), maxH (px) } */

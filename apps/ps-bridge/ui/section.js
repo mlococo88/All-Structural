@@ -81,7 +81,7 @@
       ['Strand centroid at midspan y<sub>ps</sub>', `${ev('ss.cgsMid', 3, 'in')} ${wk('sec.cgsMid')}`], ['Eccentricity at midspan e<sub>m</sub>', `${ev('ss.eMid', 3, 'in')} ${wk('sec.eMid')}`],
       ['Eccentricity at the end e<sub>end</sub>', ev('ss.eEnd', 3, 'in')], ['Transfer length ℓ<sub>t</sub>', `${ev('ss.lt', 1, 'in')} ${wk('sec.lt')}`],
       ['Jacking force P<sub>jack</sub> = A<sub>ps</sub> f<sub>pbt</sub>', `<span id="sec-Pj">${k.fx(ss.Aps * R.fpbt, 0)}</span> kip ${wk('sec.Pj')} (f<sub>pbt</sub>: <a href="#" data-gotab="loss">Losses tab</a>)`]])   // batch G2: the old app's P_jack hint (O:6074)
-      + '<p class="note">Strand rows and draped strands: <a href="#" data-goin="gird">Girders &amp; strands tab</a>. The strands are drawn in the section figure above and in the strand-pattern graphic of the Losses tab.</p>', 'card-str');
+      + '<p class="note">Strand rows and draped strands: <a href="#" data-goin="gird@card-rows">Girders &amp; strands tab</a>. The strands are drawn in the section figure above and in the strand-pattern graphic of the Losses tab.</p>', 'card-str');
     h += K().gcard('Eccentricity and effective strands along the span', 'gfx_secE');   // batch G2: the old app's chart (O:6623-6630)
     h += k.card('Worked steps: section properties', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value (the moved Prestressed Bridge Design engine).</p>${k.steps(ctx.W.section.steps, TOPICS, OPEN)}`);
     return h;

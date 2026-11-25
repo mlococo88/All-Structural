@@ -115,7 +115,7 @@ check(await p.isVisible('#i_base\\.opt\\.etaR'), 'owner question shown');
   const b = await pl(); check(b && b.below && b.pushed && /mat\.H 70 → 80/.test(await p.textContent('#notices')), 'the notice stays across tab clicks until closed'); }
 await p.click('#notices .nClose');
 check((await p.$$('#notices .notice')).length === 0, 'Close removes the notice');
-await p.click('#inTabs [data-itab="gird"]'); await p.click('[data-act="add"][data-tbl="base.rows"]');
+await p.click('#inTabs [data-itab="gird"]'); await p.click('#gSubs [data-gsub="str"]'); await p.click('[data-act="add"][data-tbl="base.rows"]');   // GSUB: the rows on the Strands sub-tab
 ls = await lsSnap(p); sv = JSON.parse(ls['psb2.project.current']);
 check(sv.base.rows.length === 4 && sv.base.rows[3].y === 8, 'strand row added');
 await p.fill('[data-path="base.rows.3.y"]', '90'); await p.press('[data-path="base.rows.3.y"]', 'Tab');
@@ -128,11 +128,11 @@ check(!/to fix/.test(await p.textContent('#sbDashCol')), 'row deleted, no errors
 await p.fill('[data-path="base.rows.0.n"]', '16'); await p.press('[data-path="base.rows.0.n"]', 'Tab');
 { const t = await p.textContent('#inPanes');
   check(await p.$eval('[data-path="base.rows.0.n"]', e => e.classList.contains('bad')) && /row 1: 16 strands at y = 2 in do not fit the PCI BT-72: the strand at x = -15 in is outside the concrete outline/.test(t), 'PS-28: a row that does not fit marked with its message');
-  check((await p.textContent('#inTabs [data-itab="gird"] .inDot')) === '1' && /do not fit the PCI BT-72/.test(await p.textContent('#sbDashCol')) && /to fix/.test(await p.textContent('#sbDashCol')), 'PS-28: counted on the tab and listed in the check summary');
+  check((await p.textContent('#inTabs [data-itab="gird"] .inDot')) === '1' && (await p.textContent('#gSubs [data-gsub="str"] .inDot')) === '1' && (await p.textContent('#gSubs [data-gsub="sec"] .inDot')) === '' && /do not fit the PCI BT-72/.test(await p.textContent('#sbDashCol')) && /to fix/.test(await p.textContent('#sbDashCol')), 'PS-28: counted on the tab and listed in the check summary');
   ls = await lsSnap(p); sv = JSON.parse(ls['psb2.project.current']); check(sv.base.rows[0].n === 16, 'PS-28: the entered count kept: ' + sv.base.rows[0].n);
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(200);
   check(!!(await p.$('#out #icNone')) && !(await p.$('#rptHost')) && /do not fit the PCI BT-72/.test(await p.textContent('#out')), 'PS-28: the Report blocked with the error listed');
-  await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(150); await p.click('#inTabs [data-itab="gird"]'); }
+  await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(150); await p.click('#inTabs [data-itab="gird"]'); await p.click('#gSubs [data-gsub="str"]'); }
 await p.fill('[data-path="base.rows.0.n"]', '10'); await p.press('[data-path="base.rows.0.n"]', 'Tab');
 check(!/to fix/.test(await p.textContent('#sbDashCol')) && !(await p.$eval('[data-path="base.rows.0.n"]', e => e.classList.contains('bad'))), 'PS-28: 10 strands fit again, no errors');
 await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(200);
@@ -164,9 +164,9 @@ const DESIGNS = [['default', null], ['continuous, exterior G1 in span 2, restrai
   ['NEXT 36F, skew 35 deg, one span', async () => {
     await p.click('#inTabs [data-itab="layout"]'); await setList(p, '#i_spans\\.lengths', '90'); await setList(p, '#i_xs\\.skews', '35, 35');
     await p.click('#inTabs [data-itab="xsec"]'); await setList(p, '#i_xs\\.bays', '10, 10, 10, 10');
-    await p.click('#inTabs [data-itab="gird"]'); await p.selectOption('#i_base\\.girder', 'NEXT 36F'); await p.fill('#i_base\\.harp\\.n', '0'); await p.press('#i_base\\.harp\\.n', 'Tab'); }],
+    await p.click('#inTabs [data-itab="gird"]'); await p.click('#gSubs [data-gsub="sec"]'); await p.selectOption('#i_base\\.girder', 'NEXT 36F'); await p.click('#gSubs [data-gsub="str"]'); await p.fill('#i_base\\.harp\\.n', '0'); await p.press('#i_base\\.harp\\.n', 'Tab'); }],
   ['handling and deck on, BT-72, one span', async () => {
-    await p.click('#inTabs [data-itab="gird"]'); await p.selectOption('#i_base\\.girder', 'PCI BT-72'); await p.fill('#i_base\\.harp\\.n', '12'); await p.press('#i_base\\.harp\\.n', 'Tab');
+    await p.click('#inTabs [data-itab="gird"]'); await p.click('#gSubs [data-gsub="sec"]'); await p.selectOption('#i_base\\.girder', 'PCI BT-72'); await p.click('#gSubs [data-gsub="str"]'); await p.fill('#i_base\\.harp\\.n', '12'); await p.press('#i_base\\.harp\\.n', 'Tab');
     await p.click('#inTabs [data-itab="loads"]'); await p.selectOption('#i_base\\.handling\\.on', 'true');
     await p.click('#inTabs [data-itab="dd"]'); await p.selectOption('#i_base\\.deck\\.on', 'true'); }]];
 for (const [lab, setup] of DESIGNS) {
@@ -427,7 +427,7 @@ await o.b.close();
   check(r.g[0] === '730.6' && r.g[1] === '132,895' && /centred between the 5\.5 in top and bottom slabs/.test(r.note), 'PS-30: Section properties A, I = the plate; the note ' + JSON.stringify(r).slice(0, 300));
   if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-ps31-banner.png') });
   // PR A (engineer request 2026-11-14): the "to be confirmed" note in the Girders & strands tab's shape card (PS-38 / PS-40: the MassDOT cross-check)
-  await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300);
+  await p.click('#inTabs [data-itab="gird"]'); await p.click('#gSubs [data-gsub="sec"]'); await p.waitForTimeout(300);
   const tbc = (await p.textContent('#secTbcNote').catch(() => '')) || '';
   check(/^To be confirmed: A, I and yb of this box beam are taken from CTDOT BDM plate 5\.2\.1b \(PDF p\. 327\)\. They replace the old app's box beam and voided slab library, which was found inconsistent \(e\.g\. the old "BIII-36 \(27in\)" gave I = 97,756 in⁴, more than a solid 36 × 27 in rectangle at 59,049 in⁴\)\. Cross-check: the MassDOT Bridge Manual Part II adjacent box beam of the same size, B36-39 \(dwg 10\.2\.4, p\. 223\), has A = 748 in², I = 135,514 in⁴, yb = 19\.24 in; .*The CTDOT values are to be confirmed by the engineer\.$/.test(tbc) && await p.isVisible('#secTbcNote'), 'PR A: the to-be-confirmed note on the Girders & strands tab ' + tbc.slice(0, 200));
   // PS-35 (2026-11-14): the box beam's live-load distribution, type (f) (6 in topping): the Loads & LLDF card and worked J, the Loads input
@@ -488,7 +488,7 @@ check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.sc
   check(await p.evaluate(() => [...document.querySelectorAll('.rp-doc .rp-fig')].filter(f => !/Verdict, by the rule|Professional Engineer seal/.test(f.textContent)).every(f => getComputedStyle(f.querySelector('.rp-fig-prn')).display !== 'none' && getComputedStyle(f.querySelector('.rp-fig-scr')).display === 'none')), 'phone: print uses the 700 px figures');
   await p.emulateMedia({ media: 'screen' }); }
 if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390-report.png') });
-await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#gfx_strands_in svg')).length >= 3, 'phone: strand pattern without sideways scroll');
+await p.click('#inTabs [data-itab="gird"]'); await p.click('#gSubs [data-gsub="str"]'); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#gfx_strands_in svg')).length >= 3, 'phone: strand pattern without sideways scroll');
 await p.click('#inTabs [data-itab="proj"]');
 if (args.shots) { await p.click('#tabBar [data-otab="str"]'); await p.waitForTimeout(300); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390-str.png'), fullPage: true }); }
 if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390.png'), fullPage: true });

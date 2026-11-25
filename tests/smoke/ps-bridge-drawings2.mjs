@@ -48,11 +48,13 @@ try {
   // 2.
   await sheet('elev0');
   r = await p.evaluate(() => [...document.querySelectorAll('.dwg-idx tr[data-dsheet="elev0"] a')].map(a => a.dataset.dgo || a.dataset.dgi));
-  assert.deepEqual(r, ['gird', 'camb', 'end']);
+  assert.deepEqual(r, ['gird@str', 'camb', 'end']);   // GSUB: the Strands sub-tab
   await p.click('.dwg-idx tr[data-dsheet="elev0"] a[data-dgo="camb"]'); await p.waitForTimeout(500);
   assert.equal(await p.evaluate(() => document.querySelector('#tabBar [aria-selected=true]').dataset.otab), 'camb');
-  await dwg(); await p.click('.dwg-idx tr[data-dsheet="strd0"] a[data-dgi="gird"]'); await p.waitForTimeout(300);
+  await dwg(); await p.click('.dwg-idx tr[data-dsheet="strd0"] a[data-dgi="gird@card-strandPat"]'); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => document.querySelector('#inTabs [aria-selected=true]').dataset.itab), 'gird');
+  assert.equal(await p.evaluate(() => document.querySelector('#gSubs [aria-selected=true]').dataset.gsub), 'str');   // GSUB: the strand pattern's sub-tab
+  assert.ok(await p.isVisible('#card-strandPat'), 'the strand pattern card shown');
   ok('index links: Girders & strands input tab, Camber & deflection tab, End zone & hold-down tab');
   // 3.
   await dwg();

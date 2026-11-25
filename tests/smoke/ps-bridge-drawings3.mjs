@@ -98,7 +98,7 @@ try {
   const hb = await p.evaluate(() => { const c = document.getElementById('card-cbhaunch'); const tr = c && c.querySelector('tr.sel'); return tr ? tr.lastElementChild.textContent.trim() : null; });
   await dwg(); t = await sheet('camb0'); const t1 = await sheet('camb1'); assert.ok(hb && (t.includes(hb) || t1.includes(hb)), 'haunch at midspan ' + hb);
   r = await p.evaluate(() => [...document.querySelectorAll('.dwg-idx tr[data-dsheet="deck"] a, .dwg-idx tr[data-dsheet="endz0"] a, .dwg-idx tr[data-dsheet="camb0"] a, .dwg-idx tr[data-dsheet="diaph"] a')].map(a => a.dataset.dgo || a.dataset.dgi));
-  assert.deepEqual(r, ['camb', 'mat', 'end', 'gird', 'dd', 'layout', 'deck', 'dd']);
+  assert.deepEqual(r, ['camb', 'mat', 'end', 'gird@card-split', 'dd', 'layout', 'deck', 'dd']);
   const pages3 = await p.evaluate(() => { let got = null; const o = SharedDxf.printSheets; SharedDxf.printSheets = l => { got = l.length; }; document.getElementById('dwg_printAll').click(); SharedDxf.printSheets = o; return got; });
   assert.equal(pages3, L3.length);
   ok(`H3 sheets: camber and haunch (the tab's midspan haunch ${hb} in), end zone, diaphragms and schedule, deck; index links; Print all ${pages3} pages`);

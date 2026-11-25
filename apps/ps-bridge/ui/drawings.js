@@ -20,9 +20,9 @@
   /* where each sheet's content is entered and worked (CLAUDE.md §6: link to the derivation): [kind, tab, text] */
   const SRC = { sec: [['out', 'lds', 'Loads & LLDF tab (cross-section, d_e)'], ['in', 'xsec', 'Cross-section input tab']], plan: [['in', 'layout', 'Bridge layout input tab (framing plan)']],
     // part 2 (item B): the girder sheets and the schedule
-    elev: [['in', 'gird', 'Girders & strands input tab'], ['out', 'camb', 'Camber & deflection tab'], ['out', 'end', 'End zone & hold-down tab']],
-    strd: [['in', 'gird', 'Girders & strands input tab (strand pattern)'], ['out', 'loss', 'Losses tab'], ['out', 'str', 'Stresses tab']],
-    sched: [['in', 'gird', 'Girders & strands input tab'], ['in', 'mat', 'Materials input tab'], ['out', 'camb', 'Camber & deflection tab']],
+    elev: [['in', 'gird@str', 'Girders & strands input tab'], ['out', 'camb', 'Camber & deflection tab'], ['out', 'end', 'End zone & hold-down tab']],
+    strd: [['in', 'gird@card-strandPat', 'Girders & strands input tab (strand pattern)'], ['out', 'loss', 'Losses tab'], ['out', 'str', 'Stresses tab']],
+    sched: [['in', 'gird@card-types', 'Girders & strands input tab'], ['in', 'mat', 'Materials input tab'], ['out', 'camb', 'Camber & deflection tab']],
     // part 3 (batch H1): the cover and sheet index, the general notes, the design summary
     cover: [['in', 'proj', 'Project input tab'], ['in', 'layout', 'Bridge layout input tab']],
     notes: [['in', 'proj', 'Project input tab'], ['in', 'mat', 'Materials input tab'], ['in', 'loads', 'Loads input tab'], ['in', 'own', 'Owner rules input tab']],
@@ -32,7 +32,7 @@
     reac: [['out', 'an', 'Analysis tab (reactions of the type and line shown)'], ['in', 'proj', 'Project input tab (Send reactions to Substructure Loading)']],
     // batch H3: camber and haunch, end zone reinforcement, diaphragms, deck
     camb: [['out', 'camb', 'Camber & deflection tab (haunch table)'], ['in', 'mat', 'Materials input tab (camber multipliers)']],
-    endz: [['out', 'end', 'End zone & hold-down tab'], ['in', 'gird', 'Girders & strands input tab (splitting and confinement steel)']],
+    endz: [['out', 'end', 'End zone & hold-down tab'], ['in', 'gird@card-split', 'Girders & strands input tab (splitting and confinement steel)']],
     diaph: [['in', 'dd', 'Diaphragms / deck input tab'], ['in', 'layout', 'Bridge layout input tab (framing plan)']], diapht: [['in', 'dd', 'Diaphragms / deck input tab'], ['out', 'lds', 'Loads & LLDF tab (DC1 point loads)']],
     deck: [['out', 'deck', 'Deck tab'], ['in', 'dd', 'Diaphragms / deck input tab (deck design)']] };
   const srcOf = id => SRC[id.replace(/\d+$/, '')] || [];
