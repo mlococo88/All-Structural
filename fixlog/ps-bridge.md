@@ -9964,3 +9964,26 @@ NEXT 24F, L 45 ft, flange 120 in, t_s 8 in, t_h 2 in, strands 16 / 16 / 12 strai
 The old `Prestressed Bridge Design.html` (frozen) keeps the old formula (open item).
 ### Open items
 Vertical curve, cross slope across the flange, camber tolerance, a t_h location setting: not added (engineer: not now). Hand-off `deck.haunch`: PR 3 (claude/ps-haunch-handoff). DC1 from the average haunch: PR 2 (claude/ps-haunch-dc1).
+
+## 2026-11-25 — PR: claude/ps-haunch-handoff (PR #1723: https://github.com/mlococo88/All-Structural/pull/1723) (HHO) — the geometry hand-off sends the haunch at the CL bearings (cross-tool with Bridge Substructure Loading; §4) — NOT MERGED, engineer review; based on PR #1722
+### Request (engineer, 2026-11-25)
+"The haunch that gets passed to other apps should get fixed to include the full thickness": the geometry hand-off sends the full haunch at the bearings, t_h + Δ_deck from the corrected profile (HP), not the midspan minimum t_h.
+### Where
+- `apps/ps-bridge/engine/handoffs.js`: new `haunchSent(cells)` (before `function sgPayload`); `sgPayload` anchor `const ts = one(i => +i.ts), tot = one(...), th = one(i => +i.th);` then `const hS = haunchSent(cs);`; the deck line; one more note; `haunchSent` exported.
+- `apps/ps-bridge/ui/handoffs.js` `card()`: the line `#hoHaunch` above the bearing-loads row.
+### Before
+```
+deck: { ts: ts.v, total: tot.v, haunch: th.v },
+```
+### After
+```
+deck: Object.assign({ ts: ts.v, total: tot.v, haunch: th.v }, hS ? { haunchBrg: r4(hS.brg), haunchMid: r4(hS.mid) } : {}),
+// haunchSent: every cell's R.hp (engine/haunch.js); brg = the largest R.hp.brg (t_h + Δ_deck; Δ_deck < 0: t_h), mid = the largest R.hp.mid; null without the profile
+```
+`deck.haunch` keeps its key, format and meaning (t_h, the entered minimum at midspan); the receiver uses its one haunch also for the wind exposed depth over the span, so the bearing haunch is sent in new optional fields (HANDOFF.md §4.14).
+### Check case
+NEXT 24F, 45 ft, flange 120 in, t_s 8, t_h 2 in, strands 16/16/12 straight, w_NC 0, w_DC2 0.5, w_DW 0.3 klf: Δ_deck 3.3458 in; deck = { ts 8, total 8, haunch 2, haunchBrg 5.3458, haunchMid 2 }. The card: "haunch at the CL bearings (deck.haunchBrg) = t_h + Δ_deck = 2.00 + 3.35 = 5.35 in … §".
+### How verified
+`tests/engine/psbridge-haunch-handoff.test.mjs` (sender, shared and receiver checks, JSON round trip through the receiver's own code, older payloads, without the profile the payload as before); smokes `tests/smoke/ps-bridge-haunch-handoff.mjs` (card, send, SubLoads pull and apply, before / after values) and `tests/smoke/ps-bridge-subloads.mjs` (updated: br.haunch = deck.haunchBrg).
+### Open items
+Wind depth with the bearing haunch (conservative); one haunch for every support; the lldfGeom hand-off keeps t_h.
