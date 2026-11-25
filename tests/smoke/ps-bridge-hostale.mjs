@@ -5,12 +5,12 @@
 //   1. a project saved before (no record), with other projects' hand-offs in storage: no banner, the card says nothing was recorded;
 //   2. Send section properties: no banner, "up to date"; no Undo step;
 //   3. an input change (a girder spacing): the banner above the output tabs names "Girder section (psSection) … changed since last sent to
-//      MCT / LL & DL" with Send, on every tab (input and output); the card shows it too;
+//      LL & DL" with Send, on every tab (input and output); the card shows it too;
 //   4. the banner's Send: the section is sent (the same alert as the card's), the banner is gone, the shared key holds the new section;
 //   5. Pull distribution factors, then LL & DL re-publishes the same factors later: no banner; newer factors: "Distribution factors (lldf):
 //      the LLDF tool has newer data than this design uses" with Load; Load (confirm): applied to the type, the banner is gone;
 //   6. Undo of the Load: the earlier pull's record (the lldf banner again), the send kept (no false psSection banner);
-//   7. Send to Substructure Loading and capacity, a span change: each named; a banner's Send clears its own channel; 0 console errors.
+//   7. Send to Substructure Loading (NOMCT 2026-11-25: no capacity send), a span change: each named; a banner's Send clears its own channel; 0 console errors.
 //   node tests/smoke/ps-bridge-hostale.mjs
 import path from 'path';
 import assert from 'assert/strict';
@@ -56,11 +56,11 @@ try {
 
   // 3. an input change: the banner, on every tab
   await setList('xsec', 'xs.bays', '9.5, 9.5, 9.5, 9.5');
-  let t = await bar(); assert.match(t, /Hand-offs out of date/); assert.match(t, /Girder section \(psSection\) of .+ on G\d: changed since last sent to MCT \/ LL & DL/);
+  let t = await bar(); assert.match(t, /Hand-offs out of date/); assert.match(t, /Girder section \(psSection\) of .+ on G\d: changed since last sent to LL & DL/);
   assert.equal(await p.locator('#hoStaleBar [data-hos="psSection"]').innerText(), 'Send');
   await otab('flex'); await itab('loads'); await p.waitForTimeout(150); assert.match(await bar(), /psSection/, 'shown from another output and input tab');
   await otab('sum'); await itab('proj'); await p.waitForTimeout(150); assert.equal(await cardN(), 1); assert.match(await cardSt(), /out of date/);
-  ok('a girder spacing changed: "Girder section (psSection) … changed since last sent to MCT / LL & DL — Send" above the output tabs (every tab) and in the card');
+  ok('a girder spacing changed: "Girder section (psSection) … changed since last sent to LL & DL — Send" above the output tabs (every tab) and in the card');
 
   // 4. the banner's Send
   const s0 = await p.evaluate(() => localStorage.getItem('bridgeSuite.v1.psSection'));
@@ -89,17 +89,17 @@ try {
   assert.match(await bar(), /Distribution factors \(lldf\)/, 'Undo of the load: the design uses the earlier factors again, so LL & DL\'s are newer'); assert.doesNotMatch(await bar(), /psSection/); const P4 = await proj(); assert.equal(P4.handoffs.loaded.lldf.at, '2026-11-21T09:00:00.000Z', 'the record of the first pull'); assert.ok(P4.handoffs.sent.psSection);
   assert.equal(P4.handoffs.sent.psSection.sig, P3.handoffs.sent.psSection.sig, 'the send kept');
   ok('Undo of the load: the earlier pull\'s record (so the lldf banner again), the send kept (no psSection banner)');
-  // 7. every girder line (Send to Substructure Loading) and capacity: a span change names each; one banner Send clears its own channel only
+  // 7. every girder line (Send to Substructure Loading); NOMCT: no capacity send: a span change names each; one banner Send clears its own channel only
   await p.click('#hoStaleBar [data-hos="lldf"]'); await p.waitForTimeout(400);   // the lldf banner of step 6 (Load again: φVn of the capacity follows the demands)
   await itab('proj'); d = await click('#psbHo [data-ho="subSend"]'); await p.waitForTimeout(600); assert.match(dialogs.at(-1) || '', /Geometry sent/);
-  d = await click('#psbHo [data-ho="capSend"]'); assert.match(d.at(-1) || '', /Capacity published/);
+  assert.equal(await p.locator('#psbHo [data-ho="capSend"]').count(), 0, 'no capacity send (NOMCT)');
   assert.equal(await bar(), '', 'every recorded channel up to date');
   await setList('layout', 'spans.lengths', '118'); await p.waitForTimeout(400);
-  t = await bar(); for (const re of [/Bridge geometry \(superGeometry\): changed since last sent to Substructure Loading/, /Reactions of every girder line \(superReactions\): changed since last sent to Substructure Loading/, /Capacity \(capacity\) of .+: changed since last sent to the MCT rating/]) assert.match(t, re);
+  t = await bar(); for (const re of [/Bridge geometry \(superGeometry\): changed since last sent to Substructure Loading/, /Reactions of every girder line \(superReactions\): changed since last sent to Substructure Loading/]) assert.match(t, re); assert.doesNotMatch(t, /capacity|MCT/);
   assert.doesNotMatch(t, /psSection/, 'the section does not depend on the span length');
   await p.click('#hoStaleBar [data-hos="superGeometry"]'); await p.waitForTimeout(800);
-  t = await bar(); assert.doesNotMatch(t, /superGeometry/); assert.match(t, /Reactions of every girder line/); assert.match(t, /capacity/);
-  ok('Send to Substructure Loading and capacity recorded; span 120 -> 118 ft: superGeometry, superReactions (every line), capacity named (not psSection: the same section); the banner\'s Send of superGeometry clears that one only');
+  t = await bar(); assert.doesNotMatch(t, /superGeometry/); assert.match(t, /Reactions of every girder line/);
+  ok('Send to Substructure Loading recorded (no capacity send); span 120 -> 118 ft: superGeometry, superReactions (every line) named (not psSection: the same section); the banner\'s Send of superGeometry clears that one only');
   assert.deepEqual(errs, [], 'console errors: ' + errs.join(' | ')); ok('0 console errors');
   console.log(`\n${n} checks passed (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 } finally { await b.close(); }

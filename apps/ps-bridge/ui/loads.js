@@ -176,7 +176,7 @@
     const { R, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, D = window.PSBDemands, T = window.PSBDemandsUI ? window.PSBDemandsUI.shownType(P) : null;
     const d = D && T ? D.describe(P, T) : { what: 'imported', detail: '' }, F = D ? D.fac(ctx.inp) : null, x = R.ext || {};
     return k.card('Live load from the imported demands', k.kv([['Source', `${k.esc(d.what)} (<a href="#" data-goin="loads">Loads tab, Demands card</a>)`],
-      ['Span of the file', x.sel ? `span ${x.sel.idx || '—'}: ${k.fx(+x.sel.x0, 2)}–${k.fx(+x.sel.x1, 2)} ft, ${x.nStations} stations` : '—'], ['LL type', k.esc(x.liveLoadType || '—')],
+      ['Span used', x.sel ? `span ${x.sel.idx || '—'}: ${k.fx(+x.sel.x0, 2)}–${k.fx(+x.sel.x1, 2)} ft, ${x.nStations} stations` : '—'], ['LL type', k.esc(x.liveLoadType || '—')],
       ['f<sub>+M</sub> = DF<sub>+M</sub> m', `${F ? k.fx(F.pos, 3) : '—'} ${wk('ld.xfp')}`], ['f<sub>−M</sub> = DF<sub>−M</sub> m', `${F ? k.fx(F.neg, 3) : '—'} ${wk('ld.xfn')}`], ['f<sub>V</sub> = DF<sub>V</sub> m', `${F ? k.fx(F.v, 3) : '—'} ${wk('ld.xfv')}`],
       ['M<sub>LL+IM</sub> per girder, midspan', `<b>${ev('MLL', 1, 'kip-ft')}</b> ${wk('ld.MLL')}`], ['V<sub>LL+IM</sub> per girder, support', `<b>${ev('VLL', 2, 'kip')}</b> ${wk('ld.VLL')}`]])
       + (R.imp ? `<div class="alert" id="impNote" role="status"><b>Imported demands are used as given.</b> ${k.esc(R.imp.text)} ${wk('ld.imp')}</div>` : '')
