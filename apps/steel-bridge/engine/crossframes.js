@@ -690,6 +690,21 @@
       sub: g.a && g.b ? `${g.f}\\max(${n2(g.a.dg)},\\ ${n2(g.b.dg)})` : `${g.f}(${n2(g.d)})`, value: g.req, unit: 'in', d: 2, ref,
       note: `Assumption (engineer decision SB-22, 2026-11-13, girder types): the channel or rolled W that CF10 recommends meets the least depth of every bay (the diaphragm depth check CFD, engineer decision SB-19: ${g.f} of the deeper of the two girders, d = D_0 + t_top + t_bot at the first support), not only that of the shallower girder of the governing bay. Every bay: ${each}. One section for every bay: ${TR.grp || !TR.fit ? pick(CH, WW, g.req, null) : `${pick(CH, WW, g.req, TR.fit.lim, TR.near)}; the fit d ≤ D_0 − c of SB-25 applies to the one section too (SB-27), D_0 of ${TR.fit.src}`}.${grp}` });
   }
+  /* typeStep(w, R) (SBLK, 2026-11-24; engineer, approved follow-up SBNG-3; display only): CF10's item links to cf.type, which typeRecStep
+     writes only where CF10 recommends a diaphragm section with girder types or names the nearest section; elsewhere the step did not exist (the
+     tab sent the § to cf.dg). This step works what CF10's item compares, as cfTypeRec does: the girder depth d (or the web depth D under an
+     owner rule on the web) against the minimum girder depth for cross-frames d_min (the input), a cross-frame when d is at least d_min (more
+     than d_min under an owner's strict rule), else a channel or rolled W diaphragm; the recommendation and the bracing in use as the item's
+     cells. No ok flag: its status is CF10's item's (the tab marks the step from it). Values and the CF10 status unchanged. */
+  function typeStep(w, R) {
+    if (w.steps.some(s => /(^|\.)type$/.test(s.id))) return;
+    const E = R.E || env0(), TR = cfTypeRec(R.p, E), st = !!(TR.rT && TR.rT.value.strict), Dsym = TR.web && TR.Dw ? 'D' : 'd';
+    const rel = TR.deep ? (st ? '\\gt' : '\\ge') : (st ? '\\le' : '\\lt');
+    w.add({ id: 'type', label: `Intermediate bracing type for the girder depth (CF10): ${Dsym === 'D' ? 'the web depth D (owner rule)' : 'the girder depth d (out-to-out of the flanges)'} against the minimum girder depth for cross-frames`,
+      sym: Dsym, eq: `${st ? '\\gt' : '\\ge'} d_{min}`, sub: `${n2(TR.dB)} ${rel} ${n2(TR.dMin)}`, value: TR.deep ? 'cross-frame' : 'diaphragm', unit: '',
+      ref: TR.rT || TR.rDd ? `${[TR.rT, TR.rDd].filter(Boolean).map(E.cite).join('; ')}; ${ED} Art. 6.7.4.2` : `Common practice (e.g. AISC/NSBA G13.1 guidance; owner standards govern); ${ED} Art. 6.7.4.2`,
+      note: `d_min: the minimum girder depth for cross-frames entered (Framing & bracing tab). Recommended: ${TR.rec}. In use: ${TR.sel}. Below d_min a channel or rolled W diaphragm at least ${TR.frac} of the girder depth (6.7.4.2) is recommended (CF10).` });
+  }
   /* SBDIA (2026-11-10): with a diaphragm (dia.on = 'yes') the truss steps of the angle cross-frame (member forces per kip, entered forces, the
      angle members CF1 to CF6 and CF9, the connection geometry CF6, the X / K brace stiffness and its system stiffness CF8) are not listed: CFD /
      CFE work the diaphragm's own. Display only: the values computed are unchanged. TRUSS: their step ids. */
@@ -700,6 +715,7 @@
     if (p.xfBay) xfBaySteps(w, R, brN); else   // SBXF (2026-11-13): girder types: the governing bay's depths (h, d) and the wind depth, worked
     w.add({ id: 'dg', label: 'Girder depth (out-to-out of the flanges)', sym: 'd', eq: '', sub: '', value: R.dft * 12, unit: 'in', d: 2 });
     typeRecStep(w, R);   // SB-22: the CF10 section for the depth of every bay (girder types); SB-27: else only where CF10 names the nearest section
+    typeStep(w, R);   // SBLK (2026-11-24): CF10's own comparison where typeRecStep wrote no cf.type step
     w.add({ id: 'Lb', label: `${dOn ? 'Diaphragm' : 'Cross-frame'} spacing (the largest unbraced length on any girder)`, sym: 'L_{b}', eq: '', sub: '', value: R.Lb, unit: 'ft', d: 2, ref: `${ED} Art. 6.7.4.2.1` });
     [['III', `Strength III, V = ${n0(W.III.V)} mph`], ['V', 'Strength V, V = 80 mph']].forEach(([k, l]) => { const q = W[k];
       w.add({ id: `w${k}.PZ`, label: `Design wind pressure, ${l}`, sym: 'P_{Z}', eq: '2.56 \\times 10^{-6}V^{2}K_{z}GC_{D}', sub: `2.56 \\times 10^{-6}(${n0(q.V)})^{2}(${n2(nm(p.wind.Kz))})(${n2(nm(p.wind.G))})(${n2(nm(p.wind.Cd))})`, value: q.PZ, unit: 'ksf', d: 4, ref: `${ED} Eq. 3.8.1.2.1-1` });

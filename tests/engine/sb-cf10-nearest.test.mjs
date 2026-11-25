@@ -82,5 +82,7 @@ test('a project saved before girder types: the fit with D_0 of the girder at the
   const st = FUI.build({ P, g: 0 }).R.steps.find(s => s.id === 'cf.type'); assert.ok(st); assert.equal(+st.value.toFixed(2), 13.41); assert.match(st.note, /D_0 of the girder at the first support/);
   const Q = M.defaultProject(); Q.girders.forEach(g => g.segments.forEach(s => { s.D = 18; })); const T2 = TR(Q);
   assert.equal(T2.near, null); assert.equal(T2.rec, 'channel diaphragm C15x33.9 (or a rolled W)', 'D = 18: C15x33.9 meets both, as before');
-  assert.ok(!FUI.build({ P: Q, g: 0 }).R.steps.some(s => s.id === 'cf.type'), 'no step where nothing is named nearest');
+  // SBLK (2026-11-24): no nearest-section step where nothing is named nearest; cf.type is CF10's own comparison step instead (d against d_min)
+  const s2 = FUI.build({ P: Q, g: 0 }).R.steps.find(s => s.id === 'cf.type');
+  assert.ok(s2 && s2.value === 'diaphragm' && !/NEAREST|SB-27/.test(s2.note) && /^19\.88 \\lt 48\.00$/.test(s2.sub), 'CF10 comparison step, not the nearest-section step: ' + (s2 && s2.sub));
 });

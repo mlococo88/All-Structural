@@ -430,5 +430,24 @@
 
   /* EV_BASIS: the basis note of the remaining-life evaluation (Fatigue & studs tab, its input card, the Report, the Summary and the left column) */
   const EV_BASIS = 'Remaining fatigue life (FA5, FA6) per MBE 4th Ed. (2026) Section 7: only fatigue-prone details are evaluated, 2.2(Δf)_tension > the dead-load compression (Eq. 7.2.3-1, FA8); (Δf)_eff = R_pR_s × the factored Fatigue II range (Eq. 7.2.2-1), R_p by Eq. 7.2.2.1-1; (Δf)_max = R_p × the factored Fatigue I range (2.2(Δf)_eff with WIM truck weights); remaining life from N_av − N_1 with the first-year and present single-lane ADTT and the growth rate g (Eqs. 7.2.5.1-1 to -8); R_R from Table 7.2.5.1-1 unless entered.';
-  window.SBDFatigue = { ES, CAT, CATS, EV_DEF, RR_TAB, EV_BASIS, evIn, RpEq, N1of, yRem, evalRow, STUD, DET, LOC, SPEC, DEFAULT, faRR, settings, supports, nAt, nRange, limitState, studLimit, setText, secSet, rowDk, compute, checks, steps, flange, detailsFromPayload };
+  /* detSteps(R) (SBLK, 2026-11-24; engineer, approved follow-up SBNG-2; display only): the worked steps of FA4, distortion-induced fatigue
+     detailing (6.6.1.3), ids faD.cp, faD.lat, faD.skew, which FA4's items (checks() above) link to and no step answered before. The inputs
+     as entered (Fatigue & studs input tab, card "Distortion-induced fatigue") and, for a lateral connection plate on the web, the distance
+     required: the same values, conditions and statuses as the items (no check changed). */
+  function detSteps(R) {
+    const d = (R && R.p && R.p.dist) || DEFAULT.dist, w = St().work('faD'), inp = 'As entered on the Fatigue & studs input tab (Distortion-induced fatigue).';
+    if (d.cp !== 'na') w.add({ id: 'cp', label: 'Transverse connection plates attached to both flanges (FA4)', sym: '\\text{both flanges}', eq: '', sub: '', value: d.cp === 'yes' ? 'yes' : 'no', unit: '', ref: `${ED} Art. 6.6.1.3.1`, ok: d.cp === 'yes',
+      note: `${inp} FA4 ${d.cp === 'yes' ? 'OK' : 'fails'}: the connection plates are to be attached to both the compression and the tension flange.` });
+    if (d.lat === 'yes') {
+      if (d.latLoc === 'flange') w.add({ id: 'lat', label: 'Lateral connection plates on the flange (FA4)', sym: '\\text{location}', eq: '', sub: '', value: 'flange', unit: '', ref: `${ED} Art. 6.6.1.3.2`, ok: true, note: `${inp} FA4 OK: a lateral connection plate attached to the flange.` });
+      else { const bf = nm(d.latBf), dist = nm(d.latDist), stf = d.latStiff === 'yes', req = stf ? bf / 2 : Math.max(6, bf / 2), ok = ge(dist, req);
+        w.add({ id: 'lat', label: `Lateral connection plate on the ${stf ? 'stiffened' : 'unstiffened'} web: vertical distance from the flange (FA4)`, sym: 'd_{lat}', eq: stf ? '\\ge \\frac{b_{f}}{2}' : '\\ge \\max\\left(6.0,\\ \\frac{b_{f}}{2}\\right)',
+          sub: `${n2(dist)} ${ok ? '\\ge' : '\\lt'} ${stf ? `\\frac{${n2(bf)}}{2}` : `\\max\\left(6.0,\\ \\frac{${n2(bf)}}{2}\\right)`} = ${n2(req)}`, value: dist, unit: 'in', d: 2, ref: `${ED} Art. 6.6.1.3.2`, ok,
+          note: `${inp} d_lat: the vertical distance from the flange; b_f = ${n2(bf)} in, the flange width at the plate; web ${stf ? 'stiffened' : 'not stiffened'} at the plate. Ratio required / provided ${n2(req)}/${n2(dist)} = ${n3(req / dist)} (FA4 ${ok ? 'OK' : 'fails'}).` }); }
+    }
+    if (d.skew === 'yes') w.add({ id: 'skew', label: 'Obliquely oriented welded attachments (FA4)', sym: '\\text{oblique attachments}', eq: '', sub: '', value: 'yes', unit: '', ref: `${ED} Condition 7.3`,
+      note: `${inp} FA4 warning (not a pass / fail check): review the detail category of these attachments.` });
+    return w.steps;
+  }
+  window.SBDFatigue = { ES, CAT, CATS, EV_DEF, RR_TAB, EV_BASIS, evIn, RpEq, N1of, yRem, evalRow, STUD, DET, LOC, SPEC, DEFAULT, faRR, settings, supports, nAt, nRange, limitState, studLimit, setText, secSet, rowDk, compute, checks, steps, detSteps, flange, detailsFromPayload };
 })();
