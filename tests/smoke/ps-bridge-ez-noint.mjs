@@ -38,16 +38,13 @@ try {
   assert.ok(!/∫|\\int|dy\b/.test(r.txt), 'no integral: ' + r.txt.slice(0, 400));
   assert.match(r.cls, /sg-ng/, 'topic NG (red) as before');
   ok(`topic 3 expanded: ${r.ids.length} steps, no integral, NG marking kept`);
-  if (SHOT) { const el = await p.$('#card-ezrel'); await el.scrollIntoViewIfNeeded();
-    const a = await el.boundingBox(), d = await (await p.$('details.sg-t[data-sgk="rel"]')).boundingBox();
-    await p.setViewportSize({ width: 1280, height: Math.ceil(Math.max(1000, d.y + d.height - a.y + 40)) });
-    const a2 = await el.boundingBox(), d2 = await (await p.$('details.sg-t[data-sgk="rel"]')).boundingBox();
-    await p.screenshot({ path: SHOT, clip: { x: 0, y: a2.y - 8, width: 1280, height: a2.height + 16 } }).catch(() => {});
-    await p.screenshot({ path: SHOT.replace(/\.png$/, '-steps.png'), clip: { x: 0, y: d2.y - 8, width: 1280, height: d2.height + 16 } });
+  if (SHOT) { await p.setViewportSize({ width: 1280, height: 2400 });
+    await (await p.$('details.sg-t[data-sgk="rel"]')).screenshot({ path: SHOT });
+    await (await p.$('#card-ezrel')).screenshot({ path: SHOT.replace(/\.png$/, '-card.png') });
     ok('screenshots ' + SHOT); }
-  await tab('rpt'); await p.waitForTimeout(2500);
-  r = await p.evaluate(() => { const t = document.body.innerText; return { has: /Tension zone, part 1: top flange/.test(t) && /Sum ΣF/.test(t.replace(/\s+/g, ' ')) || /Tension zone, part 1/.test(t), int: /∫|\\int/.test(t), len: t.length }; });
-  assert.ok(r.has, 'report has the by-parts steps'); assert.ok(!r.int, 'report: no integral');
+  await tab('rpt'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 180000 }); await p.waitForTimeout(600);
+  r = await p.evaluate(() => { const t = (document.querySelector('.rp-doc') || document.body).textContent.replace(/\s+/g, ' '); return { steps: /Tension zone, part 1: top flange/.test(t), tbl: /Sum ΣF/.test(t), int: /∫|\\int/.test(t), t: t.slice(t.indexOf('Bonded release'), t.indexOf('Bonded release') + 1500) }; });
+  assert.ok(r.steps && r.tbl, 'report has the by-parts steps and table: ' + JSON.stringify(r)); assert.ok(!r.int, 'report: no integral');
   ok('Report: the by-parts steps, no integral');
   assert.deepEqual(errs, [], 'console errors'); ok('0 console errors');
   console.log(`\n${n} passed`);
