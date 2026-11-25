@@ -74,9 +74,11 @@
     return b ? b.ints : (ly.frames && ly.frames.at) || window.SBDStiffeners.framesDefault(sup, (ly.frames && ly.frames.Lb) || 25); }
   // SB-16 (2026-11-13): an Auto design run copy (adLines: a girder type on one line) named by that line, not the run's girder number
   const runLab = (P, g) => { const G = (P.girders || [])[g]; return G && Array.isArray(G.adLines) && Number.isInteger(G.line) ? `G${G.line + 1}` : undefined; };
-  function geom(P, g, pl) {
+  /* GF (sb-panel-eta PR, 2026-11-25): the Strength I factors of the station checks (SBDShear.factorsOwner: the owner's η, m), so that the
+     panels' V_u (dem.vu) is factored as the stations' V_u; was demands(pl), the AASHTO factors without η, m */
+  function geom(P, g, pl, GF) {
     const st = ensure(P), SB = window.SBDStiffeners, ly = st.layout;
-    if (pl) { const sup = (pl.member || {}).supports || [], zones = (pl.section || {}).zones || [], dem = window.SBDShear.demands(pl);
+    if (pl) { const sup = (pl.member || {}).supports || [], zones = (pl.section || {}).zones || [], dem = window.SBDShear.demands(pl, GF);
       return { sup, cont: sup.length > 2, zAt: dem.zAt, chg: zones.slice(0, -1).map(z => z.endX), D: Math.max(...zones.map(z => z.web.depth)), gNo: +((pl.girderDetail || {}).girder) || g + 1, gLab: runLab(P, g), dem, frames: framesOf(P, { line: (+((pl.girderDetail || {}).girder) || g + 1) - 1 }, sup, ly) }; }
     const sup = [0]; P.spans.lengths.forEach(L => sup.push(+(sup[sup.length - 1] + +L).toFixed(6)));
     const G = P.girders[g] || P.girders[0], segAt = x => G.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || G.segments[G.segments.length - 1];
@@ -135,12 +137,12 @@
     // custom (added 2026-11-01, custom demands PR): the rows and reactions entered on this tab (ui/demands.js payload), the same path as a
     // file or the analysis; only the stations, panels, stiffeners and bearings that the entered rows reach are checked (custom() below)
     let C = null; if (ctx.pl === undefined && src === 'custom') { if (!window.SBDCustomDemands) return { err: 'ui/demands.js is not loaded.' }; C = window.SBDCustomDemands.payload(P, g, 'shear'); if (C.err) return { err: C.err }; pl = C.pl; }
-    const gm = geom(P, g, pl), D = gm.D;
+    const gm = geom(P, g, pl, G), D = gm.D;   // G: the owner's η, m on the panels' V_u too (sb-panel-eta PR)
     // sections along a range: both sides of every plate change inside (Preliminary sizing tsSecFns)
     const pts = (p, q) => { const xs = [p, q]; gm.chg.forEach(x => { if (x > p && x < q) xs.push(x - 1e-6, x + 1e-6); }); const Lt = gm.sup[gm.sup.length - 1]; return xs.map(x => Math.min(Math.max(x, 1e-6), Lt - 1e-6)); };
     const twAt = (p, q) => Math.min(...pts(p, q).map(x => gm.zAt(x).tw)), rat = (p, q) => Math.max(...pts(p, q).map(x => { const s = gm.zAt(x); return 2 * s.D * s.tw / (s.topB * s.topT + s.botB * s.botT); }));
     const bays = SB.girderBays(ly, D, gm.sup, gm.cont, gm.sup, gm.frames, gm.gNo), pans = bays.flatMap(SB.bayPanels);
-    const panels = SH.panels(pans, { D, Fyw, twAt, rat, vu: gm.dem ? gm.dem.vu : null });
+    const panels = SH.panels(pans, { D, Fyw, twAt, rat, vu: gm.dem ? gm.dem.vu : null, vuAt: gm.dem ? gm.dem.vuAt : null });
     const panAt = x => { const c = panels.rows.filter(q => x >= q.p - 0.05 && x <= q.q + 0.05); return c.length ? c.reduce((a, q) => (gm.dem ? q.r > a.r : q.d > a.d) ? q : a) : null; };
     let locs;
     if (pl) locs = SH.fromPayload(pl, { G }).locs;
@@ -256,7 +258,7 @@
       { key: 'weld', title: 'Stiffener-to-web welds', ref: A + '6.13.3.2.4b, 6.13.3.4', ids: /^(weld|weld\.ok|wmin)$/ },
       { key: 'own', title: 'Owner requirements', ref: '', ids: /^own$/ }],
     pan: [{ key: 'geo', title: 'Panel geometry', ref: '', ids: /^d$/ },
-      { key: 'dem', title: 'Demand: Strength I shear in the panel', ref: A + '6.10.9.3.1', ids: /^(Vu|src|cd\.src)$/ },
+      { key: 'dem', title: 'Demand: Strength I shear in the panel', ref: A + '6.10.9.3.1', ids: /^(pl|Vu|src|cd\.src)$/ },   // pl: sb-panel-eta PR
       { key: 'res', title: 'Nominal shear resistance', ref: A + '6.10.9.2, 6.10.9.3', ids: /^v\./ },
       { key: 'chk', title: 'Check', ref: A + '6.10.9.1', ids: /^ok$/ }],
     loc: [{ key: 'sec', title: 'Section: flange areas', ref: '', ids: /^flgA$/ },
@@ -320,8 +322,10 @@
       const SB_ = window.SBDSub, ST = SB_.stepSt(sel.k === 'loc' ? SB_.rows(R.stations[sel.i].checks) : sel.k === 'ts' ? SB_.items(R.tsC) : sel.k === 'bs' ? SB_.items(R.bsC)
         : sel.k === 'pan' ? [{ step: (list.find(q => /^pn\.ok$/.test(String(q.id))) || {}).id, st: (q => typeof q.r === 'number' && (!isFinite(q.r) || q.r > 1 + 1e-9) ? 'fail' : '')(R.panels.rows[sel.i]) }] : []);
       // "see" links (CLAUDE.md §6): the shears and reactions of the demand topics are worked on the Analysis tab when the analysis is the source
+      // sb-panel-eta PR: a panel's and a station's V_u take the owner's η and m (γ in their steps): where they are worked
+      const own = ' <a href="#" class="sg-see" data-gotab="loads" title="Loads &amp; LLDF tab, Owner load rules: steps own.eta, own.m">η and m: Loads &amp; LLDF tab (Owner load rules)</a>';
       h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above, or a location on the graphic, to show its work. AASHTO LRFD 10th Ed. (2024); E = 29,000 ksi. Topics in the order of the check: geometry, demands, intermediate values by sub-article, resistance, ratio.</p>
-        ${SS.groupsHTML(groups(sel.k, list), { open: S.open, item: s => stepLi(s, list, ST), see: t => (t.key === 'dem' && (sel.k === 'ts' || sel.k === 'bs' || sel.k === 'loc') ? an : '') })}</div></section>`; }
+        ${SS.groupsHTML(groups(sel.k, list), { open: S.open, item: s => stepLi(s, list, ST), see: t => (t.key === 'dem' && (sel.k === 'ts' || sel.k === 'bs') ? an : t.key === 'dem' && (sel.k === 'loc' || (sel.k === 'pan' && R.gm.dem)) ? an + own : '') })}</div></section>`; }
     return h;
   }
 

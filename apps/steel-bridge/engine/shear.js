@@ -24,6 +24,8 @@
   const ES = 29000, ED = 'AASHTO LRFD 10th Ed.', PHIV = 1.0;
   const St = () => window.SharedSteps;
   const n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), n4 = x => St().n(x, 4), g1 = x => St().g(x, 1);
+  // sb-panel-eta PR: a load factor with 2 decimals, or 4 where it has more (1.3125), a shear in parentheses, a negative one after a sign in parentheses
+  const fG = x => (Math.abs(x * 100 - Math.round(x * 100)) < 1e-9 ? n2 : n4)(x), pa = x => `(${n2(x)})`, sg = x => (x < 0 ? `(${n2(x)})` : n2(x));
 
   /* ---------- nominal resistance (GirderDetail, unchanged) ---------- */
   /* shearC(lam, r, E, k, Fyw): C, the ratio of the shear-buckling resistance to the shear yield strength, Eqs. 6.10.9.3.2-4 to -6
@@ -139,15 +141,15 @@
   }
   function worked(r) {
     const w = St().work('sh'), G = r.G, Fyw = r.Fyw, tbl = `${ED} Tables 3.4.1-1, 3.4.1-2`;
-    const utT = (s, k) => r.ut ? ` + ${n2(G.dw)}(${n2(r['VUT' + s])})_{UT} + ${n2(G.dc)}(${n2(r['VUF' + s])})_{UF}` : '';
+    const utT = (s, k) => r.ut ? ` + ${fG(G.dw)}(${n2(r['VUT' + s])})_{UT} + ${fG(G.dc)}(${n2(r['VUF' + s])})_{UF}` : '';   // fG (sb-panel-eta PR): 1.3125, not 1.31
     // GD45 (sb-ped-owner PR): the pedestrian part of V_LL+IM without the owner multiplier m
     (r.plAdj || []).forEach(a => w.add({ id: 'pl.' + a.k, label: `${a.k === 'VLLp' ? 'Largest LL+IM shear in the web panel' : 'LL+IM shear'} used: m not on the pedestrian part`, sym: 'V_{LL+IM,used}', eq: 'V_{LL+IM+PL} - V_{PL} + \\frac{V_{PL}}{m}',
       sub: `${n2(a.v0)} - ${n2(a.q)} + \\frac{${n2(a.q)}}{${n2(G.m)}}`, value: a.v, unit: 'kip', d: 2, ref: `${ED} Art. 3.6.1.6, Table 3.4.1-1`, note: 'So that γ_LL ηm × it = γ_LL ηm V_LL+IM + γ_LL η V_PL (GirderDetail GD45). V_PL: Analysis tab.' }));
     w.add({ id: 'Vu', label: 'Strength I shear at the location', sym: 'V_{u}', eq: `\\gamma_{DC}(V_{DC1} + V_{DC2}) + \\gamma_{DW}V_{DW} + \\gamma_{LL}V_{LL+IM}${r.ut ? ' + \\gamma_{DW}V_{UT} + \\gamma_{DC}V_{UF}' : ''}`,
-      sub: `${n2(G.dc)}(${n2(r.VDC1)} + ${n2(r.VDC2)}) + ${n2(G.dw)}(${n2(r.VDW)}) + ${n3(G.ll)}(${n2(r.VLL)})${utT('')}`, value: r.Vu, unit: 'kip', d: 2, ref: tbl, note: 'Shears are magnitudes: the maximum load factors.' });
+      sub: `${fG(G.dc)}(${n2(r.VDC1)} + ${n2(r.VDC2)}) + ${fG(G.dw)}(${n2(r.VDW)}) + ${n3(G.ll)}(${n2(r.VLL)})${utT('')}`, value: r.Vu, unit: 'kip', d: 2, ref: tbl, note: 'Shears are magnitudes: the maximum load factors.' });
     if (r.VuP != null) {
       const vp = G.dc * (r.VDC1p + r.VDC2p) + G.dw * r.VDWp + G.ll * r.VLLp + G.dw * r.VUTp + G.dc * r.VUFp;
-      w.add({ id: 'VuPan', label: 'Strength I shear, the largest in the web panel', sym: 'V_{u,panel}', eq: '', sub: `${n2(G.dc)}(${n2(r.VDC1p)} + ${n2(r.VDC2p)}) + ${n2(G.dw)}(${n2(r.VDWp)}) + ${n3(G.ll)}(${n2(r.VLLp)})${utT('p')}`, value: vp, unit: 'kip', d: 2, ref: tbl });
+      w.add({ id: 'VuPan', label: 'Strength I shear, the largest in the web panel', sym: 'V_{u,panel}', eq: '', sub: `${fG(G.dc)}(${n2(r.VDC1p)} + ${n2(r.VDC2p)}) + ${fG(G.dw)}(${n2(r.VDWp)}) + ${n3(G.ll)}(${n2(r.VLLp)})${utT('p')}`, value: vp, unit: 'kip', d: 2, ref: tbl });
       w.add({ id: 'VuP', label: 'Shear for the web panel check', sym: 'V_{u}', eq: '\\max(V_{u}, V_{u,panel})', sub: `\\max(${n2(r.Vu)}, ${n2(vp)})`, value: r.VuP, unit: 'kip', d: 2, ref: `${ED} Art. 6.10.9.3.1`, note: 'The largest shear in the panel (6.10.9.3.1).' });
     }
     w.add({ id: 'flgA', label: 'Flange areas', sym: 'b_{fc}t_{fc} + b_{ft}t_{ft}', eq: '', sub: `${n2(r.topB)}(${n4(r.topT)}) + ${n2(r.botB)}(${n4(r.botT)})`, value: r.flgA, unit: 'in^{2}', d: 3 });
@@ -165,7 +167,8 @@
 
   /* ---------- every panel of a stiffener layout (Preliminary sizing tsEvalBay) ---------- */
   /* panels(pans, opt): pans from SBDStiffeners.panels() [{ p, q (ft), d (in), end, sp, sq }]; opt = { D, Fyw, twAt(p, q), rat(p, q),
-     vu(p, q) (the largest Strength I |V_u| in p..q, kip), tfa (default true) }. Each panel: tsVn with the thinnest web and the largest
+     vu(p, q) (the largest Strength I |V_u| in p..q, kip), vuAt(p, q) (optional: demands().vuAt, the terms of that V_u for its worked
+     step; sb-panel-eta PR), tfa (default true) }. Each panel: tsVn with the thinnest web and the largest
      2Dt_w/(b_fc t_fc + b_ft t_ft) in it, V_u, φ_vV_n, ratio, and the worked steps. Returns { rows, gov }. */
   function panels(pans, opt) {
     const tfa = opt.tfa !== false;
@@ -175,7 +178,16 @@
       Object.defineProperty(q, 'steps', { enumerable: false, configurable: true, get() {
         const w = St().work('pn'); w.add({ id: 'd', label: `Panel ${n2(pn.p)}–${n2(pn.q)} ft${pn.end ? ' (end panel)' : ''}`, sym: 'd_{o}', eq: '12(x_{2} - x_{1})', sub: `12(${n3(pn.q)} - ${n3(pn.p)})`, value: pn.d, unit: 'in', d: 2, ref: `${ED} Art. 6.10.9.1` });
         const id = panelSteps(w, 'v', { ...V, tfa: V.tfa || undefined, rat }, { D: opt.D, tw, Fyw: opt.Fyw, doIn: pn.d, end: pn.end, flgA: 2 * opt.D * tw / rat });
-        w.add({ id: 'Vu', label: 'Largest Strength I shear in the panel', sym: 'V_{u}', eq: '', sub: '', value: Vu, unit: 'kip', d: 2, ref: `${ED} Art. 6.10.9.3.1`, note: 'Envelope of the analysis stations in the panel; minimum load factors where a permanent load relieves the extreme (Table 3.4.1-2).' });
+        const T = opt.vuAt && opt.vu ? opt.vuAt(pn.p, pn.q) : null;   // sb-panel-eta PR: the terms of V_u at the station that gives it
+        if (T && T.q && T.m !== 1) w.add({ id: 'pl', label: 'LL+IM shear used: m not on the pedestrian part', sym: 'V_{LL+IM,used}', eq: 'V_{LL+IM+PL} - V_{PL} + \\frac{V_{PL}}{m}',
+          sub: `${n2(T.VLL0)} - ${sg(T.q)} + \\frac{${n2(T.q)}}{${n2(T.m)}}`, value: T.VLL, unit: 'kip', d: 2, ref: `${ED} Art. 3.6.1.6, Table 3.4.1-1`, note: 'So that γ_LL × it = 1.75ηm V_LL+IM + 1.75η V_PL (GirderDetail GD45), as at the stations.' });
+        if (T) { const ut = !!(T.VUT || T.VUF);
+          w.add({ id: 'Vu', label: `Largest Strength I shear in the panel (x = ${n2(T.x)} ft, ${T.s > 0 ? 'positive' : 'negative'} LL+IM envelope)`, sym: 'V_{u}',
+            eq: `\\left|\\gamma_{DC}(V_{DC1} + V_{DC2}) + \\gamma_{DW}V_{DW} + \\gamma_{LL}V_{LL+IM}${ut ? ' + \\gamma_{DW}V_{UT} + \\gamma_{DC}V_{UF}' : ''}\\right|`,
+            sub: `\\left|${fG(T.gDC)}(${n2(T.VDC1)} + ${sg(T.VDC2)}) + ${fG(T.gDW)}${pa(T.VDW)} + ${fG(T.gLL)}${pa(T.VLL)}${ut ? ` + ${fG(T.gUT)}${pa(T.VUT)} + ${fG(T.gUF)}${pa(T.VUF)}` : ''}\\right|`,
+            value: Vu, unit: 'kip', d: 2, ref: `${ED} Art. 6.10.9.3.1, Art. 1.3.2.1, Tables 3.4.1-1, 3.4.1-2`,
+            note: `Envelope of the analysis stations in the panel (the station and envelope with the largest |V_u|); shears in the hand-off sign. γ with the owner's η and m, as at the stations: maximum γ_DC = 1.25η, γ_DW = 1.50η, γ_LL = 1.75ηm; minimum 0.90/η, 0.65/η where a permanent load relieves the extreme (Table 3.4.1-2).` }); }
+        else w.add({ id: 'Vu', label: 'Largest Strength I shear in the panel', sym: 'V_{u}', eq: '', sub: '', value: Vu, unit: 'kip', d: 2, ref: `${ED} Art. 6.10.9.3.1`, note: 'Envelope of the analysis stations in the panel; minimum load factors where a permanent load relieves the extreme (Table 3.4.1-2).' });
         w.add({ id: 'ok', label: 'Shear resistance of the panel', sym: 'V_{u} \\le \\phi_{v}V_{n}', eq: '', sub: `${n2(Vu)} ${Vu <= PHIV * V.Vn + 1e-9 ? '\\le' : '\\gt'} 1.0(${n2(V.Vn)})`, value: q.r, unit: '', d: 3, ref: `${ED} Eq. 6.10.9.1-1`, ok: Vu <= PHIV * V.Vn + 1e-9, note: `See §${id}.` });
         Object.defineProperty(q, 'steps', { value: w.steps, enumerable: false }); return w.steps; } });
       return q;
@@ -201,6 +213,13 @@
     const gDCn = G.dcMin, gDWn = G.dwMin;
     const VuE = xs.map((_, e) => { const VDC = VDC1[e] + VDC2[e], vf = s => (s * VDC >= 0 ? G.dc : gDCn) * VDC + (s * VDW[e] >= 0 ? G.dw : gDWn) * VDW[e] + (s * VUT[e] >= 0 ? G.dw : gDWn) * VUT[e] + (s * VUF[e] >= 0 ? G.dc * VUF[e] : 0);
       return Math.max(Math.abs(vf(1) + G.ll * (Vp[e] - Qp[e] + Qp[e] / mO)), Math.abs(vf(-1) + G.ll * (Vn[e] - Qn[e] + Qn[e] / mO))); });
+    /* vuTerms(e) (sb-panel-eta PR, display only): the terms of VuE[e] for the worked step of a panel's V_u: the envelope taken (s = +1 the
+       positive LL+IM, -1 the negative), the factor of each load by its sign (the same choice as VuE), the LL+IM used (pedestrian part q
+       without m) and |V_u| = VuE[e] */
+    const vuTerms = e => { const VDC = VDC1[e] + VDC2[e], a = s => { const VL0 = s > 0 ? Vp[e] : Vn[e], q = s > 0 ? Qp[e] : Qn[e], VL = VL0 - q + q / mO;
+        const t = { s, gDC: s * VDC >= 0 ? G.dc : gDCn, gDW: s * VDW[e] >= 0 ? G.dw : gDWn, gUT: s * VUT[e] >= 0 ? G.dw : gDWn, gUF: s * VUF[e] >= 0 ? G.dc : 0, VDC1: VDC1[e], VDC2: VDC2[e], VDW: VDW[e], VUT: VUT[e], VUF: VUF[e], VLL0: VL0, q, VLL: VL, gLL: G.ll, m: mO };
+        t.Vu = Math.abs(t.gDC * VDC + t.gDW * VDW[e] + t.gUT * VUT[e] + t.gUF * VUF[e] + G.ll * VL); return t; };
+      const A1 = a(1), A2 = a(-1); return { e, x: xs[e], ...(A2.Vu > A1.Vu ? A2 : A1) }; };
     const idx = (a, b) => { const out = []; xs.forEach((x, i) => { if (x >= a - 1e-9 && x <= b + 1e-9) out.push(i); }); if (!out.length) { let i = 0; const m = (a + b) / 2; xs.forEach((x, j) => { if (Math.abs(x - m) < Math.abs(xs[i] - m)) i = j; }); out.push(i); } return out; };
     const mx = (ids, arr) => Math.max(0, ...ids.map(i => Math.abs(arr[i])));
     // plLL: the pedestrian part of LL (that of the station and envelope giving the largest |V_LL+IM|, as GirderDetail V_PLq), 0 without one
@@ -216,7 +235,9 @@
       if (r < 0 && l < 0 && xs.length) { if (x <= xs[0] + 1e-6) r = 0; else if (x >= xs[xs.length - 1] - 1e-6) l = xs.length - 1; }   // a station at the girder end itself
       const jump = A => v(A, l) - v(A, r);
       return { DC1: jump(VDC1), DC2: jump(VDC2), DW: jump(VDW), UT: jump(VUT), UF: jump(VUF), LL: Math.max(0, v(Vp, l)) - Math.min(0, v(Vn, r)), PL: (v(Vp, l) > 0 ? v(Qp, l) : 0) - (v(Vn, r) < 0 ? v(Qn, r) : 0), left: l >= 0, right: r >= 0 }; };
-    return { xs, VuE, at: x => pack(idx(x - 0.011, x + 0.011)), inPanel: (p, q) => pack(idx(Math.min(p, q), Math.max(p, q))), vu: (p, q) => Math.max(0, ...idx(p, q).map(i => VuE[i])), zAt, reaction, G };
+    // vuAt(p, q) (sb-panel-eta PR): vuTerms of the station giving vu(p, q) (the first of equal ones)
+    const vuAt = (p, q) => { const ids = idx(p, q); let b = ids[0]; ids.forEach(i => { if (VuE[i] > VuE[b]) b = i; }); return vuTerms(b); };
+    return { xs, VuE, at: x => pack(idx(x - 0.011, x + 0.011)), inPanel: (p, q) => pack(idx(Math.min(p, q), Math.max(p, q))), vu: (p, q) => Math.max(0, ...idx(p, q).map(i => VuE[i])), vuAt, zAt, reaction, G };
   }
 
   /* fromPayload(pl, opt): the stations of the payload as shear locations (every payload station, 0.01 ft inside the girder ends and

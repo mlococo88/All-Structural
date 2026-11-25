@@ -12053,3 +12053,35 @@ None.
 - **Governing provision:** none changed (no tool code changed).
 - **Check case:** built-in project, G1: CF10 Item cell "Intermediate bracing. Recommended: K (bottom)-frame (S/h = 2.19). In use: X-frame. [[cf.type]]".
 - **How verified:** `node tests/engine/run.mjs xf-cf10-depth.test.mjs xf-cf10-notes.test.mjs`: 7 / 7 pass (3 failed on main before).
+
+## 2026-11-25 — PR: claude/sb-panel-eta (PR: pending) (SBPETA) — "Web panels" shear check: V_u with the owner's η and m, as the station checks   [CALCULATION CHANGE, CLAUDE.md §4]
+- **Problem:** the Shear & stiffeners tab's "Web panels" rows (and the Report's §"Web panels") took each panel's V_u with the plain AASHTO Strength I factors 1.25 / 1.50 / 1.75, without the owner's load modifier η (η_D η_R η_I, AASHTO 1.3.2.1) and design load multiplier m (RIDOT BDM 3.4.1.2: 1.2). The station checks (GS11) on the same tab take them. Unconservative for an owner with η or m ≠ 1 (RIDOT always: m = 1.2; MassDOT / CTDOT / RIDOT where η ≠ 1); the panel row under-stated V_u by up to 1/(1.05 × 1.2) on the LL+IM part. No verdict changed in the test designs, because the stations (GS11) check the same panel with the right factors and govern or tie.
+- **Where:** `apps/steel-bridge/ui/shear.js` `geom(P, g, pl, GF)` (anchor `dem = window.SBDShear.demands(pl, GF)`) and `build()` (anchor `const gm = geom(P, g, pl, G), D = gm.D;`, `vuAt: gm.dem ? gm.dem.vuAt : null`); `apps/steel-bridge/engine/shear.js` `demands()` (new `vuTerms`, `vuAt`, display only) and `panels()` (the worked step `pn.Vu`, new `pn.pl`); `worked()` (the station steps print 1.3125 / 1.5750, not 1.31 / 1.58; display only); `apps/steel-bridge/report/builders.js` `shear()` (anchor `const ownN = on =>`: a note with the links to η and m before the panel and station steps).
+- **Before:**
+  ```js
+  function geom(P, g, pl) {
+    ...
+    if (pl) { const sup = ..., dem = window.SBDShear.demands(pl);
+  ...
+  const gm = geom(P, g, pl), D = gm.D;
+  const panels = SH.panels(pans, { D, Fyw, twAt, rat, vu: gm.dem ? gm.dem.vu : null });
+  ```
+  and the step `w.add({ id: 'Vu', label: 'Largest Strength I shear in the panel', sym: 'V_{u}', eq: '', sub: '', value: Vu, ... })` (a value with no equation).
+- **After:**
+  ```js
+  function geom(P, g, pl, GF) {
+    ...
+    if (pl) { const sup = ..., dem = window.SBDShear.demands(pl, GF);
+  ...
+  const gm = geom(P, g, pl, G), D = gm.D;   // G = SH.factorsOwner(lf, { fat: fatI(P) }), the station checks' factors
+  const panels = SH.panels(pans, { D, Fyw, twAt, rat, vu: gm.dem ? gm.dem.vu : null, vuAt: gm.dem ? gm.dem.vuAt : null });
+  ```
+  and the step `pn.Vu`: V_u = |γ_DC(V_DC1 + V_DC2) + γ_DW V_DW + γ_LL V_LL+IM (+ γ_DW V_UT + γ_DC V_UF)| with the station, the envelope and each γ substituted (maximum γ_DC = 1.25η, γ_DW = 1.50η, γ_LL = 1.75ηm; minimum 0.90/η, 0.65/η where a permanent load relieves the extreme); `pn.pl` (V_LL+IM − V_PL + V_PL/m) where the panel's V_LL+IM carries a pedestrian part and m ≠ 1. On screen the panel and station "Demands" topics link to the Loads & LLDF tab (Owner load rules, steps own.eta, own.m); in the Report a note before the steps links to [[own.eta]] and [[own.m]] (Project and owner, Owner load rules).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 1.3.2.1 (Eqs. 1.3.2.1-2, -3: η on the maximum and minimum load factors), Art. 3.4.1 (Tables 3.4.1-1, 3.4.1-2), Art. 6.10.9 (6.10.9.1, 6.10.9.3.1: the largest shear in the panel); the owner's η and m as the app's owner rules cite them (RIDOT BDM 1.3.1 η_D, 1.3.2 η_R, 1.3.3 η_I; RIDOT BDM 3.4.1.2 design load multiplier 1.2).
+- **Check case** (a made-up RIDOT bridge built in `tests/engine/sb-panel-eta.test.mjs`: 80 ft simple span, 5 girders at 8 ft, web 42 × 7/16 in, flanges 14 × 3/4 and 16 × 1 in, stiffened at d_o/D = 1.5, η_I = 1.05 entered: η = 1.05, m = 1.2), girder type Interior, end panel 0–5 ft (d_o = 60 in ≤ 1.5D = 63 in): V_DC1 = 46.35, V_DC2 = 10.05, V_DW = 7.00, V_LL+IM = 89.74 kip (Analysis tab, at the bearing). φV_n = V_cr = CV_p = 0.7361 × 532.88 = 392.25 kip (k = 7.45, D/t_w = 96).
+  - Before: V_u = 1.25(56.40) + 1.50(7.00) + 1.75(89.74) = 70.50 + 10.50 + 157.05 = **238.04 kip**, ratio 0.607.
+  - After: V_u = 1.3125(56.40) + 1.575(7.00) + 2.205(89.74) = 74.02 + 11.03 + 197.88 = **282.92 kip**, ratio **0.721** = the station GS11 at x = 0.01 ft (0.721).
+  - Owner AASHTO (η = m = 1), the same bridge: 238.04 kip before and after.
+- **How verified:** `node tests/engine/run.mjs sb-panel-eta` (new: the hand check, the step, AASHTO unchanged exactly, the pedestrian part, the stiffener and bearing rows unchanged, the report links); the 20 recorded steel test designs (5 projects × AASHTO / RIDOT / MassDOT / CTDOT) and the app's built-in and new projects: every panel, station, stiffener and bearing result hashed on main and on this branch; only the RIDOT designs' panel V_u change (m = 1.2), every station, stiffener and bearing result and every verdict is unchanged, every design with η = m = 1 is identical (table in the PR).
+- **Other copies:** none (the panel V_u is computed only here).
+- **Open items (reported, not changed):** none in the shear path. Checked and found to apply η and m already: the transverse stiffener and connection plate rows and the bearing stiffener rows (engine/stiffeners.js, OWN_K.ts / OWN_K.bstf, on the unfactored shears and reactions of `demands()`), the welds (engine/welds.js, OWN_K.wt), the field splices (engine/splices.js ownM), the flexure (factorsOwner), deck placement (SBDConstr.factorsOwner, η only), the Factored demands tab (factorsOwner); ui/fatigue.js takes only `demands(pl).zAt`.
