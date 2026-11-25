@@ -36,7 +36,8 @@ test('SBNG: made-up thin bridge: every failing / warning item links to a shown s
   SB.items(SH.tsC).forEach(e => chk('stiff', e.st, e.step, tsS)); SB.items(SH.bsC).forEach(e => chk('stiff', e.st, e.step, bsS));
   SH.stations.forEach(r => { const S = ids(W.SBDShearUI.stepsOf(SH, 'loc', r)); SB.rows(r.checks).forEach(e => chk('shear', e.st, e.step, S)); });
   const FA = B.fat, faS = new Set(); FA.FR.rows.forEach(r => ids(W.SBDFatigueUI.stepsOf(FA, 'fa', r)).forEach(x => faS.add(x)));
-  SB.items(FA.FC).filter(e => !/^faD\./.test(e.step)).forEach(e => chk('fat', e.st, e.step, faS));   // FA4's detailing items link to faD.* steps no tab shows (open item SBNG-2)
+  ids(W.SBDFatigueUI.stepsOf(FA, 'fd')).forEach(x => faS.add(x));   // SBLK (2026-11-24): FA4's detailing steps (faD.*), shown on selection 'fd'
+  SB.items(FA.FC).forEach(e => chk('fat', e.st, e.step, faS));
   SB.items(FA.SCC).forEach(e => chk('studs', e.st, e.step, ids(W.SBDFatigueUI.stepsOf(FA, 'sc'))));
   B.spl.list.forEach(s => { if (s.CK) SB.items(s.CK).forEach(e => chk('spl', e.st, e.step, ids(W.SBDSplicesUI.stepsOf(B.spl, s)))); });
   const wS = new Set(); B.wd.R.fw.forEach(r => ids(W.SBDWeldsUI.stepsOf(B.wd, 'fw', r.i)).forEach(x => wS.add(x))); B.wd.R.tr.forEach(r => ids(W.SBDWeldsUI.stepsOf(B.wd, 'tr', r.i)).forEach(x => wS.add(x)));
