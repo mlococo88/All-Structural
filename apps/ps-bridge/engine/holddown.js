@@ -38,7 +38,9 @@
   // correction on the exterior girders only; engine/lldf-opt.js, which also applies PS-19 itself); no inputs.lldf (both off): engine0 itself
   const engine = inp => (window.PSBLldfOpt && inp && inp.lldf ? window.PSBLldfOpt.run(inp, engine0) : engine0(inp));
   // PS-35 (2026-11-14): a box beam or voided slab gets the type (f) / (g) distribution factors (engine/lldf-fg.js); every other shape the engine's
-  const compute0 = inp => apply(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));
+  const core = inp => (window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));
+  // SH-SP (2026-11-25, §4): the engine with the stirrup spacing check and β of Eq. 5.7.3.4.2-2 where A_v < A_v,min (engine/shear-sp.js)
+  const compute0 = inp => apply(inp, window.PSBShearSp ? window.PSBShearSp.run(inp, core) : core(inp));
   // PS-34 (2026-11-14): the pier compression block checked against the family's thickness (engine/pierblock.js; a warning only)
   const compute1 = inp => { const R = compute0(inp); return window.PSBPierBlock ? window.PSBPierBlock.apply(inp, R) : R; };
   // E1-D4 / E1-D5 (engineer decisions 2026-11-21): the engine's load rating with φ_s = 1.0 for shear and the positive-moment dead-load
