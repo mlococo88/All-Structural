@@ -17,7 +17,7 @@ import { MIDAS_CASES, midasFixtures } from './psbridge-midas-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', 'dxf.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'handoffs', 'rating-along', 'demands'].map(n => path.join(APP, `engine/${n}.js`)),
+const W = loadShared('steps.js', 'dxf.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'haunch', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'handoffs', 'rating-along', 'demands'].map(n => path.join(APP, `engine/${n}.js`)),
   ...['vizkit', 'strands', 'view3d', 'xsfig', 'plan', 'dash', 'summary', 'sheets'].map(n => path.join(APP, `ui/${n}.js`)));
 W.PSBSections.install();
 const X = W.SharedDxf, SH = W.PSBSheets, BR = W.PSBBridge, J = v => JSON.parse(JSON.stringify(v));
@@ -173,6 +173,10 @@ test('H3 camber and haunch: the curves and the tenth-point table = R.haunch; the
       [['PRESTRESS', R.cam.dPS], ['SELF-WEIGHT', R.cam.dSW], ['DECK + HAUNCH', R.cam.dDK], ['DC2 + DW', R.cam.dSD], ['LL + IM', R.cam.dLL], ['LL LIMIT', R.cam.llLim]].forEach(([a, v]) => assert.ok(R6.some(q => q[0] === a && q[1] === f3(v)), `${lab} ${a}`));
       const T = texts(B, s).map(e => e.s).join(' ').replace(/\s+/g, ' ');
       assert.ok(T.includes(`AT THE CL BEARINGS ${Hn[0].buildup.toFixed(2)} AND ${Hn[Hn.length - 1].buildup.toFixed(2)} IN, AT MIDSPAN ${Hn[5].buildup.toFixed(2)} IN`), lab + ' haunch at the supports and midspan');
+      // HP (2026-11-25, engine/haunch.js): t_h is the minimum haunch at midspan; toward the bearings t_h + Δ_deck (Δ_deck < 0: t_h at the bearings)
+      const th = +t.inp.th, dd = R.cam.afterDeck; assert.ok(R.hp, lab + ' HP applied');
+      close(Hn[5].buildup, Math.max(dd >= 0 ? th : th - dd, 0.5), lab + ' midspan haunch'); close(Hn[0].buildup, Math.max(dd >= 0 ? th + dd : th, 0.5), lab + ' bearing haunch');
+      assert.ok(T.includes(dd >= 0 ? 'IS THE MINIMUM, AT MIDSPAN AT THE GIRDER CENTRELINE' : 'IS THE MINIMUM, AT THE BEARINGS'), lab + ' haunch note');
     });
   }
 });

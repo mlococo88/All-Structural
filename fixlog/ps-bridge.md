@@ -9930,3 +9930,37 @@ Before (main, src midas) and after (converted table): every engine result, worke
 - NOMCT-d. Kept entries keep the stored values' input warnings (span length, continuity) reworded, plus a warning to re-enter.
 ### Other tools with MCT / MIDAS links (not changed, one tool per PR)
 lldf.html ("Send DL to MCT Loads" and its MCT links), apps/steel-bridge ("Import MIDAS (.lga)" / "Export to MIDAS (.lga)", demand-file notes), apps/midas-model-inspector, tools.html, the old "Prestressed Bridge Design.html" (frozen), the root index.html (the MCT Generator).
+
+## 2026-11-25 — PR: claude/ps-haunch-profile (PR #1722: https://github.com/mlococo88/All-Structural/pull/1722) (HP) — the haunch along the girder with t_h the minimum at midspan (§4; a reported value only, no check, load or ratio changes) — NOT MERGED, engineer review
+### Request (engineer, 2026-11-25)
+A 45 ft NEXT 24F with about 3.39 in of camber at deck placement and t_h = 2.0 in showed "Haunch build-up at midspan 5.39 in" and 2.00 in at the bearings. On a straight grade the haunch is thinnest at midspan. Decision: t_h is the MINIMUM haunch, at midspan, at the girder centreline; the profile is fixed in a new non-frozen engine file (the frozen `engine/pbd-*.js` and the old root page are not edited).
+### Where
+- New `apps/ps-bridge/engine/haunch.js` (`window.PSBHaunch.apply(inp, R)`), loaded before `engine/holddown.js` (`index.html`); applied last in `PSBHoldDown.compute` (`engine/holddown.js`, anchor `const compute = inp =>`: the former last step renamed `compute6`).
+- The engine line it corrects (frozen, `engine/pbd-compute.js` computeAll, anchor): `const buildup=Math.max(inp.th + cam.afterDeck*par,0.5); // haunch needed to hold grade` (checked once in computeAll, and each engine value checked equal to that expression; else an error).
+- Display: `engine/fields.js` (base.th help), `ui/camber.js` (net camber card note, tenth-point note, chart limit label, topic ids), `engine/worked-end.js` camber() (anchor `const hM = R.haunch[5];`: steps `cb.haunch`, new `cb.haunchBrg`; the old step kept when the module is not loaded), `ui/sheets.js` camber() notes.
+### Before
+```
+const buildup=Math.max(inp.th + cam.afterDeck*par,0.5);   // engine; shown as is
+add({ id: 'haunch', label: 'Haunch build-up at midspan', sym: 't_{h,mid}', eq: '\\max(t_{h} + \\Delta_{deck},\\ 0.5)', … }, Math.max(+inp.th + c.afterDeck * hM.par, 0.5), 'haunch.5.buildup');
+```
+### After
+```
+const profile = (th, d, psi) => Math.max(th + Math.max(d, 0) * (1 - psi) + Math.max(-d, 0) * psi, 0.5);
+R.haunch.forEach(r => { r.buildup0 = r.buildup; r.buildup = profile(th, d, r.par); });   // d = R.cam.afterDeck
+// R.hp = { th, d, neg, mid, brg, min, max, xMax, owner, lim, warn }; RIDOT and max > 4 in: one warning in R.warns
+```
+Steps: `cb.haunch` = max(t_h + Δ_deck(1 − ψ), 0.5) at ψ = 1 (midspan), `cb.haunchBrg` at ψ = 0 (bearings); Δ_deck < 0: max(t_h + |Δ_deck| ψ, 0.5).
+### Problem
+The engine added the camber at midspan; the haunch is thickest at the bearings. Not a design-check issue (no check reads it), but the shown haunch (and the DXF sheet) was wrong for detailing.
+### Decision (pending engineer review)
+Δ_deck < 0 (the girder sags at deck placement): t_h is kept at the thinnest point, the bearings (never thinner than t_h anywhere).
+### Governing provision
+Geometry. AASHTO LRFD 10th Ed. 5.6.3.5.2 (camber); RIDOT BDM (April 2026) 9.4.6 (minimum nominal haunch at the girder centreline; a haunch thicker than 4 in to be reinforced), the warning for owner RIDOT. Other owners reported, not added: MassDOT Part I 3.5.1.2, 3.7.1.3; CTDOT BDM 8.1.2.4.
+### Check case
+NEXT 24F, L 45 ft, flange 120 in, t_s 8 in, t_h 2 in, strands 16 / 16 / 12 straight (2.875, 4.875, 6.875 in), w_NC 0, w_DC2 0.5, w_DW 0.3 klf: Δ_deck = 3.346 in. Midspan 5.35 → 2.00 in; bearings 2.00 → 5.35 in; 0.1L (ψ 0.36) 3.20 → 2 + 3.346(0.64) = 4.14 in. Owner RIDOT: warning "haunch up to 5.35 in (at the bearings …)".
+### How verified
+`tests/engine/psbridge-haunch.test.mjs` (new; hand check, Δ < 0, RIDOT warning, anchors, the whole result with and without the module); `psbridge-drawings-h` (the sheet's midspan and bearing haunch), `psbridge-tabs` (step pairs), `psbridge-model` (script list); harness B `tests/psbridge-compare.mjs` (the haunch compared with the profile worked from the old app's Δ_deck); result hashes origin/main vs branch on 657 designs: identical without the haunch values; smoke `tests/smoke/ps-bridge-haunch.mjs`.
+### Other copies
+The old `Prestressed Bridge Design.html` (frozen) keeps the old formula (open item).
+### Open items
+Vertical curve, cross slope across the flange, camber tolerance, a t_h location setting: not added (engineer: not now). Hand-off `deck.haunch`: PR 3 (claude/ps-haunch-handoff). DC1 from the average haunch: PR 2 (claude/ps-haunch-dc1).

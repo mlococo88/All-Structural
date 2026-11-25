@@ -59,6 +59,9 @@
   const compute5 = inp => { const R = compute4(inp), D = window.PSBDemands; return D && D.assumed ? D.assumed(inp, D.neutral ? D.neutral(R) : R) : R; };
   // DD (2026-11-24, engineer request "Please fix the deck distribution steel"; §4): the deck's distribution reinforcement on the effective span
   // length of AASHTO LRFD 10th Ed. Art. 9.7.2.3 (engine/deckdist.js, with shared/deck.js distEff); a girder without the deck design: R as before
-  const compute = inp => { const R = compute5(inp); return window.PSBDeckDist && R && R.deck ? window.PSBDeckDist.apply(inp, R) : R; };
+  const compute6 = inp => { const R = compute5(inp); return window.PSBDeckDist && R && R.deck ? window.PSBDeckDist.apply(inp, R) : R; };
+  // HP (2026-11-25, engineer decision: t_h is the minimum haunch, at midspan; §4): the haunch along the girder t_h + Δ_deck (1 − ψ) instead of
+  // the engine's t_h + Δ_deck ψ (engine/haunch.js; R.haunch only, no check, load or ratio) and the RIDOT 9.4.6 warning over 4 in
+  const compute = inp => { const R = compute6(inp); return window.PSBHaunch ? window.PSBHaunch.apply(inp, R) : R; };
   window.PSBHoldDown = { NAME, FRAC, apply, compute, fracOf };
 })();
