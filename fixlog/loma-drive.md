@@ -45,3 +45,11 @@ Not an engineering calculation tool: no formulas, load or resistance factors, un
 - **Assumptions (also stated in the tool's info text):** the finished floor sits on the 4" slab; partitions are 2×4 plus drywall, running from the floor to a ceiling under the existing joists; the perimeter is furred, insulated and drywalled. Headroom and code clearance are not checked (engineer's instruction, 2026-11-25).
 - **Governing provision:** n/a (display only; no computed engineering values).
 - **How verified:** headless: each preset rendered top-down; editor adds an item, drags it (position saved), draws a wall (saved as `[13,5,27,5]`); no page errors.
+
+## 2026-11-25 — Controls organized into tabs
+
+- **What:** The control panel is split into five tabs: **View** (camera presets, 3D floor isolate, walk-through), **Show** (layers, mode, section cut), **Style** (finishes, lighting, sun and shadows), **Basement** (finishing presets, editor, finishes) and **About** (sources, assumptions, tips). The panel is 370 px wide on desktop and stays a bottom sheet on phones. The basement floor and ceiling options are stacked under their headings.
+- **Where:** `apps/loma-drive/index.html`. Markup `#panel .tabs` / `.tabp[data-tab]`; script `showTab()`, anchor text `// ---- control tabs ----`.
+- **Saved data:** new key `lomaDrive.ui.tab` (last open tab), prefixed per §5, wrapped in try/catch. No existing keys changed.
+- **Governing provision:** n/a (UI only).
+- **How verified:** headless screenshots of each tab at 1200×800 and 390×844; no page errors.
