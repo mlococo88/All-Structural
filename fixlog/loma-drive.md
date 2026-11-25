@@ -61,3 +61,12 @@ Not an engineering calculation tool: no formulas, load or resistance factors, un
 - **Assumptions (also in the tool's info text):** not shown on the permit set. The layout is for visualization only, and no lot lines, setbacks or curb-cut rules are checked. Checked clear of the nearest neighbouring building (about 30' south).
 - **Governing provision:** n/a (display only).
 - **How verified:** headless renders (aerial, south and site map views); no page errors.
+
+## 2026-11-25 — Aerial photo drew over the driveway and walkway
+
+- **Problem:** The aerial layers used `polygonOffset` (factor −1 to −3) so they would win against the grass terrain and against each other. That pulled them in front of the driveway and walkway, which sit only 0.22–0.25' above grade, so the photo covered them.
+- **Where:** `apps/loma-drive/index.html`, block `AERIAL PHOTO`, function `layer()`.
+- **Before:** `new T.MeshStandardMaterial({ map: tex, roughness: 1, polygonOffset: true, polygonOffsetFactor: -order, polygonOffsetUnits: -order })`, with nested layers overlapping (`layer(17, …, 1)`, `layer(19, …, 2)`, `layer(20, …, 3)`).
+- **After:** no polygon offset. Each layer keeps only the triangles that are not fully inside the next finer layer's box (`layer(17, …, [-330, 370, -350, 380])`, `layer(19, …, [-110, 150, -120, 160])`, `layer(20, …, null)`), so the layers tile without overlapping. The plain grass terrain is hidden while the photo is shown (`applyMode()`: `k === 'site' && o.material === mat.grass`).
+- **Governing provision:** n/a (display only).
+- **How verified:** headless render with stand-in tiles from the Aerial and Front views. The driveway and walkway are fully visible over the photo, with no flicker between layers.

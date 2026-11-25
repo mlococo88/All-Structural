@@ -1136,7 +1136,7 @@ const AER = { on: true, ok: 0, fail: 0, meshes: [] };
   const ll = (X, Z) => { const e = g.O[0] + (X * g.uX[0] + Z * g.uZ[0]) * 0.3048, n = g.O[1] + (X * g.uX[1] + Z * g.uZ[1]) * 0.3048; return [g.lon0 + e / g.kx, g.lat0 + n / g.ky]; };
   const merc = (lon, lat, z) => { const s = 256 * 2 ** z, r = lat * Math.PI / 180; return [(lon + 180) / 360 * s, (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * s]; };
   const terr = G.terrain.children[0], tpos = terr.geometry.attributes.position, tidx = terr.geometry.index.array;
-  function layer(z, Xa, Xb, Za, Zb, order) {
+  function layer(z, Xa, Xb, Za, Zb, ex) {
     let px0 = 1e12, py0 = 1e12, px1 = -1e12, py1 = -1e12;
     [[Xa, Za], [Xa, Zb], [Xb, Za], [Xb, Zb]].forEach(([X, Z]) => { const [x, y] = merc(...ll(X, Z), z); px0 = Math.min(px0, x); py0 = Math.min(py0, y); px1 = Math.max(px1, x); py1 = Math.max(py1, y); });
     const tx0 = Math.floor(px0 / 256), ty0 = Math.floor(py0 / 256), tx1 = Math.floor(px1 / 256), ty1 = Math.floor(py1 / 256);
@@ -1149,9 +1149,11 @@ const AER = { on: true, ok: 0, fail: 0, meshes: [] };
       const Z = tpos.getX(i) + CZ, X = tpos.getZ(i) + CX, [x, y] = merc(...ll(X, Z), z);
       uv[i * 2] = (x - tx0 * 256) / W; uv[i * 2 + 1] = (y - ty0 * 256) / H; inside[i] = X >= Xa && X <= Xb && Z >= Za && Z <= Zb;
     }
-    const idx = []; for (let k = 0; k < tidx.length; k += 3) if (inside[tidx[k]] && inside[tidx[k + 1]] && inside[tidx[k + 2]]) idx.push(tidx[k], tidx[k + 1], tidx[k + 2]);
+    // keep triangles fully inside this layer's box but not fully inside the next (finer) layer's box, so layers never overlap
+    const inEx = i => { if (!ex) return false; const Z = tpos.getX(i) + CZ, X = tpos.getZ(i) + CX; return X >= ex[0] && X <= ex[1] && Z >= ex[2] && Z <= ex[3]; };
+    const idx = []; for (let k = 0; k < tidx.length; k += 3) { const a = tidx[k], b = tidx[k + 1], c = tidx[k + 2]; if (inside[a] && inside[b] && inside[c] && !(inEx(a) && inEx(b) && inEx(c))) idx.push(a, b, c); }
     const geo = new T.BufferGeometry(); geo.setAttribute('position', tpos); geo.setAttribute('normal', terr.geometry.attributes.normal); geo.setAttribute('uv', new T.BufferAttribute(uv, 2)); geo.setIndex(idx);
-    const m = new T.Mesh(geo, new T.MeshStandardMaterial({ map: tex, roughness: 1, polygonOffset: true, polygonOffsetFactor: -order, polygonOffsetUnits: -order }));
+    const m = new T.Mesh(geo, new T.MeshStandardMaterial({ map: tex, roughness: 1 }));
     m.receiveShadow = true; m.userData.k = 'aer'; m.userData.info = { t: 'Aerial photo — MassGIS 2023 orthoimagery', d: 'Spring 2023 leaf-off color orthos (MassGIS tile service), draped on the lidar-fit ground. Shows the existing house; the new house sits on its footprint.' };
     m.visible = false; G.terrain.add(m); pickables.push(m); walkables.push(m); AER.meshes.push(m);
     for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
@@ -1161,9 +1163,9 @@ const AER = { on: true, ok: 0, fail: 0, meshes: [] };
       img.src = URL + z + '/' + ty + '/' + tx;
     }
   }
-  layer(17, -900, 940, -920, 940, 1);
-  layer(19, -330, 370, -350, 380, 2);
-  layer(20, -110, 150, -120, 160, 3);
+  layer(17, -900, 940, -920, 940, [-330, 370, -350, 380]);
+  layer(19, -330, 370, -350, 380, [-110, 150, -120, 160]);
+  layer(20, -110, 150, -120, 160, null);
 }
 function aerialNote() {
   const el = document.getElementById('aerNote'); if (!el) return;
@@ -1378,6 +1380,7 @@ function applyMode() {
     if (k === 'lbl') { o.visible = labelsOn; return; }
     if (k === 'exo') { o.visible = exoOn; return; }
     if (k === 'aer') { o.visible = AER.on && AER.ok > 0; return; }
+    if (k === 'site' && o.material === mat.grass) { o.visible = !(AER.on && AER.ok > 0); return; }
     if (k === 'ctx') { o.visible = !(AER.on && AER.ok > 0); return; }
     if (k === 'furn') { o.visible = furnOn && mode === 'fin'; return; }
     if (mode === 'fin') o.visible = k !== 'frm';
