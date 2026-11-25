@@ -9770,7 +9770,7 @@ None.
 - **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
 - **Other copies:** none.
 
-## 2026-11-25 — PR: claude/ps-no-mct (PR #TBD) (NOMCT) — no MCT input or output: the MIDAS file demand source, the MCT demands / geometry banners, the capacity send and "↩ MCT Analysis" removed; saved MIDAS demands converted to the custom table when exact, else kept read only; the frozen engine's MIDAS wording reworded where shown
+## 2026-11-25 — PR: claude/ps-no-mct (PR #1716: https://github.com/mlococo88/All-Structural/pull/1716) (NOMCT) — no MCT input or output: the MIDAS file demand source, the MCT demands / geometry banners, the capacity send and "↩ MCT Analysis" removed; saved MIDAS demands converted to the custom table when exact, else kept read only; the frozen engine's MIDAS wording reworded where shown
 ### Request (engineer, 2026-11-25)
 "I'm seeing references to MCT in the PS bridge app. We should have no MCT input or output." Decisions (2026-11-25, through the coordinator): migration "exact convert, else keep" (read only, labelled "Imported demands (from an earlier version)"); the frozen engine's text "reworded where shown"; psSection kept (LL & DL Distribution reads it), named for LL & DL only.
 ### Removed
