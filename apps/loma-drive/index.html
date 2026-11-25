@@ -124,6 +124,8 @@ select{min-height:36px;border-radius:9px;border:1px solid var(--line);background
   <div class="sl"><span>Time</span><input id="hr" type="range" min="5" max="20" step="0.25"><output id="hrv"></output></div>
   <label class="ck" style="width:100%"><input type="checkbox" id="shad" checked>Cast shadows</label>
  </div>
+ <div class="sec"><h2>Render quality</h2><div class="row" id="qualSeg"><button class="b" data-q="standard">Standard (faster)</button><button class="b" data-q="high">High (sharper shadows)</button></div>
+  <p class="note">High renders at full screen resolution with finer shadows; use Standard on an older laptop or a phone. Saved in this browser. Furniture, decor and light fixtures are illustrative.</p></div>
 </div>
 <div class="tabp" data-tab="bsmt" role="tabpanel">
  <div class="sec"><h2>Basement finishing</h2><div class="row" id="bPresets"></div>
@@ -193,6 +195,76 @@ const sc = sun.shadow.camera; sc.left = -110; sc.right = 110; sc.top = 110; sc.b
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 scene.add(sun); scene.add(sun.target);
 const amb = new T.AmbientLight(0xffffff, 0.12); scene.add(amb);
+// ---------- realism: gradient sky, sky light (environment map), view-fitted sun shadows, render quality ----------
+const REAL = (() => {
+  const QKEY = 'lomaDrive.quality', R = { sunDir: new T.Vector3(0.4, 0.8, 0.4), ext: 0, day: 1 };
+  let q = null; try { q = localStorage.getItem(QKEY); } catch (e) { }
+  const small = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || innerWidth < 900;
+  R.q = q === 'standard' || q === 'high' ? q : (small ? 'standard' : 'high');
+  const maxTex = renderer.capabilities.maxTextureSize;
+  R.apply = () => {
+    const hi = R.q === 'high', ms = hi && maxTex >= 4096 ? 4096 : 2048;
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, hi ? 2 : 1.5));
+    R.minExt = hi ? 38 : 48;
+    if (sun.shadow.mapSize.x !== ms) { sun.shadow.mapSize.set(ms, ms); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+    R.ext = 0;
+  };
+  renderer.toneMappingExposure = 0.92;
+  R.set = v => { R.q = v; try { localStorage.setItem(QKEY, v); } catch (e) { } R.apply(); };
+  R.apply();
+  // sky dome drawn behind everything (colours are display colours; the fog uses the horizon colour so distant ground melts into it)
+  const skyU = { top: { value: new T.Color() }, hor: { value: new T.Color() }, bot: { value: new T.Color() }, sunCol: { value: new T.Color(0xfff2d6) }, sunDir: { value: R.sunDir }, sunAmt: { value: 1 } };
+  const sky = new T.Mesh(new T.SphereGeometry(1500, 32, 16), new T.ShaderMaterial({
+    uniforms: skyU, side: T.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: false,
+    vertexShader: 'varying vec3 vD; void main(){ vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 top, hor, bot, sunCol, sunDir; uniform float sunAmt; varying vec3 vD;' +
+      'void main(){ vec3 d = normalize(vD); float h = d.y; vec3 c = h > 0.0 ? mix(hor, top, pow(clamp(h, 0.0, 1.0), 0.55)) : mix(hor, bot, clamp(-h * 5.0, 0.0, 1.0));' +
+      'float s = max(dot(d, normalize(sunDir)), 0.0); c += sunCol * (smoothstep(0.9993, 0.9997, s) * 1.2 + pow(s, 12.0) * 0.16) * sunAmt * step(0.0, h + 0.02);' +
+      'gl_FragColor = vec4(c, 1.0); }'
+  }));
+  sky.renderOrder = -1e6; sky.frustumCulled = false; sky.userData.k = 'ui'; scene.add(sky);
+  // sky light: a soft blue-above / warm-ground gradient baked into a prefiltered environment map
+  {
+    const pm = new T.PMREMGenerator(renderer), es = new T.Scene(), sg = new T.SphereGeometry(10, 48, 24), p = sg.attributes.position, col = new Float32Array(p.count * 3);
+    const zen = new T.Color(0.30, 0.46, 0.80), hz = new T.Color(0.86, 0.89, 0.92), gr = new T.Color(0.36, 0.35, 0.32), c = new T.Color();
+    for (let i = 0; i < p.count; i++) { const y = p.getY(i) / 10; if (y >= 0) c.copy(hz).lerp(zen, Math.pow(y, 0.6)); else c.copy(hz).lerp(gr, Math.min(1, -y * 4)); col.set([c.r, c.g, c.b], i * 3); }
+    sg.setAttribute('color', new T.BufferAttribute(col, 3));
+    const em = new T.MeshBasicMaterial({ vertexColors: true, side: T.BackSide, depthTest: false, depthWrite: false }); es.add(new T.Mesh(sg, em));
+    try { scene.environment = pm.fromScene(es, 0.03).texture; } catch (e) { scene.environment = null; }
+    pm.dispose(); sg.dispose(); em.dispose();
+  }
+  const mix3 = (a, b, t) => new T.Color(a).lerp(new T.Color(b), t);
+  // day: 0 at night .. 1 in full sun; el: sun elevation (radians)
+  R.light = (day, el) => {
+    R.day = day;
+    const low = Math.max(0, Math.min(1, 1 - (el - 0.04) / 0.32)) * (day > 0 ? 1 : 0); // golden-hour warmth
+    sun.intensity = 2.35 * day; sun.color.copy(mix3(0xfff3e2, 0xffb978, low * 0.85));
+    hemi.color.setHex(day > 0.2 ? 0xdfeaf5 : 0x7f95c4); hemi.groundColor.setHex(0x6b6a55); hemi.intensity = 0.07 + 0.06 * day; amb.intensity = 0.05 - 0.02 * day;
+    R.env = 0.06 + 0.66 * day;
+    const top = mix3(0x050a16, mix3(0x5f93cf, 0x6c86b4, low * 0.6).getHex(), day), hor = mix3(0x1b2536, mix3(0xdde6ee, 0xf1c9a0, low * 0.8).getHex(), day);
+    skyU.top.value.copy(top); skyU.hor.value.copy(hor); skyU.bot.value.copy(hor).lerp(new T.Color(day > 0.3 ? 0xb9c1bd : 0x0c1119), 0.45);
+    skyU.sunCol.value.copy(mix3(0xfff4dc, 0xffb070, low)); skyU.sunAmt.value = day;
+    scene.background = hor.clone(); scene.fog.color.copy(hor);
+    R.envAll();
+  };
+  // environment strength per material (glass and polished surfaces get a little more)
+  R.envAll = () => { const seen = new Set(), f = m => { if (!m || seen.has(m) || !m.isMeshStandardMaterial) return; seen.add(m); m.envMapIntensity = (m.userData.env ?? (m.userData.glass ? 1.8 : 1)) * R.env; }; finMats.forEach(f); scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(f); }); };
+  // fit the sun's shadow box to what the camera is looking at, so shadows stay crisp close up
+  const right = new T.Vector3(), up = new T.Vector3(), cen = new T.Vector3(), Y = new T.Vector3(0, 1, 0);
+  R.fit = (target, dist) => {
+    let e = Math.min(320, Math.max(R.minExt, dist * 1.15)); e = R.minExt * Math.pow(1.25, Math.ceil(Math.log(e / R.minExt) / Math.log(1.25) - 1e-6));
+    if (e !== R.ext) { R.ext = e; sc.left = sc.bottom = -e; sc.right = sc.top = e; sc.near = 120; sc.far = 620; sc.updateProjectionMatrix(); }
+    right.crossVectors(Y, R.sunDir); if (right.lengthSq() < 1e-6) right.set(1, 0, 0); right.normalize(); up.crossVectors(R.sunDir, right).normalize();
+    const tx = 2 * e / sun.shadow.mapSize.x, a = target.dot(right), b = target.dot(up);
+    cen.copy(target).addScaledVector(right, Math.round(a / tx) * tx - a).addScaledVector(up, Math.round(b / tx) * tx - b);
+    sun.target.position.copy(cen); sun.position.copy(cen).addScaledVector(R.sunDir, 360);
+    sky.position.copy(camera.position);
+  };
+  // after the model is built: let sunlight through window glass, so sun patches land on the floors
+  R.finish = () => { scene.traverse(o => { if (o.isMesh && o.material && o.material.userData && (o.material.userData.glass || o.material.userData.clear)) o.castShadow = false; }); R.envAll(); };
+  return R;
+})();
+sun.shadow.bias = -0.00025; sun.shadow.normalBias = 0.03;
 
 // ---------- groups ----------
 const G = {};
@@ -200,75 +272,160 @@ const G = {};
 const pickables = [], walkables = [], blockers = [];
 
 // ---------- textures ----------
-function cvs(n, draw) { const c = document.createElement('canvas'); c.width = c.height = n; const g = c.getContext('2d'); draw(g, n); return c; }
-function tex(c, ft, ftv) { const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(1 / ft, 1 / (ftv || ft)); t.anisotropy = 8; t.encoding = T.sRGBEncoding; return t; }
+// Colour maps are drawn on a canvas; most surfaces also get a matching height map (bump) so boards, grout and laps catch the light.
+const ANI = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+function cvs(n, draw, m) { const c = document.createElement('canvas'); c.width = n; c.height = m || n; const g = c.getContext('2d'); draw(g, n, m || n); return c; }
+function tex(c, ft, ftv) { const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(1 / ft, 1 / (ftv || ft)); t.anisotropy = ANI; t.encoding = T.sRGBEncoding; return t; }
+function htex(c, ft, ftv) { const t = tex(c, ft, ftv); t.encoding = T.LinearEncoding; return t; } // height maps stay linear
+// draw a colour canvas and a height canvas together: draw(g, h, n, m)
+function cvs2(n, draw, m) { m = m || n; const a = document.createElement('canvas'), b = document.createElement('canvas'); a.width = b.width = n; a.height = b.height = m; const g = a.getContext('2d'), h = b.getContext('2d'); h.fillStyle = '#808080'; h.fillRect(0, 0, n, m); draw(g, h, n, m); return [a, b]; }
+function pair(cs, ft, ftv) { return [tex(cs[0], ft, ftv), htex(cs[1], ft, ftv)]; }
+const gray = v => { v = Math.max(0, Math.min(255, Math.round(v))); return `rgb(${v},${v},${v})`; };
 let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-const sidingT = tex(cvs(512, (g, n) => {
-  const rows = 12, h = n / rows; g.fillStyle = '#fff'; g.fillRect(0, 0, n, n);
+// lap siding, 5" exposure, light wood-grain embossing
+const [sidingT, sidingB] = pair(cvs2(512, (g, h, n) => {
+  const rows = 12, bh = n / rows; g.fillStyle = '#fff'; g.fillRect(0, 0, n, n);
   for (let i = 0; i < rows; i++) {
-    const y = i * h, gr = g.createLinearGradient(0, y, 0, y + h);
-    gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.85, '#e9e9e9'); gr.addColorStop(1, '#cfcfcf');
-    g.fillStyle = gr; g.fillRect(0, y, n, h);
-    g.fillStyle = 'rgba(0,0,0,.42)'; g.fillRect(0, y + h - 3, n, 3);
-    g.fillStyle = 'rgba(255,255,255,.7)'; g.fillRect(0, y, n, 1);
+    const y = i * bh, gr = g.createLinearGradient(0, y, 0, y + bh); gr.addColorStop(0, '#f3f3f3'); gr.addColorStop(0.8, '#ffffff'); gr.addColorStop(1, '#f4f4f4');
+    g.fillStyle = gr; g.fillRect(0, y, n, bh); g.fillStyle = 'rgba(0,0,0,.34)'; g.fillRect(0, y + bh - 2.5, n, 2.5); g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(0, y + bh - 5, n, 2.5);
+    const hg = h.createLinearGradient(0, y, 0, y + bh); hg.addColorStop(0, gray(40)); hg.addColorStop(0.94, gray(235)); hg.addColorStop(1, gray(245)); h.fillStyle = hg; h.fillRect(0, y, n, bh);
   }
-  for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(0,0,0,${rnd() * 0.04})`; g.fillRect(rnd() * n, rnd() * n, 6 + rnd() * 30, 1); }
+  for (let i = 0; i < 1800; i++) { const x = rnd() * n, y = rnd() * n, L = 12 + rnd() * 60, a = rnd() * 0.05; g.fillStyle = `rgba(0,0,0,${a})`; g.fillRect(x, y, L, 1); h.fillStyle = `rgba(0,0,0,${a * 2})`; h.fillRect(x, y, L, 1); }
 }), 5);
-const shingleT = tex(cvs(512, (g, n) => {
-  const rows = 8, h = n / rows; g.fillStyle = '#3a3c3e'; g.fillRect(0, 0, n, n);
+// architectural (laminated) asphalt shingles
+const [shingleT, shingleB] = pair(cvs2(512, (g, h, n) => {
+  const rows = 8, rh = n / rows; g.fillStyle = '#34373a'; g.fillRect(0, 0, n, n);
   for (let r = 0; r < rows; r++) {
-    let x = -rnd() * 60;
+    const y = r * rh, hg = h.createLinearGradient(0, y, 0, y + rh); hg.addColorStop(0, gray(70)); hg.addColorStop(1, gray(200)); h.fillStyle = hg; h.fillRect(0, y, n, rh);
+    let x = -rnd() * 80;
     while (x < n) {
-      const w = 40 + rnd() * 70, s = 44 + rnd() * 36;
-      g.fillStyle = `rgb(${s},${s + 2},${s + 5})`; g.fillRect(x, r * h, w - 2, h);
-      for (let k = 0; k < 40; k++) { const v = rnd() * 60; g.fillStyle = `rgba(${v},${v},${v},.35)`; g.fillRect(x + rnd() * w, r * h + rnd() * h, 2, 2); }
+      const w = 38 + rnd() * 74, s = 46 + rnd() * 34, tone = rnd() < 0.5 ? 0 : 4, dt = rh * (0.35 + rnd() * 0.35), tw = w * (0.3 + rnd() * 0.5);
+      [x, x - n].forEach(xx => {
+        g.fillStyle = `rgb(${s + tone},${s + 2},${s + 5})`; g.fillRect(xx, y, w - 2, rh);
+        g.fillStyle = 'rgba(10,10,12,.55)'; g.fillRect(xx + w * 0.1, y + rh - dt, tw, dt - 3); // laminated shadow tooth
+        h.fillStyle = 'rgba(0,0,0,.35)'; h.fillRect(xx + w - 3, y, 3, rh); h.fillStyle = 'rgba(255,255,255,.18)'; h.fillRect(xx, y + rh * 0.45, w - 3, rh * 0.5);
+      });
       x += w;
     }
-    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, r * h + h - 5, n, 5);
+    for (let k = 0; k < 2600; k++) { const v = 20 + rnd() * 90; g.fillStyle = `rgba(${v},${v},${v + 3},.5)`; g.fillRect(rnd() * n, y + rnd() * rh, 1.6, 1.6); }
+    g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(0, y + rh - 4, n, 4); h.fillStyle = gray(25); h.fillRect(0, y + rh - 2, n, 2);
   }
 }), 4);
-const woodT = tex(cvs(512, (g, n) => {
-  const pw = n / 24; for (let i = 0; i < 24; i++) {
-    let y = -rnd() * 300; while (y < n) {
-      const L = 120 + rnd() * 260, b = 150 + rnd() * 40;
-      g.fillStyle = `rgb(${b + 40},${b},${b - 55})`; g.fillRect(i * pw, y, pw - 1, L - 1);
-      for (let k = 0; k < 6; k++) { g.fillStyle = 'rgba(90,55,20,.08)'; g.fillRect(i * pw + rnd() * pw, y, 1, L); }
+// 3" oak strip flooring, random-length boards with grain and hairline joints
+const [woodT, woodB] = pair(cvs2(1024, (g, h, n) => {
+  const cols = 24, pw = n / cols; g.fillStyle = '#b08a5a'; g.fillRect(0, 0, n, n); h.fillStyle = gray(40); h.fillRect(0, 0, n, n);
+  for (let i = 0; i < cols; i++) {
+    const x = i * pw; let y = rnd() * n; const end = y + n;
+    while (y < end) {
+      const L = Math.min(end - y, 300 + rnd() * 820), b = 150 + rnd() * 42, hv = 200 + rnd() * 18;
+      const lines = []; for (let k = 0; k < 9; k++) lines.push([x + 2 + rnd() * (pw - 4), rnd() < 0.7, 0.06 + rnd() * 0.12, 0.6 + rnd() * 1.4, rnd() * 6, 0.5 + rnd() * 2.2]);
+      const knot = rnd() < 0.18 ? [x + pw * (0.25 + rnd() * 0.5), L * rnd(), 2 + rnd() * 2.5, 4 + rnd() * 6] : null;
+      for (const yy of [y, y - n]) {
+        g.fillStyle = `rgb(${b + 42},${b},${b - 55})`; g.fillRect(x + 1, yy + 1, pw - 2, L - 2);
+        lines.forEach(([gx, dark, a, lw, ph, amp]) => { // grain lines
+          g.strokeStyle = dark ? `rgba(80,45,15,${a})` : `rgba(255,235,200,${a * 0.7})`; g.lineWidth = lw;
+          g.beginPath(); g.moveTo(gx, yy + 1); for (let t = 1; t <= 12; t++) g.lineTo(gx + Math.sin(ph + t * 0.9) * amp, yy + 1 + (L - 2) * t / 12); g.stroke();
+        });
+        if (knot) { g.fillStyle = 'rgba(70,40,15,.35)'; g.beginPath(); g.ellipse(knot[0], yy + knot[1], knot[2], knot[3], 0, 0, 7); g.fill(); }
+        h.fillStyle = gray(hv); h.fillRect(x + 1.2, yy + 1.2, pw - 2.4, L - 2.4);
+      }
       y += L;
     }
   }
 }), 6);
-const tileT = tex(cvs(256, (g, n) => { g.fillStyle = '#c9c6bf'; g.fillRect(0, 0, n, n); const s = n / 2; for (let i = 0; i < 2; i++)for (let j = 0; j < 2; j++) { const v = 222 + rnd() * 14; g.fillStyle = `rgb(${v},${v - 2},${v - 6})`; g.fillRect(i * s + 2, j * s + 2, s - 4, s - 4); } }), 2);
-const slateT = tex(cvs(256, (g, n) => { g.fillStyle = '#6f7476'; g.fillRect(0, 0, n, n); const s = n / 2; for (let i = 0; i < 2; i++)for (let j = 0; j < 2; j++) { const v = 118 + rnd() * 30; g.fillStyle = `rgb(${v},${v + 3},${v + 6})`; g.fillRect(i * s + 2, j * s + 2, s - 4, s - 4); } }), 3);
+// 12" porcelain tile with grout
+const [tileT, tileB] = pair(cvs2(256, (g, h, n) => {
+  g.fillStyle = '#b9b5ad'; g.fillRect(0, 0, n, n); h.fillStyle = gray(60); h.fillRect(0, 0, n, n); const s = n / 2;
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    const v = 222 + rnd() * 14; g.fillStyle = `rgb(${v},${v - 2},${v - 6})`; g.fillRect(i * s + 2, j * s + 2, s - 4, s - 4);
+    for (let k = 0; k < 40; k++) { g.fillStyle = `rgba(150,140,130,${rnd() * 0.06})`; g.beginPath(); g.ellipse(i * s + 2 + rnd() * (s - 4), j * s + 2 + rnd() * (s - 4), 4 + rnd() * 18, 2 + rnd() * 6, rnd() * 3, 0, 7); g.fill(); }
+    h.fillStyle = gray(225); h.fillRect(i * s + 3, j * s + 3, s - 6, s - 6);
+  }
+}), 2);
+// slate-look tile, cleft surface
+const [slateT, slateB] = pair(cvs2(256, (g, h, n) => {
+  g.fillStyle = '#5e6365'; g.fillRect(0, 0, n, n); h.fillStyle = gray(50); h.fillRect(0, 0, n, n); const s = n / 2;
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    const v = 112 + rnd() * 34; g.fillStyle = `rgb(${v},${v + 3},${v + 6})`; g.fillRect(i * s + 2, j * s + 2, s - 4, s - 4); h.fillStyle = gray(200); h.fillRect(i * s + 3, j * s + 3, s - 6, s - 6);
+    for (let k = 0; k < 60; k++) { const x = i * s + 3 + rnd() * (s - 10), y = j * s + 3 + rnd() * (s - 10), w = 6 + rnd() * 40, hh = 3 + rnd() * 14, d = rnd() < 0.5 ? -1 : 1; g.fillStyle = `rgba(${d > 0 ? '255,255,255' : '0,0,0'},${0.04 + rnd() * 0.06})`; g.fillRect(x, y, Math.min(w, i * s + s - 3 - x), hh); h.fillStyle = `rgba(${d > 0 ? '255,255,255' : '0,0,0'},.18)`; h.fillRect(x, y, Math.min(w, i * s + s - 3 - x), hh); }
+  }
+}), 3);
 const grassT = tex(cvs(512, (g, n) => { g.fillStyle = '#6f8a4a'; g.fillRect(0, 0, n, n); for (let i = 0; i < 26000; i++) { const v = rnd(); g.fillStyle = `rgba(${60 + v * 70},${95 + v * 70},${35 + v * 30},.55)`; g.fillRect(rnd() * n, rnd() * n, 1.5, 3 + rnd() * 3); } }), 12);
-const deckT = tex(cvs(256, (g, n) => { const rows = 11; const h = n / rows; for (let i = 0; i < rows; i++) { const v = 200 + rnd() * 40; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, i * h, n, h - 2); g.fillStyle = '#555'; g.fillRect(0, i * h + h - 2, n, 2); } }), 5);
-const beadT = tex(cvs(128, (g, n) => { g.fillStyle = '#f6f6f2'; g.fillRect(0, 0, n, n); for (let i = 0; i < 4; i++) { g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, i * n / 4, n, 2); } }), 1.17);
-const shakeT = tex(cvs(256, (g, n) => { const rows = 6, h = n / rows; for (let r = 0; r < rows; r++) { let x = -(r % 2) * 20; while (x < n) { const w = 25 + rnd() * 35, v = 225 + rnd() * 20; g.fillStyle = `rgb(${v},${v},${v - 4})`; g.fillRect(x, r * h, w - 2, h); x += w; } g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, r * h + h - 3, n, 3); } }), 2.5);
+// composite deck boards (5½") with gaps and grain
+const [deckT, deckB] = pair(cvs2(512, (g, h, n) => {
+  const rows = 11, bh = n / rows; g.fillStyle = '#3a3a3a'; g.fillRect(0, 0, n, n); h.fillStyle = gray(20); h.fillRect(0, 0, n, n);
+  for (let i = 0; i < rows; i++) {
+    const v = 205 + rnd() * 35, y = i * bh; g.fillStyle = gray(v); g.fillRect(0, y, n, bh - 4); h.fillStyle = gray(215); h.fillRect(0, y + 0.5, n, bh - 5);
+    for (let k = 0; k < 26; k++) { g.fillStyle = `rgba(${rnd() < 0.6 ? '60,40,20' : '255,255,255'},${0.04 + rnd() * 0.07})`; g.fillRect(rnd() * n, y + 2 + rnd() * (bh - 8), 30 + rnd() * 200, 1 + rnd()); }
+  }
+}), 5);
+// beadboard
+const [beadT, beadB] = pair(cvs2(128, (g, h, n) => {
+  g.fillStyle = '#f6f6f2'; g.fillRect(0, 0, n, n);
+  for (let i = 0; i < 4; i++) { const y = i * n / 4; g.fillStyle = 'rgba(0,0,0,.2)'; g.fillRect(0, y, n, 2); const hg = h.createLinearGradient(0, y, 0, y + n / 4); hg.addColorStop(0, gray(30)); hg.addColorStop(0.12, gray(200)); hg.addColorStop(0.5, gray(240)); hg.addColorStop(1, gray(200)); h.fillStyle = hg; h.fillRect(0, y, n, n / 4); }
+}), 1.17);
+// white cedar shakes
+const [shakeT, shakeB] = pair(cvs2(256, (g, h, n) => {
+  const rows = 6, rh = n / rows;
+  for (let r = 0; r < rows; r++) {
+    let x = -(r % 2) * 20; const hg = h.createLinearGradient(0, r * rh, 0, r * rh + rh); hg.addColorStop(0, gray(60)); hg.addColorStop(1, gray(220)); h.fillStyle = hg; h.fillRect(0, r * rh, n, rh);
+    while (x < n) { const w = 25 + rnd() * 35, v = 225 + rnd() * 20; g.fillStyle = `rgb(${v},${v},${v - 4})`; g.fillRect(x, r * rh, w - 2, rh); for (let k = 0; k < 5; k++) { g.fillStyle = 'rgba(0,0,0,.05)'; g.fillRect(x + rnd() * w, r * rh, 1, rh); } h.fillStyle = gray(30); h.fillRect(x + w - 2, r * rh, 2, rh); x += w; }
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, r * rh + rh - 3, n, 3);
+  }
+}), 2.5);
 const latticeT = tex(cvs(256, (g, n) => { g.clearRect(0, 0, n, n); g.strokeStyle = '#f2f2ee'; g.lineWidth = 16; for (let i = -n; i < 2 * n; i += n / 2) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + n, n); g.stroke(); g.beginPath(); g.moveTo(i, n); g.lineTo(i + n, 0); g.stroke(); } }), 1.4);
 const louverT = tex(cvs(64, (g, n) => { g.fillStyle = '#fff'; g.fillRect(0, 0, n, n); for (let i = 0; i < 4; i++) { const gr = g.createLinearGradient(0, i * 16, 0, i * 16 + 16); gr.addColorStop(0, '#fff'); gr.addColorStop(1, '#8c8c8c'); g.fillStyle = gr; g.fillRect(0, i * 16, n, 16); } }), 1, 0.25);
-const cmuT = tex(cvs(256, (g, n) => { g.fillStyle = '#8f8d88'; g.fillRect(0, 0, n, n); const bw = n / 2, bh = n / 4; for (let r = 0; r < 4; r++)for (let c = -1; c < 3; c++) { const x = c * bw + (r % 2) * bw / 2, v = 150 + rnd() * 20; g.fillStyle = `rgb(${v},${v - 2},${v - 6})`; g.fillRect(x + 2, r * bh + 2, bw - 4, bh - 4); } }), 2.67);
-const concT = tex(cvs(256, (g, n) => { g.fillStyle = '#a9a7a1'; g.fillRect(0, 0, n, n); for (let i = 0; i < 6000; i++) { const v = 140 + rnd() * 60; g.fillStyle = `rgba(${v},${v},${v - 4},.35)`; g.fillRect(rnd() * n, rnd() * n, 2, 2); } }), 6);
+const [cmuT, cmuB] = pair(cvs2(256, (g, h, n) => { g.fillStyle = '#8f8d88'; g.fillRect(0, 0, n, n); h.fillStyle = gray(60); h.fillRect(0, 0, n, n); const bw = n / 2, bh = n / 4; for (let r = 0; r < 4; r++) for (let c = -1; c < 3; c++) { const x = c * bw + (r % 2) * bw / 2, v = 150 + rnd() * 20; g.fillStyle = `rgb(${v},${v - 2},${v - 6})`; g.fillRect(x + 2, r * bh + 2, bw - 4, bh - 4); h.fillStyle = gray(210); h.fillRect(x + 3, r * bh + 3, bw - 6, bh - 6); } for (let i = 0; i < 4000; i++) { const v = rnd(); g.fillStyle = `rgba(${v < 0.5 ? '0,0,0' : '255,255,255'},.07)`; g.fillRect(rnd() * n, rnd() * n, 1.5, 1.5); } }), 2.67);
+const [concT, concB] = pair(cvs2(256, (g, h, n) => { g.fillStyle = '#a9a7a1'; g.fillRect(0, 0, n, n); for (let i = 0; i < 6000; i++) { const v = 140 + rnd() * 60, x = rnd() * n, y = rnd() * n; g.fillStyle = `rgba(${v},${v},${v - 4},.35)`; g.fillRect(x, y, 2, 2); h.fillStyle = `rgba(${v},${v},${v},.5)`; h.fillRect(x, y, 2, 2); } }), 6);
 
 // ---------- materials ----------
 const finMats = [];
 function M(o, fin = true) { const m = new T.MeshStandardMaterial(Object.assign({ roughness: 0.85, metalness: 0 }, o)); if (fin) finMats.push(m); return m; }
+// furniture fabrics, wood grain, stone, quartz and brushed steel (used by the furniture models further down)
+const [weaveT, weaveB] = pair(cvs2(256, (g, h, n) => {
+  g.fillStyle = '#e9e9e9'; g.fillRect(0, 0, n, n); h.fillStyle = gray(128); h.fillRect(0, 0, n, n);
+  for (let y = 0; y < n; y += 4) for (let x = 0; x < n; x += 4) { const o = ((x + y) / 4) % 2, v = 228 + rnd() * 27; g.fillStyle = gray(v); g.fillRect(x, y, o ? 4 : 3, o ? 3 : 4); h.fillStyle = gray(o ? 190 : 90); h.fillRect(x, y, o ? 4 : 3, o ? 3 : 4); }
+  for (let i = 0; i < 500; i++) { g.fillStyle = `rgba(0,0,0,${rnd() * 0.07})`; g.fillRect(rnd() * n, rnd() * n, 1, 6 + rnd() * 30); }
+}), 0.6);
+const linenT = tex(cvs(256, (g, n) => { g.fillStyle = '#f7f6f2'; g.fillRect(0, 0, n, n); for (let i = 0; i < 900; i++) { const v = rnd(); g.fillStyle = `rgba(${v < 0.5 ? '0,0,0' : '255,255,255'},${0.02 + rnd() * 0.04})`; if (rnd() < 0.5) g.fillRect(0, rnd() * n, n, 1); else g.fillRect(rnd() * n, 0, 1, n); } }), 1.2);
+const grainT = tex(cvs(512, (g, n) => {
+  g.fillStyle = '#f0f0f0'; g.fillRect(0, 0, n, n);
+  for (let i = 0; i < 140; i++) { const y0 = rnd() * n, a = 0.04 + rnd() * 0.12, ph = rnd() * 6, amp = 1 + rnd() * 6, lw = 0.5 + rnd() * 2; g.strokeStyle = `rgba(60,35,15,${a})`; g.lineWidth = lw; for (const yy of [y0, y0 - n, y0 + n]) { g.beginPath(); g.moveTo(0, yy); for (let t = 1; t <= 24; t++) g.lineTo(n * t / 24, yy + Math.sin(ph + t * Math.PI / 6) * amp); g.stroke(); } }
+}), 3);
+const [stoneT, stoneB] = pair(cvs2(512, (g, h, n) => { // ledgestone veneer
+  g.fillStyle = '#4a4845'; g.fillRect(0, 0, n, n); h.fillStyle = gray(15); h.fillRect(0, 0, n, n);
+  let y = 0; while (y < n) {
+    const rh = Math.min(n - y, 14 + rnd() * 26); let x = -rnd() * 60;
+    while (x < n) { const w = 30 + rnd() * 110, v = 105 + rnd() * 70, w2 = rnd() * 14; g.fillStyle = `rgb(${v + w2},${v + w2 * 0.6},${v - 4})`; g.fillRect(x + 1, y + 1, w - 2, rh - 2); for (let k = 0; k < 10; k++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},.08)`; g.fillRect(x + rnd() * w, y + rnd() * rh, 4 + rnd() * 20, 1 + rnd() * 3); } h.fillStyle = gray(150 + rnd() * 100); h.fillRect(x + 2, y + 2, w - 4, rh - 4); x += w; }
+    y += rh;
+  }
+}), 4);
+const quartzT = tex(cvs(512, (g, n) => {
+  g.fillStyle = '#f4f3ef'; g.fillRect(0, 0, n, n);
+  for (let i = 0; i < 3000; i++) { g.fillStyle = `rgba(150,145,140,${rnd() * 0.08})`; g.fillRect(rnd() * n, rnd() * n, 1.5, 1.5); }
+  for (let v = 0; v < 7; v++) { let x = rnd() * n, y = 0; g.strokeStyle = `rgba(120,118,115,${0.12 + rnd() * 0.22})`; g.lineWidth = 0.6 + rnd() * 2.2; g.beginPath(); g.moveTo(x, y); while (y < n) { x += (rnd() - 0.5) * 36; y += 10 + rnd() * 26; g.lineTo(x, y); } g.stroke(); }
+}), 5);
+const steelT = tex(cvs(256, (g, n) => { g.fillStyle = '#dcdcdc'; g.fillRect(0, 0, n, n); for (let i = 0; i < 2200; i++) { const v = 190 + rnd() * 65; g.fillStyle = gray(v); g.fillRect(0, rnd() * n, n, 1); } }), 1.5);
 const mat = {
-  siding: M({ map: sidingT, color: 0xc9d2cf }), trim: M({ color: 0xf4f3ee, roughness: 0.6 }), paint: M({ color: 0xece7dc }),
-  ceil: M({ color: 0xf7f6f2 }), roof: M({ map: shingleT, color: 0xffffff, roughness: 0.95 }), wood: M({ map: woodT, roughness: 0.55 }),
-  tile: M({ map: tileT, roughness: 0.4 }), slate: M({ map: slateT, roughness: 0.6 }), deck: M({ map: deckT, color: 0xa47e58, roughness: 0.8 }),
-  bead: M({ map: beadT }), shake: M({ map: shakeT, color: 0xd9dcd6 }), lattice: M({ map: latticeT, transparent: true, alphaTest: 0.4, side: T.DoubleSide }),
-  shutter: M({ map: louverT, color: 0x2e3a3a, roughness: 0.6 }), door: M({ color: 0x263445, roughness: 0.5 }), sash: M({ color: 0xf7f7f4, roughness: 0.5 }),
-  glass: M({ color: 0x9db4c2, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.38 }),
-  cmu: M({ map: cmuT, roughness: 0.95 }), conc: M({ map: concT, roughness: 0.95 }), parge: M({ color: 0x9e9c96, roughness: 0.95 }),
-  subfl: M({ color: 0xc8b48a }), gutter: M({ color: 0xf1f1ee, roughness: 0.4, metalness: 0.1 }), metal: M({ color: 0x8a8f93, metalness: 0.6, roughness: 0.4 }),
-  oak: M({ color: 0xa8733f, roughness: 0.45 }), stone: M({ color: 0x8b8680, roughness: 0.8 }), black: M({ color: 0x1b1c1e, roughness: 0.4 }),
-  counter: M({ color: 0xe9e6df, roughness: 0.25 }), cab: M({ color: 0x5d6f6b, roughness: 0.6 }), cabW: M({ color: 0xf2f0ea, roughness: 0.55 }),
-  fabric: M({ color: 0x8c9aa0 }), fabric2: M({ color: 0xb79d7d }), bed: M({ color: 0xf1efe8 }), rug: M({ color: 0x9a8a74 }), chrome: M({ color: 0xdfe3e6, metalness: 0.8, roughness: 0.25 }),
-  porcelain: M({ color: 0xffffff, roughness: 0.2 }), appliance: M({ color: 0xc9ccce, metalness: 0.7, roughness: 0.35 }),
+  siding: M({ map: sidingT, bumpMap: sidingB, bumpScale: 0.035, color: 0xc9d2cf, roughness: 0.72 }), trim: M({ color: 0xf4f3ee, roughness: 0.55 }), paint: M({ color: 0xece7dc, roughness: 0.9 }),
+  ceil: M({ color: 0xf7f6f2, roughness: 0.95 }), roof: M({ map: shingleT, bumpMap: shingleB, bumpScale: 0.045, color: 0xffffff, roughness: 0.92 }), wood: M({ map: woodT, bumpMap: woodB, bumpScale: 0.006, roughness: 0.42 }),
+  tile: M({ map: tileT, bumpMap: tileB, bumpScale: 0.01, roughness: 0.28 }), slate: M({ map: slateT, bumpMap: slateB, bumpScale: 0.015, roughness: 0.55 }), deck: M({ map: deckT, bumpMap: deckB, bumpScale: 0.02, color: 0xa47e58, roughness: 0.75 }),
+  bead: M({ map: beadT, bumpMap: beadB, bumpScale: 0.012, roughness: 0.6 }), shake: M({ map: shakeT, bumpMap: shakeB, bumpScale: 0.03, color: 0xd9dcd6 }), lattice: M({ map: latticeT, transparent: true, alphaTest: 0.4, side: T.DoubleSide }),
+  shutter: M({ map: louverT, color: 0x2e3a3a, roughness: 0.55 }), door: M({ color: 0x263445, roughness: 0.4 }), sash: M({ color: 0xf7f7f4, roughness: 0.45 }),
+  glass: M({ color: 0x8fa6b4, roughness: 0.03, metalness: 0.35, transparent: true, opacity: 0.34 }),
+  cmu: M({ map: cmuT, bumpMap: cmuB, bumpScale: 0.02, roughness: 0.95 }), conc: M({ map: concT, bumpMap: concB, bumpScale: 0.006, roughness: 0.95 }), parge: M({ color: 0x9e9c96, roughness: 0.95 }),
+  subfl: M({ color: 0xc8b48a }), gutter: M({ color: 0xf1f1ee, roughness: 0.4, metalness: 0.1 }), metal: M({ color: 0x8a8f93, metalness: 0.7, roughness: 0.35 }),
+  oak: M({ map: grainT, color: 0xa8733f, roughness: 0.48 }), stone: M({ map: stoneT, bumpMap: stoneB, bumpScale: 0.06, roughness: 0.9 }), black: M({ color: 0x1b1c1e, roughness: 0.35 }),
+  counter: M({ map: quartzT, color: 0xffffff, roughness: 0.18 }), cab: M({ color: 0x5d6f6b, roughness: 0.5 }), cabW: M({ color: 0xf2f0ea, roughness: 0.5 }),
+  fabric: M({ map: weaveT, bumpMap: weaveB, bumpScale: 0.004, color: 0x8c9aa0, roughness: 0.95 }), fabric2: M({ map: weaveT, bumpMap: weaveB, bumpScale: 0.004, color: 0xb79d7d, roughness: 0.95 }),
+  bed: M({ map: linenT, color: 0xf3f1ea, roughness: 0.95 }), rug: M({ map: weaveT, color: 0x9a8a74, roughness: 1 }), chrome: M({ color: 0xe6e9ec, metalness: 1, roughness: 0.12 }),
+  porcelain: M({ color: 0xffffff, roughness: 0.12 }), appliance: M({ map: steelT, color: 0xd8dbdd, metalness: 0.85, roughness: 0.3 }),
   grass: new T.MeshStandardMaterial({ map: grassT, roughness: 1 }),
   lumber: M({ color: 0xc9995a, roughness: 0.8 }, false), lvl: M({ color: 0xc79a5b, roughness: 0.7 }, false), ij: M({ color: 0xbe9a5f, roughness: 0.8 }, false),
   pt: M({ color: 0x9a9168, roughness: 0.85 }, false), steel: M({ color: 0x55606a, metalness: 0.6, roughness: 0.5 }, false),
 };
 mat.glass.userData.glass = true;
+mat.glass.userData.env = 2.2; mat.chrome.userData.env = 1.3; mat.appliance.userData.env = 1.2;
 
 // ---------- geometry helpers ----------
 function worldUV(geo) {
@@ -863,90 +1020,498 @@ const DK = -0.33;
   rail([45.4, 25.05], [45.4, 25.05 - (s2.n - 1) * 0.92], DK, s2.gs, 3.0, G.porch, { ext: true, posts: true });
 }
 
-// =================== FURNITURE ===================
-{
-  const P = G.f1;
-  const F = (X0, X1, y0, y1, Z0, Z1, m, t) => box(X0, X1, y0, y1, Z0, Z1, m, y0 >= FF2 - 0.1 ? G.f2 : y0 < -1 ? G.found : G.f1, { t }, 'furn');
-  const sofa = (X0, X1, Z0, Z1, y, backSide, t) => { // backSide: 'Z0','Z1','X0','X1'
-    F(X0, X1, y + 0.4, y + 1.45, Z0, Z1, mat.fabric, t);
-    const b = 0.65; if (backSide === 'Z0') F(X0, X1, y + 1.45, y + 2.8, Z0, Z0 + b, mat.fabric, t); if (backSide === 'Z1') F(X0, X1, y + 1.45, y + 2.8, Z1 - b, Z1, mat.fabric, t);
-    if (backSide === 'X0') F(X0, X0 + b, y + 1.45, y + 2.8, Z0, Z1, mat.fabric, t); if (backSide === 'X1') F(X1 - b, X1, y + 1.45, y + 2.8, Z0, Z1, mat.fabric, t);
-    F(X0, X1, y, y + 0.4, Z0 + 0.1, Z1 - 0.1, mat.black, t);
+// =================== FURNITURE MODELS (illustrative; procedural, merged per material) ===================
+// Every model is built in its own frame: width along x (centred), depth along z with the FRONT at +z, y up from the floor.
+const FX = (() => {
+  const GLOW = []; // [material, strength] lit by applyLights() after dusk
+  const glowM = (o, k) => { const m = M(Object.assign({ emissive: 0xffcf8f, emissiveIntensity: 0 }, o)); GLOW.push([m, k]); return m; };
+  const X = {
+    walnut: M({ map: grainT, color: 0x6b4a33, roughness: 0.45 }), brass: M({ color: 0xb8925a, metalness: 1, roughness: 0.3 }), iron: M({ color: 0x232426, metalness: 0.6, roughness: 0.55 }),
+    ceramic: M({ color: 0xece8df, roughness: 0.25 }), clay: M({ color: 0xb56c4c, roughness: 0.85 }), soil: M({ color: 0x3b2c22, roughness: 1 }),
+    leaf: M({ color: 0x3f6a34, roughness: 0.6, side: T.DoubleSide }), leaf2: M({ color: 0x5d8b42, roughness: 0.6, side: T.DoubleSide }),
+    accent: M({ map: weaveT, bumpMap: weaveB, bumpScale: 0.004, color: 0x5f7d93, roughness: 0.95 }), accent2: M({ map: weaveT, bumpMap: weaveB, bumpScale: 0.004, color: 0xc7a252, roughness: 0.95 }),
+    charcoal: M({ map: weaveT, bumpMap: weaveB, bumpScale: 0.004, color: 0x4a4f55, roughness: 0.95 }), velvet: M({ map: weaveT, color: 0x7d8a7a, roughness: 0.9 }),
+    linen: M({ map: linenT, color: 0xffffff, roughness: 0.95 }), screen: M({ color: 0x07080a, roughness: 0.1, metalness: 0.4 }), kick: M({ color: 0x2a2b2c, roughness: 0.9 }),
+    mirror: M({ color: 0xdfe6ea, metalness: 1, roughness: 0.03 }), enamel: M({ color: 0xf3f3f0, roughness: 0.28 }), wicker: M({ map: weaveT, color: 0xa07c52, roughness: 0.95 }),
+    clear: M({ color: 0xd6e4ea, roughness: 0.03, metalness: 0.1, transparent: true, opacity: 0.22 }), books: M({ vertexColors: true, roughness: 0.75 }), cloth: M({ map: weaveT, vertexColors: true, roughness: 0.95 }),
+    shade: glowM({ color: 0xf4ead6, roughness: 0.9, side: T.DoubleSide }, 0.55), bulb: glowM({ color: 0xfff1d6 }, 2.2),
   };
-  const table = (X0, X1, Z0, Z1, y, h, m, t) => { F(X0, X1, y + h - 0.12, y + h, Z0, Z1, m, t); [[X0 + 0.15, Z0 + 0.15], [X1 - 0.3, Z0 + 0.15], [X0 + 0.15, Z1 - 0.3], [X1 - 0.3, Z1 - 0.3]].forEach(([x, z]) => F(x, x + 0.15, y, y + h - 0.12, z, z + 0.15, m, t)); };
-  const chair = (X, Z, y, face, t) => { F(X - 0.75, X + 0.75, y + 1.45, y + 1.55, Z - 0.75, Z + 0.75, mat.oak, t); [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => F(X + a * 0.6 - 0.05, X + a * 0.6 + 0.05, y, y + 1.45, Z + b * 0.6 - 0.05, Z + b * 0.6 + 0.05, mat.oak, t));
-    const o = { N: [X - 0.75, X - 0.65, Z - 0.75, Z + 0.75], S: [X + 0.65, X + 0.75, Z - 0.75, Z + 0.75], W: [X - 0.75, X + 0.75, Z - 0.75, Z - 0.65], E: [X - 0.75, X + 0.75, Z + 0.65, Z + 0.75] }[face]; F(o[0], o[1], y + 1.55, y + 3.2, o[2], o[3], mat.oak, t); };
-  const bed = (X0, X1, Z0, Z1, y, head, t) => {
-    F(X0, X1, y + 0.3, y + 1.2, Z0, Z1, mat.oak, t); F(X0 + 0.1, X1 - 0.1, y + 1.2, y + 2.0, Z0 + 0.1, Z1 - 0.1, mat.bed, t);
-    const hb = { Z1: [X0, X1, Z1 - 0.2, Z1], Z0: [X0, X1, Z0, Z0 + 0.2], X0: [X0, X0 + 0.2, Z0, Z1], X1: [X1 - 0.2, X1, Z0, Z1] }[head]; F(hb[0], hb[1], y, y + 4.0, hb[2], hb[3], mat.oak, t);
-    const thr = { Z1: [X0 + 0.05, X1 - 0.05, Z0 + 0.05, Z0 + 2.2], Z0: [X0 + 0.05, X1 - 0.05, Z1 - 2.2, Z1 - 0.05], X0: [X1 - 2.2, X1 - 0.05, Z0 + 0.05, Z1 - 0.05], X1: [X0 + 0.05, X0 + 2.2, Z0 + 0.05, Z1 - 0.05] }[head]; F(thr[0], thr[1], y + 2.0, y + 2.08, thr[2], thr[3], mat.fabric2, t);
-    const pl = { Z1: [[X0 + 0.4, (X0 + X1) / 2 - 0.15, Z1 - 1.5, Z1 - 0.3], [(X0 + X1) / 2 + 0.15, X1 - 0.4, Z1 - 1.5, Z1 - 0.3]], Z0: [[X0 + 0.4, (X0 + X1) / 2 - 0.15, Z0 + 0.3, Z0 + 1.5], [(X0 + X1) / 2 + 0.15, X1 - 0.4, Z0 + 0.3, Z0 + 1.5]], X0: [[X0 + 0.3, X0 + 1.5, Z0 + 0.4, (Z0 + Z1) / 2 - 0.15], [X0 + 0.3, X0 + 1.5, (Z0 + Z1) / 2 + 0.15, Z1 - 0.4]] }[head] || [];
-    pl.forEach(p => F(p[0], p[1], y + 2.0, y + 2.45, p[2], p[3], mat.bed, t));
+  X.clear.userData.clear = true; X.clear.userData.glass = true; X.clear.userData.env = 1.8; X.mirror.userData.env = 1.4; X.screen.userData.env = 0.6;
+  const fire = tex(cvs(256, (g, n) => { // gas fireplace: logs on embers, flames
+    g.fillStyle = '#060606'; g.fillRect(0, 0, n, n);
+    const eg = g.createLinearGradient(0, n * 0.65, 0, n); eg.addColorStop(0, '#2a0d02'); eg.addColorStop(0.5, '#a33a08'); eg.addColorStop(1, '#1a0a03'); g.fillStyle = eg; g.fillRect(0, n * 0.7, n, n * 0.3);
+    for (let i = 0; i < 9; i++) { const x = 20 + rnd() * (n - 40), fh = 50 + rnd() * 80, fw = 12 + rnd() * 20, fg = g.createRadialGradient(x, n * 0.72, 2, x, n * 0.72 - fh * 0.4, fh); fg.addColorStop(0, 'rgba(255,230,160,.95)'); fg.addColorStop(0.35, 'rgba(255,140,30,.75)'); fg.addColorStop(1, 'rgba(120,20,0,0)'); g.fillStyle = fg; g.beginPath(); g.ellipse(x, n * 0.72 - fh * 0.45, fw, fh * 0.55, 0, 0, 7); g.fill(); }
+    [[0.18, 0.74, 0.62, 0.8], [0.4, 0.78, 0.86, 0.72], [0.3, 0.66, 0.7, 0.64]].forEach(([a, b, c, d]) => { g.strokeStyle = '#3b2a1e'; g.lineWidth = 16; g.lineCap = 'round'; g.beginPath(); g.moveTo(a * n, b * n); g.lineTo(c * n, d * n); g.stroke(); });
+  }), 1);
+  X.fire = M({ color: 0x3a3a3a, map: fire, emissive: 0xffffff, emissiveMap: fire, emissiveIntensity: 0, roughness: 0.15, metalness: 0.2 }); GLOW.push([X.fire, 1.1]);
+  const subway = pair(cvs2(256, (g, h, n) => { g.fillStyle = '#cfcfcb'; g.fillRect(0, 0, n, n); h.fillStyle = gray(40); h.fillRect(0, 0, n, n); const th = n / 4, tw = n / 2; for (let r = 0; r < 4; r++) for (let c = -1; c < 3; c++) { const x = c * tw + (r % 2) * tw / 2, v = 240 + rnd() * 12; g.fillStyle = gray(v); g.fillRect(x + 2, r * th + 2, tw - 4, th - 4); h.fillStyle = gray(225); h.fillRect(x + 3, r * th + 3, tw - 6, th - 6); } }), 1);
+  X.subway = M({ map: subway[0], bumpMap: subway[1], bumpScale: 0.008, color: 0xffffff, roughness: 0.15 });
+  const rugTex = (draw) => { const t = tex(cvs(512, draw), 1); return t; };
+  const RUGS = {
+    trad: M({ roughness: 1, map: rugTex((g, n) => { // traditional: ivory field, blue/rust border, centre medallion
+      g.fillStyle = '#d9cdb4'; g.fillRect(0, 0, n, n); g.fillStyle = '#7b3a2e'; g.fillRect(0, 0, n, n); g.fillStyle = '#e3d8c1'; g.fillRect(20, 20, n - 40, n - 40); g.fillStyle = '#34506b'; g.fillRect(44, 44, n - 88, n - 88); g.fillStyle = '#ddd1b8'; g.fillRect(58, 58, n - 116, n - 116);
+      g.strokeStyle = 'rgba(123,58,46,.55)'; g.lineWidth = 3; for (let i = 0; i < 10; i++) for (let j = 0; j < 10; j++) { const x = 58 + (i + 0.5) * (n - 116) / 10, y = 58 + (j + 0.5) * (n - 116) / 10; g.beginPath(); g.moveTo(x, y - 14); g.lineTo(x + 14, y); g.lineTo(x, y + 14); g.lineTo(x - 14, y); g.closePath(); g.stroke(); }
+      g.fillStyle = '#34506b'; g.beginPath(); g.ellipse(n / 2, n / 2, 95, 125, 0, 0, 7); g.fill(); g.fillStyle = '#d9cdb4'; g.beginPath(); g.ellipse(n / 2, n / 2, 70, 98, 0, 0, 7); g.fill(); g.fillStyle = '#7b3a2e'; g.beginPath(); g.ellipse(n / 2, n / 2, 34, 48, 0, 0, 7); g.fill();
+      for (let i = 0; i < 26000; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},.05)`; g.fillRect(rnd() * n, rnd() * n, 1.5, 1.5); }
+    }) }),
+    soft: M({ roughness: 1, map: rugTex((g, n) => { // light trellis pattern
+      g.fillStyle = '#e4e0d8'; g.fillRect(0, 0, n, n); g.strokeStyle = 'rgba(120,118,112,.45)'; g.lineWidth = 3;
+      const s = n / 8; for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) { g.beginPath(); g.arc(i * s, j * s, s / 2, 0, 7); g.stroke(); }
+      g.strokeStyle = '#8d8a83'; g.lineWidth = 10; g.strokeRect(14, 14, n - 28, n - 28);
+      for (let i = 0; i < 26000; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},.05)`; g.fillRect(rnd() * n, rnd() * n, 1.5, 1.5); }
+    }) }),
+    dark: M({ roughness: 1, map: rugTex((g, n) => { // charcoal with stripes
+      g.fillStyle = '#4b4d50'; g.fillRect(0, 0, n, n); for (let y = 30; y < n - 20; y += 46) { g.fillStyle = 'rgba(220,215,205,.5)'; g.fillRect(24, y, n - 48, 5); }
+      for (let i = 0; i < 26000; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,255,255'},.06)`; g.fillRect(rnd() * n, rnd() * n, 1.5, 1.5); }
+    }) }),
   };
-  // ---- 1st floor ----
-  const y1 = 0;
-  F(0.6, 2.17, 0, 4.4, 6.87, 12.35, mat.trim, 'Gas fireplace surround'); F(0.6, 2.25, 0, 3.2, 8.1, 11.1, mat.stone, 'Gas fireplace — 36" direct vent'); F(2.0, 2.27, 0.5, 2.6, 8.6, 10.6, mat.black, 'Gas fireplace — 36" direct vent');
-  F(0.6, 2.4, 4.4, 4.55, 6.8, 12.4, mat.trim, 'Mantel'); F(2.17, 2.3, 5.0, 7.6, 7.4, 11.8, mat.black, 'TV above fireplace');
-  F(2.17, 3.8, 0, 0.06, 7.0, 12.2, mat.stone, 'Hearth');
-  F(3.5, 14.5, 0.01, 0.03, 1.2, 13.5, mat.rug, 'Area rug');
-  sofa(4.9, 11.8, 0.8, 3.8, y1, 'Z0', 'Sofa'); sofa(13.1, 15.9, 6.7, 12.1, y1, 'X1', 'Loveseat');
-  F(2.6, 4.4, y1, 2.9, 1.0, 3.6, mat.fabric2, 'Arm chair'); table(5.6, 10.7, 4.6, 6.6, y1, 1.4, mat.oak, 'Coffee table');
-  F(6.8, 9.6, 0, 2.7, 12.6, 15.4, mat.fabric2, 'Reading chair');
-  F(10.3, 12.2, 0, 3.0, 16.6, 23.2, mat.cabW, 'Built-in cabinetry'); F(10.3, 12.2, 3.0, 3.12, 16.6, 23.2, mat.oak, 'Built-in cabinetry');
-  table(1.0, 3.6, 16.8, 21.0, y1, 2.5, mat.oak, 'Desk'); chair(4.2, 18.9, y1, 'S', 'Desk chair');
-  // dining
-  table(30.3, 33.5, 2.3, 9.9, y1, 2.5, mat.oak, 'Dining table');
-  [3.5, 6.1, 8.7].forEach(Z => { chair(29.4, Z, y1, 'N', 'Dining chair'); chair(34.4, Z, y1, 'S', 'Dining chair'); });
-  chair(31.9, 1.4, y1, 'W', 'Dining chair'); chair(31.9, 10.8, y1, 'E', 'Dining chair');
-  F(24.12, 26.1, 0, 3.0, 5.1, 11.1, mat.cab, '2\'×6\' hutch'); F(24.12, 26.1, 3.0, 3.1, 5.1, 11.1, mat.counter, '2\'×6\' hutch'); F(24.12, 25.2, 3.1, 7.0, 5.4, 10.8, mat.cab, '2\'×6\' hutch');
-  // kitchen
-  const ki = 'Kitchen cabinetry';
-  F(27.8, 33.4, 0, 2.9, 26.2, 28.19, mat.cab, ki); F(27.7, 37.6, 2.9, 3.05, 26.1, 28.19, mat.counter, 'Quartz countertop'); F(35.9, 37.6, 0, 2.9, 26.2, 28.19, mat.cab, ki);
-  F(33.4, 35.9, 0, 3.0, 26.2, 28.19, mat.appliance, 'Range'); F(33.6, 35.7, 3.05, 3.1, 26.4, 28.0, mat.black, 'Cooktop');
-  F(33.3, 36.0, 5.6, 7.4, 26.6, 28.19, mat.appliance, 'Hood');
-  F(24.8, 27.8, 0, 7.0, 26.0, 28.19, mat.appliance, 'Refrigerator'); F(29.5, 32.0, 2.9, 7.0, 26.2, 28.19, mat.cab, 'Wall oven / microwave'); F(29.8, 31.7, 3.5, 6.5, 26.15, 26.2, mat.black, 'Wall oven / microwave');
-  F(27.8, 29.5, 4.6, 7.4, 26.9, 28.19, mat.cab, ki); F(32.0, 33.3, 4.6, 7.4, 26.9, 28.19, mat.cab, ki); F(36.0, 37.6, 4.6, 7.4, 26.9, 28.19, mat.cab, ki);
-  F(37.6, 39.467, 0, 2.9, 13.9, 28.19, mat.cab, ki); F(37.5, 39.467, 2.9, 3.05, 13.8, 28.19, mat.counter, 'Quartz countertop');
-  F(37.9, 39.2, 2.55, 3.06, 18.3, 20.5, mat.chrome, 'Sink'); F(38.9, 39.1, 3.05, 4.1, 19.3, 19.5, mat.chrome, 'Faucet');
-  F(37.58, 37.62, 0.3, 2.8, 20.9, 22.9, mat.appliance, 'Dishwasher');
-  F(37.6, 39.467, 4.6, 7.4, 13.9, 17.4, mat.cab, ki); F(37.6, 39.467, 4.6, 7.4, 24.2, 28.19, mat.cab, ki);
-  { // island with curved bar top
-    const isl = 'Island — beverage fridge & microwave drawer'; F(29.0, 34.5, 0, 2.9, 17.6, 22.6, mat.cabW, isl);
-    const s = new T.Shape(); const pt = (X, Z) => [Z - CZ, -(X - CX)];
-    s.moveTo(...pt(34.5, 16.8)); s.lineTo(...pt(34.5, 23.0)); s.lineTo(...pt(27.0, 23.0)); s.quadraticCurveTo(...pt(26.6, 16.8), ...pt(31.2, 16.8)); s.lineTo(...pt(34.5, 16.8));
-    const g = new T.ExtrudeGeometry(s, { depth: 0.13, bevelEnabled: false }); g.rotateX(-Math.PI / 2); g.translate(0, 2.9, 0); tag(new T.Mesh(g, mat.counter), P, { t: isl }, 'furn');
-    [[27.9, 20.9], [28.4, 19.0], [29.6, 17.6]].forEach(([X, Z]) => { const st = new T.Mesh(new T.CylinderGeometry(0.62, 0.62, 0.12, 20), mat.oak); st.position.copy(V(X - 0.7, 2.1, Z - 0.6)); tag(st, P, { t: 'Counter stool' }, 'furn'); const lg = new T.Mesh(new T.CylinderGeometry(0.06, 0.06, 2.05, 6), mat.metal); lg.position.copy(V(X - 0.7, 1.03, Z - 0.6)); tag(lg, P, { t: 'Counter stool' }, 'furn'); });
+  // ---------- geometry ----------
+  // rounded box (same construction as three's RoundedBoxGeometry)
+  function rg(w, h, d, r, s) {
+    r = Math.min(r || 0, w / 2 - 0.002, h / 2 - 0.002, d / 2 - 0.002);
+    if (!(r > 0.004)) return new T.BoxGeometry(w, h, d);
+    s = s || (r > 0.09 ? 2 : 1); const k = 2 * s + 1, src = new T.BoxGeometry(1, 1, 1, k, k, k), g = src.toNonIndexed(); src.dispose();
+    const p = g.attributes.position.array, nr = g.attributes.normal.array, hs = 0.5 / k, bx = w / 2 - r, by = h / 2 - r, bz = d / 2 - r, n = new T.Vector3();
+    for (let i = 0; i < p.length; i += 3) {
+      const x = p[i], y = p[i + 1], z = p[i + 2]; n.set(x - Math.sign(x) * hs, y - Math.sign(y) * hs, z - Math.sign(z) * hs).normalize();
+      p[i] = bx * Math.sign(x) + n.x * r; p[i + 1] = by * Math.sign(y) + n.y * r; p[i + 2] = bz * Math.sign(z) + n.z * r; nr[i] = n.x; nr[i + 1] = n.y; nr[i + 2] = n.z;
+    }
+    return g;
   }
-  // mudroom / laundry / lav / pantry
-  F(30.1, 33.45, 0, 1.5, 29.0, 31.0, mat.cabW, 'Mudroom bench'); F(30.1, 33.45, 1.5, 1.6, 29.0, 31.0, mat.oak, 'Mudroom bench'); F(30.1, 33.45, 4.8, 7.5, 28.8, 30.0, mat.cabW, 'Cubbies');
-  F(10.0, 12.6, 0, 3.0, 25.4, 28.1, mat.appliance, 'Washer'); F(10.0, 12.6, 3.0, 6.0, 25.4, 28.1, mat.appliance, 'Dryer (stacked)');
-  F(12.8, 20.4, 0, 3.0, 26.0, 28.1, mat.cabW, 'Laundry counter'); F(12.8, 20.4, 3.0, 3.1, 26.0, 28.1, mat.counter, 'Laundry counter');
-  F(11.6, 13.6, 0, 1.4, 29.5, 31.2, mat.porcelain, 'Toilet'); F(12.9, 13.6, 1.4, 2.8, 29.5, 31.2, mat.porcelain, 'Toilet');
-  F(8.45, 10.3, 0, 2.8, 33.4, 35.2, mat.cabW, 'Lav vanity'); F(8.45, 10.3, 2.8, 2.9, 33.4, 35.2, mat.counter, 'Lav vanity');
-  F(14.15, 19.6, 0, 7.2, 28.8, 30.2, mat.cabW, 'Pantry shelving'); F(0.65, 7.9, 0, 7.2, 34.0, 35.2, mat.cabW, 'Study shelves');
-  table(0.9, 3.4, 29.0, 33.0, y1, 2.5, mat.oak, 'Study desk'); chair(4.0, 31.0, y1, 'S', 'Desk chair');
-  // ---- 2nd floor ----
-  const y2 = FF2;
-  bed(5.6, 10.6, 21.4, 28.15, y2, 'Z1', 'Queen bed'); F(3.9, 5.3, y2, y2 + 2.1, 26.6, 28.15, mat.oak, 'Night stand'); F(10.9, 12.15, y2, y2 + 2.1, 26.6, 28.15, mat.oak, 'Night stand');
-  bed(9.3, 14.3, 5.2, 11.88, y2, 'Z1', 'Queen bed'); F(7.6, 9.0, y2, y2 + 2.1, 10.4, 11.88, mat.oak, 'Night stand'); F(14.6, 16.0, y2, y2 + 2.1, 10.4, 11.88, mat.oak, 'Night stand');
-  bed(24.9, 31.8, 18.6, 25.0, y2, 'X0', 'King bed'); F(25.0, 26.6, y2, y2 + 2.1, 16.9, 18.4, mat.oak, 'Night stand'); F(25.0, 26.6, y2, y2 + 2.1, 25.2, 26.7, mat.oak, 'Night stand');
-  F(33.9, 39.4, y2, y2 + 3.0, 8.8, 10.6, mat.oak, '6\' dresser'); F(37.9, 39.45, y2, y2 + 2.6, 16.5, 20.5, mat.oak, 'Bureau'); F(39.2, 39.4, y2 + 3.6, y2 + 6.2, 16.8, 20.2, mat.black, 'TV');
-  F(30, 36, y2 + 0.01, y2 + 0.03, 14, 24, mat.rug, 'Area rug');
+  const colorize = (g, hex) => { const c = new T.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3); g.setAttribute('color', new T.BufferAttribute(a, 3)); return g; };
+  function merge(list, vc) {
+    let n = 0; const gs = list.map(g => { const x = g.index ? g.toNonIndexed() : g; if (x !== g) g.dispose(); n += x.attributes.position.count; return x; });
+    const P = new Float32Array(n * 3), N = new Float32Array(n * 3), U = new Float32Array(n * 2), C = vc ? new Float32Array(n * 3).fill(1) : null; let o = 0;
+    gs.forEach(g => { const c = g.attributes.position.count; P.set(g.attributes.position.array, o * 3); N.set(g.attributes.normal.array, o * 3); if (g.attributes.uv) U.set(g.attributes.uv.array, o * 2); if (C && g.attributes.color) C.set(g.attributes.color.array, o * 3); o += c; g.dispose(); });
+    const r = new T.BufferGeometry(); r.setAttribute('position', new T.BufferAttribute(P, 3)); r.setAttribute('normal', new T.BufferAttribute(N, 3)); r.setAttribute('uv', new T.BufferAttribute(U, 2)); if (C) r.setAttribute('color', new T.BufferAttribute(C, 3));
+    r.computeBoundingSphere(); return r;
+  }
+  function Bld() {
+    const parts = new Map();
+    const put = (g, m, uv = true) => { if (uv) worldUV(g); if (!parts.has(m)) parts.set(m, []); parts.get(m).push(g); return g; };
+    const b = {
+      parts,
+      box(x0, x1, y0, y1, z0, z1, m, r = 0, s) { const g = rg(x1 - x0, y1 - y0, z1 - z0, r, s); g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); return put(g, m); },
+      cbox(cx, cy, cz, w, h, d, m, r = 0, rx = 0, ry = 0, rz = 0) { const g = rg(w, h, d, r); if (rx) g.rotateX(rx); if (rz) g.rotateZ(rz); if (ry) g.rotateY(ry); g.translate(cx, cy, cz); return put(g, m); },
+      cyl(x, z, r0, r1, y0, y1, m, seg = 16, open = false) { const g = new T.CylinderGeometry(r1, r0, y1 - y0, seg, 1, open); g.translate(x, (y0 + y1) / 2, z); return put(g, m); },
+      rod(a, c, r, m, seg = 8, r2) { const A = new T.Vector3(...a), C = new T.Vector3(...c), L = A.distanceTo(C), g = new T.CylinderGeometry(r2 ?? r, r, L, seg); g.translate(0, L / 2, 0); g.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), C.clone().sub(A).normalize())); g.translate(A.x, A.y, A.z); return put(g, m); },
+      sph(x, y, z, rx, ry, rz, m, ax = 0, ay = 0, az = 0, seg = 12, half = false) { const g = half ? new T.SphereGeometry(1, seg, seg / 2, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2) : new T.SphereGeometry(1, seg, Math.max(4, seg / 2)); g.scale(rx, ry, rz); if (ax) g.rotateX(ax); if (az) g.rotateZ(az); if (ay) g.rotateY(ay); g.translate(x, y, z); return put(g, m); },
+      lathe(pts, x, y, z, m, seg = 24) { const g = new T.LatheGeometry(pts.map(p => new T.Vector2(p[0], p[1])), seg); g.translate(x, y, z); return put(g, m); },
+      tor(x, y, z, R, r, m, rx = Math.PI / 2, arc = Math.PI * 2, ry = 0, seg = 32) { const g = new T.TorusGeometry(R, r, 8, seg, arc); if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); g.translate(x, y, z); return put(g, m); },
+      col(g, hex) { colorize(g, hex); return g; },
+      add(g, m, uv = true) { return put(g, m, uv); },
+      sub(fn, x, y, z, ry = 0) { const c = Bld(); fn(c); c.parts.forEach((list, m) => list.forEach(g => { if (ry) g.rotateY(ry); g.translate(x, y, z); put(g, m, false); })); },
+      done(group) {
+        parts.forEach((list, m) => { const mesh = new T.Mesh(merge(list, m.vertexColors), m); mesh.castShadow = !(m.userData.glass || m.userData.clear || m === X.shade || m === X.bulb); mesh.receiveShadow = true; group.add(mesh); });
+        return group;
+      },
+    };
+    return b;
+  }
+  // soft contact shadow under a piece (fakes the ambient occlusion a real room would have)
+  const blobT = new T.CanvasTexture(cvs(64, (g, n) => { const r = g.createRadialGradient(n / 2, n / 2, 2, n / 2, n / 2, n / 2); r.addColorStop(0, 'rgba(0,0,0,.85)'); r.addColorStop(0.55, 'rgba(0,0,0,.55)'); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, n, n); }));
+  const blobM = new T.MeshBasicMaterial({ map: blobT, transparent: true, depthWrite: false, opacity: 0.5, polygonOffset: true, polygonOffsetFactor: -2 }), blobG = new T.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  function blob(group, w, d, y = 0.035) { const m = new T.Mesh(blobG, blobM); m.scale.set(w * 1.25 + 0.6, 1, d * 1.25 + 0.6); m.position.y = y; m.userData.noCast = true; m.userData.blob = true; m.renderOrder = 1; group.add(m); return m; }
+  // seeded random for decor so every load looks the same
+  let fs = 11; const fr = () => (fs = (fs * 16807) % 2147483647) / 2147483647;
+  const BOOK = [0x7a2e2a, 0x2f4a6b, 0x3e5e45, 0xc9b48a, 0x8c6a3c, 0x1f2a36, 0xd9d4c7, 0x6b3f5a, 0xa8432c, 0x4d6f86, 0xe0c35a, 0x2c2c2c];
+  const CLOTH = [0x2f3b4c, 0x8d9aa6, 0xe8e4da, 0x5a4636, 0x9e3d32, 0x3f5d4a, 0xc7b79c, 0x1f1f22, 0x6f88a8, 0xb5a07a];
+  const PANTRY = [0xe8e2d2, 0xc9a35a, 0x8d4a2a, 0xd8d0be, 0x6b7f4a, 0xb33a2a, 0x3f5f8a, 0xf0e6c8];
+  // ---------- parts ----------
+  const legs4 = (b, x0, x1, z0, z1, y0, y1, m, r = 0.05, sq = false) => [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].forEach(([x, z]) => sq ? b.box(x - r, x + r, y0, y1, z - r, z + r, m) : b.cyl(x, z, r * 0.7, r, y0, y1, m, 10));
+  const knob = (b, x, y, z, m = X.brass) => b.sph(x, y, z, 0.045, 0.045, 0.045, m, 0, 0, 0, 8);
+  const pullH = (b, x, y, z, L = 0.4, m = X.iron) => { b.rod([x - L / 2, y, z + 0.06], [x + L / 2, y, z + 0.06], 0.018, m, 6); b.box(x - L / 2 - 0.01, x - L / 2 + 0.02, y - 0.015, y + 0.015, z, z + 0.06, m); b.box(x + L / 2 - 0.02, x + L / 2 + 0.01, y - 0.015, y + 0.015, z, z + 0.06, m); };
+  const pullV = (b, x, y, z, L = 0.5, m = X.iron) => { b.rod([x, y - L / 2, z + 0.06], [x, y + L / 2, z + 0.06], 0.018, m, 6); b.box(x - 0.015, x + 0.015, y - L / 2 - 0.01, y - L / 2 + 0.02, z, z + 0.06, m); b.box(x - 0.015, x + 0.015, y + L / 2 - 0.02, y + L / 2 + 0.01, z, z + 0.06, m); };
+  // shaker door/drawer front on the plane z = zf (facing +z)
+  function shaker(b, x0, x1, y0, y1, zf, m, rail = 0.2) {
+    const s = Math.min(rail, (x1 - x0) / 4, (y1 - y0) / 4);
+    b.box(x0, x0 + s, y0, y1, zf, zf + 0.06, m); b.box(x1 - s, x1, y0, y1, zf, zf + 0.06, m); b.box(x0 + s, x1 - s, y0, y0 + s, zf, zf + 0.06, m); b.box(x0 + s, x1 - s, y1 - s, y1, zf, zf + 0.06, m);
+    b.box(x0 + s, x1 - s, y0 + s, y1 - s, zf, zf + 0.035, m);
+  }
+  function books(b, x0, x1, y, z0, z1, hmax, lean = true) {
+    let x = x0 + 0.02 + fr() * 0.1;
+    while (x < x1 - 0.12) {
+      if (fr() < 0.07) { x += 0.25 + fr() * 0.3; continue; }
+      const w = 0.07 + fr() * 0.12, h = hmax * (0.62 + fr() * 0.35), d = (z1 - z0) * (0.7 + fr() * 0.25);
+      if (lean && fr() < 0.05 && x + h * 0.6 < x1) { const g = b.cbox(x + h * 0.25, y + Math.cos(0.4) * h / 2, z1 - d / 2, w, h, d, X.books, 0, 0, 0, -0.4); b.col(g, BOOK[Math.floor(fr() * BOOK.length)]); x += h * 0.55; continue; }
+      b.col(b.box(x, x + w - 0.005, y, y + h, z1 - d, z1, X.books), BOOK[Math.floor(fr() * BOOK.length)]); x += w;
+    }
+  }
+  function vase(b, x, y, z, s = 1, m = X.ceramic) { b.lathe([[0, 0], [0.12 * s, 0], [0.18 * s, 0.12 * s], [0.2 * s, 0.35 * s], [0.12 * s, 0.6 * s], [0.08 * s, 0.75 * s], [0.1 * s, 0.82 * s], [0.09 * s, 0.82 * s], [0.06 * s, 0.7 * s], [0, 0.7 * s]], x, y, z, m, 18); }
+  function bowl(b, x, y, z, r = 0.45, m = X.ceramic) { b.lathe([[0, 0], [r * 0.45, 0], [r * 0.6, 0.03], [r * 0.95, r * 0.35], [r, r * 0.45], [r * 0.94, r * 0.45], [r * 0.88, r * 0.38], [r * 0.5, r * 0.12], [0, r * 0.1]], x, y, z, m, 24); }
+  function lamp(b, x, y, z, s = 1) { // table lamp: ceramic base, linen drum shade (glows after dusk)
+    b.lathe([[0, 0], [0.2 * s, 0], [0.22 * s, 0.04 * s], [0.27 * s, 0.35 * s], [0.2 * s, 0.75 * s], [0.07 * s, 0.9 * s], [0.04 * s, 1.1 * s], [0, 1.1 * s]], x, y, z, X.ceramic, 20);
+    b.cyl(x, z, 0.47 * s, 0.37 * s, y + 1.0 * s, y + 1.62 * s, X.shade, 28, true); b.sph(x, y + 1.18 * s, z, 0.09 * s, 0.11 * s, 0.09 * s, X.bulb, 0, 0, 0, 10);
+  }
+  function plant(b, x, y, z, s = 1, tall = false) {
+    b.lathe([[0, 0], [0.28 * s, 0], [0.36 * s, 0.7 * s], [0.38 * s, 0.75 * s], [0.34 * s, 0.75 * s], [0, 0.72 * s]], x, y, z, tall ? X.clay : X.ceramic, 20);
+    b.cyl(x, z, 0.33 * s, 0.33 * s, y + 0.68 * s, y + 0.72 * s, X.soil, 16);
+    const n = tall ? 22 : 16, top = y + (tall ? 0.8 : 0.7) * s;
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.4 + fr() * 0.5, up = tall ? 0.6 + (i / n) * 3.2 * s : 0.1 + fr() * 0.5, L = (tall ? 0.7 : 0.6 + fr() * 0.4) * s, tilt = tall ? 0.6 + fr() * 0.5 : 0.5 + fr() * 0.7;
+      if (tall && i % 3 === 0) b.rod([x, top, z], [x + Math.cos(a) * 0.15 * s, top + up, z - Math.sin(a) * 0.15 * s], 0.025 * s, X.walnut, 5);
+      const cx = x + Math.sin(tilt) * Math.cos(a) * L * 0.5 + (tall ? Math.cos(a) * 0.15 * s : 0), cz = z - Math.sin(tilt) * Math.sin(a) * L * 0.5 - (tall ? Math.sin(a) * 0.15 * s : 0), cy = top + up + Math.cos(tilt) * L * 0.5;
+      b.sph(cx, cy, cz, (tall ? 0.24 : 0.12) * s, L * 0.5, 0.012, i % 2 ? X.leaf : X.leaf2, 0, a, -tilt, 8);
+    }
+  }
+  // ---------- seating ----------
+  function sofa(b, w, d, o = {}) {
+    const F = o.fab || mat.fabric, arm = o.arm ?? 0.5, z0 = -d / 2, z1 = d / 2, bh = o.bh || 2.75;
+    legs4(b, -w / 2 + 0.25, w / 2 - 0.25, z0 + 0.25, z1 - 0.25, 0, 0.36, X.walnut, 0.06);
+    b.box(-w / 2 + 0.04, w / 2 - 0.04, 0.35, 1.0, z0 + 0.05, z1 - 0.06, F, 0.06);
+    b.box(-w / 2 + 0.04, w / 2 - 0.04, 0.9, bh, z0, z0 + 0.55, F, 0.16);
+    if (arm) { b.box(-w / 2, -w / 2 + arm, 0.35, 2.05, z0 + 0.02, z1, F, 0.16); b.box(w / 2 - arm, w / 2, 0.35, 2.05, z0 + 0.02, z1, F, 0.16); }
+    const iw = w - 2 * arm - 0.08, n = o.n || Math.max(1, Math.min(4, Math.round(iw / 2.3))), cw = iw / n;
+    for (let i = 0; i < n; i++) {
+      const cx = -iw / 2 + cw * (i + 0.5);
+      b.cbox(cx, 1.24, (z0 + 0.55 + z1 - 0.04) / 2, cw - 0.04, 0.5, z1 - z0 - 0.6, F, 0.17);
+      b.cbox(cx, 1.95, z0 + 0.82, cw - 0.06, 1.3, 0.55, F, 0.2, -0.16);
+    }
+    if (o.pillows !== false && w > 3.6) [-1, 1].forEach(s => b.cbox(s * (iw / 2 - 0.6), 2.0, z0 + 1.25, 1.25, 1.25, 0.36, o.pf || X.accent, 0.17, -0.35, -s * 0.25));
+  }
+  const armchair = (b, w, d, o = {}) => sofa(b, w, d, Object.assign({ n: 1, arm: 0.42, pillows: false }, o));
+  function sectional(b, w, d) { // L: long run along x with back at -z; chaise on the +x end running to +z, back on +x
+    const F = mat.fabric, x0 = -w / 2, x1 = w / 2, z0 = -d / 2, z1 = d / 2, cx = x1 - 3.0, sd = 2.95;
+    [[x0 + 0.25, z0 + 0.25], [x0 + 0.25, z0 + sd - 0.25], [x1 - 0.25, z0 + 0.25], [x1 - 0.25, z1 - 0.25], [cx + 0.25, z1 - 0.25]].forEach(([x, z]) => b.cyl(x, z, 0.04, 0.06, 0, 0.36, X.walnut, 10));
+    b.box(x0 + 0.03, x1 - 0.03, 0.35, 1.0, z0 + 0.05, z0 + sd, F, 0.06); b.box(cx, x1 - 0.03, 0.35, 1.0, z0 + sd - 0.1, z1 - 0.05, F, 0.06);
+    b.box(x0 + 0.03, x1 - 0.03, 0.9, 2.75, z0, z0 + 0.55, F, 0.16); b.box(x1 - 0.55, x1, 0.9, 2.75, z0 + 0.3, z1 - 0.3, F, 0.16);
+    b.box(x0, x0 + 0.5, 0.35, 2.05, z0 + 0.02, z0 + sd, F, 0.16);
+    const run = x1 - 0.55 - (x0 + 0.5), n = 4, cw = run / n;
+    for (let i = 0; i < n; i++) { const c = x0 + 0.5 + cw * (i + 0.5); b.cbox(c, 1.24, z0 + 0.55 + (sd - 0.6) / 2, cw - 0.04, 0.5, sd - 0.6, F, 0.17); b.cbox(c, 1.95, z0 + 0.82, cw - 0.06, 1.3, 0.55, F, 0.2, -0.16); }
+    b.cbox(cx + (x1 - 0.55 - cx) / 2, 1.24, (z0 + sd + z1) / 2 - 0.02, x1 - 0.55 - cx - 0.04, 0.5, z1 - z0 - sd - 0.1, F, 0.17);
+    [z0 + sd + 0.7, z0 + sd + 2.4].forEach(z => b.cbox(x1 - 0.82, 1.95, z, 0.55, 1.3, 1.6, F, 0.2, 0, 0, -0.16));
+    b.cbox(x0 + 1.2, 2.0, z0 + 1.25, 1.25, 1.25, 0.36, X.accent, 0.17, -0.35, 0.25); b.cbox(x1 - 1.3, 2.0, z0 + 1.3, 1.25, 1.25, 0.36, X.accent2, 0.17, -0.35, -0.6);
+  }
+  function diningChair(b, o = {}) { // ~1.5' wide; seat 1.55' high
+    const W = o.wood || mat.oak, F = o.fab || mat.fabric2;
+    [[-0.62, 0.6], [0.62, 0.6]].forEach(([x, z]) => b.rod([x, 0, z + 0.04], [x, 1.42, z], 0.05, W, 8, 0.035));
+    [-0.62, 0.62].forEach(x => b.rod([x, 0, -0.66], [x * 0.97, 3.25, -0.82], 0.05, W, 8, 0.04));
+    b.box(-0.7, 0.7, 1.3, 1.45, -0.72, 0.7, W, 0.03); b.box(-0.68, 0.68, 1.45, 1.6, -0.64, 0.7, F, 0.06);
+    b.cbox(0, 2.92, -0.8, 1.3, 0.55, 0.1, W, 0.04, -0.12); [-0.25, 0.25].forEach(x => b.cbox(x, 2.2, -0.73, 0.12, 1.0, 0.06, W, 0.02, -0.12));
+    b.rod([-0.62, 0.45, -0.65], [0.62, 0.45, -0.65], 0.025, W, 6); b.rod([-0.62, 0.45, 0.62], [0.62, 0.45, 0.62], 0.025, W, 6);
+  }
+  function officeChair(b) {
+    for (let i = 0; i < 5; i++) { const a = i * Math.PI * 0.4; b.rod([0, 0.22, 0], [Math.cos(a) * 0.95, 0.14, Math.sin(a) * 0.95], 0.045, mat.black, 6); b.sph(Math.cos(a) * 0.95, 0.08, Math.sin(a) * 0.95, 0.08, 0.08, 0.08, mat.black, 0, 0, 0, 8); }
+    b.cyl(0, 0, 0.09, 0.07, 0.2, 1.35, X.iron, 12); b.box(-0.82, 0.82, 1.35, 1.65, -0.8, 0.82, X.charcoal, 0.12);
+    b.cbox(0, 2.75, -0.85, 1.5, 1.7, 0.22, X.charcoal, 0.14, -0.1); b.rod([0, 1.4, -0.7], [0, 2.1, -0.9], 0.05, mat.black, 6);
+    [-0.85, 0.85].forEach(x => { b.rod([x, 1.5, -0.2], [x, 2.25, -0.2], 0.04, mat.black, 6); b.box(x - 0.08, x + 0.08, 2.22, 2.3, -0.6, 0.25, mat.black, 0.03); });
+  }
+  function stool(b, h = 2.2) {
+    b.lathe([[0, 0], [0.52, 0], [0.56, 0.04], [0.56, 0.1], [0.5, 0.14], [0, 0.14]], 0, h - 0.14, 0, mat.oak, 28);
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, c]) => b.rod([a * 0.3, h - 0.14, c * 0.3], [a * 0.47, 0, c * 0.47], 0.04, X.iron, 6));
+    b.tor(0, h * 0.36, 0, 0.42, 0.025, X.iron);
+  }
+  // ---------- tables ----------
+  function coffee(b, w, d, h = 1.4, o = {}) {
+    const W = o.wood || mat.oak; b.box(-w / 2, w / 2, h - 0.14, h, -d / 2, d / 2, W, 0.04);
+    b.box(-w / 2 + 0.18, w / 2 - 0.18, 0.3, 0.38, -d / 2 + 0.18, d / 2 - 0.18, W, 0.01);
+    legs4(b, -w / 2 + 0.16, w / 2 - 0.16, -d / 2 + 0.16, d / 2 - 0.16, 0, h - 0.14, W, 0.08, true);
+    if (o.decor !== false) { b.col(b.box(-w / 4 - 0.45, -w / 4 + 0.45, h, h + 0.12, -0.35, 0.35, X.books), 0x34506b); b.col(b.box(-w / 4 - 0.38, -w / 4 + 0.36, h + 0.12, h + 0.22, -0.3, 0.3, X.books), 0xd9d4c7); bowl(b, w / 4, h, 0.05, 0.42); }
+  }
+  function diningTable(b, w, d, h = 2.5, o = {}) {
+    const W = o.wood || mat.oak; b.box(-w / 2, w / 2, h - 0.15, h, -d / 2, d / 2, W, 0.03);
+    b.box(-w / 2 + 0.35, w / 2 - 0.35, h - 0.45, h - 0.15, -d / 2 + 0.35, -d / 2 + 0.43, W); b.box(-w / 2 + 0.35, w / 2 - 0.35, h - 0.45, h - 0.15, d / 2 - 0.43, d / 2 - 0.35, W);
+    b.box(-w / 2 + 0.35, -w / 2 + 0.43, h - 0.45, h - 0.15, -d / 2 + 0.35, d / 2 - 0.35, W); b.box(w / 2 - 0.43, w / 2 - 0.35, h - 0.45, h - 0.15, -d / 2 + 0.35, d / 2 - 0.35, W);
+    legs4(b, -w / 2 + 0.42, w / 2 - 0.42, -d / 2 + 0.42, d / 2 - 0.42, 0, h - 0.15, W, 0.13, true);
+    if (o.decor !== false) { const lx = w > d; b.box(lx ? -w / 2 + 0.6 : -0.55, lx ? w / 2 - 0.6 : 0.55, h, h + 0.008, lx ? -0.55 : -d / 2 + 0.6, lx ? 0.55 : d / 2 - 0.6, mat.bed); bowl(b, 0, h + 0.008, 0, 0.55, X.ceramic); [-1, 1].forEach(s => { const x = lx ? s * 1.3 : 0, z = lx ? 0 : s * 1.3; b.lathe([[0, 0], [0.12, 0], [0.05, 0.08], [0.035, 0.55], [0.07, 0.6], [0, 0.6]], x, h + 0.008, z, X.brass, 14); b.cyl(x, z, 0.035, 0.035, h + 0.6, h + 1.05, mat.bed, 10); }); }
+  }
+  function desk(b, w, d, h = 2.5, o = {}) {
+    const W = o.wood || mat.oak; b.box(-w / 2, w / 2, h - 0.12, h, -d / 2, d / 2, W, 0.03);
+    b.box(-w / 2 + 0.05, -w / 2 + 1.3, 0.25, h - 0.12, -d / 2 + 0.05, d / 2 - 0.08, W, 0.02); shaker(b, -w / 2 + 0.1, -w / 2 + 1.25, 1.3, h - 0.2, d / 2 - 0.08, W, 0.12); shaker(b, -w / 2 + 0.1, -w / 2 + 1.25, 0.3, 1.25, d / 2 - 0.08, W, 0.12);
+    knob(b, -w / 2 + 0.68, h - 0.55, d / 2 + 0.02); knob(b, -w / 2 + 0.68, 0.95, d / 2 + 0.02);
+    legs4(b, -w / 2 + 0.2, w / 2 - 0.12, -d / 2 + 0.12, d / 2 - 0.12, 0, 0.25, W, 0.06, true); b.box(w / 2 - 0.2, w / 2 - 0.05, 0, h - 0.12, -d / 2 + 0.05, d / 2 - 0.05, W, 0.02);
+    if (o.decor !== false) { lamp(b, -w / 2 + 0.5, h, -d / 2 + 0.45, 0.75); b.box(0.1, 1.2, h, h + 0.03, -0.3, 0.45, X.iron, 0.01); b.cbox(0.65, h + 0.36, -0.32, 1.1, 0.7, 0.03, X.iron, 0.01, -0.3); b.col(b.box(w / 2 - 1.0, w / 2 - 0.3, h, h + 0.1, -d / 2 + 0.2, -d / 2 + 0.75, X.books), 0x7a2e2a); }
+  }
+  // ---------- bedroom ----------
+  function bed(b, w, d, o = {}) { // head at -z
+    const z0 = -d / 2, z1 = d / 2, Fr = o.frame || mat.fabric;
+    legs4(b, -w / 2 + 0.2, w / 2 - 0.2, z0 + 0.45, z1 - 0.2, 0, 0.45, X.walnut, 0.07, true);
+    b.box(-w / 2, w / 2, 0.45, 1.05, z0 + 0.3, z1, Fr, 0.08); b.box(-w / 2 - 0.1, w / 2 + 0.1, 0, 4.3, z0, z0 + 0.35, Fr, 0.14);
+    b.box(-w / 2 + 0.08, w / 2 - 0.08, 1.05, 1.88, z0 + 0.4, z1 - 0.08, X.linen, 0.16);
+    b.box(-w / 2 + 0.02, w / 2 - 0.02, 1.5, 1.99, z0 + 1.95, z1 + 0.02, mat.bed, 0.14);
+    b.box(-w / 2 - 0.03, w / 2 + 0.03, 1.62, 2.07, z1 - 1.8, z1 + 0.06, o.thr || mat.fabric2, 0.1);
+    const n = w > 5.8 ? 3 : 2, pw = (w - 0.7) / n;
+    for (let i = 0; i < n; i++) { const cx = -w / 2 + 0.35 + pw * (i + 0.5); b.cbox(cx, 2.5, z0 + 0.66, pw - 0.08, 1.55, 0.42, mat.bed, 0.2, -0.24); b.cbox(cx, 2.1, z0 + 1.2, pw - 0.15, 0.48, 1.3, X.linen, 0.2, -0.3); }
+    b.cbox(0, 2.18, z0 + 1.78, Math.min(2.2, w * 0.4), 0.62, 0.3, o.acc || X.accent, 0.14, -0.35);
+  }
+  function nightstand(b, w, d, h = 2.1, o = {}) {
+    const W = o.wood || mat.oak; legs4(b, -w / 2 + 0.1, w / 2 - 0.1, -d / 2 + 0.1, d / 2 - 0.12, 0, 0.42, W, 0.05, true);
+    b.box(-w / 2, w / 2, 0.4, h, -d / 2, d / 2 - 0.03, W, 0.03);
+    [[0.5, 1.2], [1.26, h - 0.08]].forEach(([y0, y1]) => { b.box(-w / 2 + 0.07, w / 2 - 0.07, y0, y1, d / 2 - 0.03, d / 2 + 0.01, W, 0.01); knob(b, 0, (y0 + y1) / 2, d / 2 + 0.04); });
+    if (o.lamp !== false) lamp(b, -w * 0.12, h, -0.05, 0.85); if (o.book !== false) b.col(b.box(w * 0.08, w * 0.08 + 0.55, h, h + 0.1, 0.05, 0.45, X.books), 0x2f4a6b);
+  }
+  function dresser(b, w, d, h = 3, o = {}) {
+    const W = o.wood || mat.oak, cols = w > 4 ? 2 : 1, rows = h > 2.7 ? 3 : 2, gap = 0.05;
+    legs4(b, -w / 2 + 0.15, w / 2 - 0.15, -d / 2 + 0.15, d / 2 - 0.15, 0, 0.35, W, 0.06, true);
+    b.box(-w / 2, w / 2, 0.33, h - 0.1, -d / 2, d / 2 - 0.03, W, 0.02); b.box(-w / 2 - 0.04, w / 2 + 0.04, h - 0.1, h, -d / 2, d / 2 + 0.03, W, 0.02);
+    const iw = (w - 0.1) / cols, ih = (h - 0.55) / rows;
+    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) { const x0 = -w / 2 + 0.05 + c * iw + gap / 2, y0 = 0.4 + r * ih + gap / 2; b.box(x0, x0 + iw - gap, y0, y0 + ih - gap, d / 2 - 0.03, d / 2 + 0.01, W, 0.01); pullH(b, x0 + (iw - gap) / 2, y0 + (ih - gap) * 0.6, d / 2, Math.min(0.6, iw * 0.3), X.brass); }
+    if (o.decor !== false) { if (o.lamp !== false) lamp(b, -w / 2 + 0.6, h, -0.1, 0.95); vase(b, w / 2 - 0.55, h, 0, 1.1); b.col(b.box(-0.4, 0.5, h, h + 0.15, -0.2, 0.4, X.books), 0xc9b48a); }
+  }
+  function shelves(b, w, d, h, o = {}) { // open shelving unit with books (or pantry goods)
+    const W = o.m || mat.cabW, t = 0.07, n = o.n || Math.max(3, Math.round(h / 1.25));
+    b.box(-w / 2, -w / 2 + t, 0, h, -d / 2, d / 2, W, 0.01); b.box(w / 2 - t, w / 2, 0, h, -d / 2, d / 2, W, 0.01); b.box(-w / 2, w / 2, 0, 0.3, -d / 2, d / 2, W); b.box(-w / 2, w / 2, h - t, h, -d / 2, d / 2, W, 0.01); b.box(-w / 2, w / 2, 0, h, -d / 2, -d / 2 + 0.04, W);
+    const sp = (h - 0.3) / n; const bays = Math.max(1, Math.round(w / 3));
+    for (let k = 1; k < bays; k++) { const x = -w / 2 + k * w / bays; b.box(x - t / 2, x + t / 2, 0.3, h - t, -d / 2, d / 2, W); }
+    for (let i = 0; i < n; i++) {
+      const y = 0.3 + i * sp; if (i > 0) b.box(-w / 2 + t, w / 2 - t, y - t, y, -d / 2, d / 2, W);
+      for (let k = 0; k < bays; k++) {
+        const x0 = -w / 2 + t + k * w / bays, x1 = -w / 2 + (k + 1) * w / bays - t;
+        if (o.kind === 'pantry') { let x = x0 + 0.05; while (x < x1 - 0.3) { const jar = fr() < 0.5, ww = jar ? 0.3 : 0.25 + fr() * 0.3, hh = Math.min(sp - 0.15, 0.45 + fr() * 0.55); if (jar) b.col(b.cyl(x + 0.15, 0, 0.13, 0.13, y, y + hh * 0.8, X.books, 12), PANTRY[Math.floor(fr() * PANTRY.length)]).translate(0, 0, d / 2 - 0.3); else b.col(b.box(x, x + ww, y, y + hh, d / 2 - 0.55, d / 2 - 0.08, X.books), PANTRY[Math.floor(fr() * PANTRY.length)]); x += ww + 0.05; } }
+        else if (o.kind !== 'none') { if (fr() < 0.22) { vase(b, (x0 + x1) / 2, y, 0, 0.9); books(b, x0, x0 + (x1 - x0) * 0.35, y, -d / 2 + 0.1, d / 2 - 0.05, sp - 0.15, false); } else books(b, x0, x1, y, -d / 2 + 0.1, d / 2 - 0.05, Math.min(1.05, sp - 0.15)); }
+      }
+    }
+  }
+  function closet(b, w, d, o = {}) { // shelf + rod + hanging clothes (front at +z)
+    const yS = o.shelf || 5.5; b.box(-w / 2, w / 2, yS, yS + 0.08, -d / 2, d / 2 - 0.2, mat.cabW); b.rod([-w / 2, yS - 0.25, -d / 2 + 0.95], [w / 2, yS - 0.25, -d / 2 + 0.95], 0.03, mat.chrome, 8);
+    let x = -w / 2 + 0.2; while (x < w / 2 - 0.2) { const t = 0.08 + fr() * 0.12, L = 2.4 + fr() * 1.6; b.col(b.cbox(x, yS - 0.32 - L / 2, -d / 2 + 0.95, t, L, Math.min(1.5, d - 0.2), X.cloth, 0.03), CLOTH[Math.floor(fr() * CLOTH.length)]); x += t + 0.08 + fr() * 0.1; }
+    for (let x2 = -w / 2 + 0.3; x2 < w / 2 - 1.2; x2 += 1.4 + fr() * 0.6) b.col(b.box(x2, x2 + 1.0, yS + 0.08, yS + 0.08 + 0.7, -d / 2 + 0.1, -d / 2 + 1.2, X.cloth), [0xd8cfbf, 0x9aa5ad, 0x6b5a48][Math.floor(fr() * 3)]);
+  }
+  // ---------- kitchen & baths ----------
+  function baseCab(b, w, d, h = 2.9, o = {}) { // base cabinet run, top drawer + door below, toe kick
+    const C = o.m || mat.cab, zf = d / 2 - 0.06; b.box(-w / 2, w / 2, 0.35, h, -d / 2, zf, C); b.box(-w / 2, w / 2, 0, 0.35, -d / 2, zf - 0.25, X.kick);
+    const n = Math.max(1, Math.round(w / (o.dw || 1.6))), dw = w / n;
+    for (let i = 0; i < n; i++) {
+      const x0 = -w / 2 + i * dw + 0.03, x1 = x0 + dw - 0.06;
+      if (o.drawers) { const k = 3, hh = (h - 0.45) / k; for (let j = 0; j < k; j++) { const y0 = 0.4 + j * hh; shaker(b, x0, x1, y0, y0 + hh - 0.05, zf, C, 0.14); pullH(b, (x0 + x1) / 2, y0 + hh - 0.25, zf + 0.06, 0.45); } }
+      else { shaker(b, x0, x1, h - 0.65, h - 0.07, zf, C, 0.14); pullH(b, (x0 + x1) / 2, h - 0.36, zf + 0.06, 0.45); shaker(b, x0, x1, 0.4, h - 0.71, zf, C); pullV(b, i % 2 ? x0 + 0.17 : x1 - 0.17, h - 1.05, zf + 0.06, 0.45); }
+    }
+  }
+  function wallCab(b, w, d, h, o = {}) {
+    const C = o.m || mat.cab, zf = d / 2 - 0.06; b.box(-w / 2, w / 2, 0, h, -d / 2, zf, C);
+    const n = Math.max(1, Math.round(w / 1.5)), dw = w / n;
+    for (let i = 0; i < n; i++) { const x0 = -w / 2 + i * dw + 0.03, x1 = x0 + dw - 0.06; shaker(b, x0, x1, 0.04, h - 0.04, zf, C); pullV(b, i % 2 ? x0 + 0.17 : x1 - 0.17, 0.45, zf + 0.06, 0.45); }
+    b.box(-w / 2, w / 2, h - 0.12, h, -d / 2, zf + 0.12, C);
+  }
+  function tallCab(b, w, d, h, o = {}) {
+    const C = o.m || mat.cabW, zf = d / 2 - 0.06; b.box(-w / 2, w / 2, 0.35, h, -d / 2, zf, C); b.box(-w / 2, w / 2, 0, 0.35, -d / 2, zf - 0.25, X.kick);
+    const n = Math.max(1, Math.round(w / 1.6)), dw = w / n, split = Math.min(h - 0.5, 4.2);
+    for (let i = 0; i < n; i++) { const x0 = -w / 2 + i * dw + 0.03, x1 = x0 + dw - 0.06, px = i % 2 ? x0 + 0.17 : x1 - 0.17; shaker(b, x0, x1, 0.4, split - 0.03, zf, C); shaker(b, x0, x1, split + 0.03, h - 0.07, zf, C); pullV(b, px, split - 0.6, zf + 0.06, 0.55); pullV(b, px, split + 0.6, zf + 0.06, 0.55); }
+    b.box(-w / 2 - 0.03, w / 2 + 0.03, h - 0.15, h, -d / 2, zf + 0.12, C);
+  }
+  function range(b, w, d) { // 30" freestanding range, front at +z
+    const S = mat.appliance, zf = d / 2; b.box(-w / 2, w / 2, 0, 2.93, -d / 2, zf - 0.06, S); b.box(-w / 2, w / 2, 0.05, 0.4, zf - 0.06, zf, S, 0.01);
+    b.box(-w / 2 + 0.02, w / 2 - 0.02, 0.45, 2.25, zf - 0.06, zf, S, 0.02); b.box(-w / 2 + 0.38, w / 2 - 0.38, 0.85, 1.85, zf, zf + 0.012, X.screen, 0.01);
+    b.rod([-w / 2 + 0.25, 2.08, zf + 0.16], [w / 2 - 0.25, 2.08, zf + 0.16], 0.03, mat.chrome, 8); [-1, 1].forEach(s => b.rod([s * (w / 2 - 0.3), 2.08, zf], [s * (w / 2 - 0.3), 2.08, zf + 0.16], 0.022, mat.chrome, 6));
+    b.box(-w / 2, w / 2, 2.3, 2.93, zf - 0.06, zf + 0.01, S, 0.01); for (let i = 0; i < 5; i++) { const g = new T.CylinderGeometry(0.075, 0.08, 0.09, 14); g.rotateX(Math.PI / 2); g.translate(-w / 2 + 0.35 + i * (w - 0.7) / 4, 2.6, zf + 0.055); b.add(g, X.iron); }
+    b.box(-w / 2 + 0.02, w / 2 - 0.02, 2.93, 2.98, -d / 2 + 0.15, zf - 0.04, mat.black, 0.01);
+    [-1, 1].forEach(s => { const cx = s * w / 4; for (let k = -1; k <= 1; k++) { b.box(cx - w / 4 + 0.08, cx + w / 4 - 0.08, 2.98, 3.03, k * 0.45 - 0.02, k * 0.45 + 0.02, X.iron); b.box(cx + k * 0.3 - 0.02, cx + k * 0.3 + 0.02, 2.98, 3.03, -d / 2 + 0.25, zf - 0.15, X.iron); } [-0.4, 0.4].forEach(z => b.cyl(cx, z, 0.17, 0.15, 2.97, 3.02, X.iron, 16)); });
+    b.box(-w / 2, w / 2, 2.93, 3.35, -d / 2, -d / 2 + 0.12, S, 0.02);
+  }
+  function hood(b, w, d) { // chimney hood: canopy 5.6'–6.3', flue cover to the ceiling (8.2')
+    const g = new T.CylinderGeometry(Math.SQRT1_2, Math.SQRT1_2, 1, 4, 1).toNonIndexed(); g.rotateY(Math.PI / 4); const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const top = p.getY(i) > 0; p.setX(i, p.getX(i) * (top ? 1.0 : w)); p.setZ(i, top ? p.getZ(i) * 0.8 - d / 2 + 0.4 : p.getZ(i) * d); p.setY(i, top ? 0.7 : 0); } g.computeVertexNormals(); g.translate(0, 5.6, 0);
+    b.add(g, mat.appliance); b.box(-w / 2, w / 2, 5.45, 5.6, -d / 2, d / 2, mat.appliance, 0.01); b.box(-0.5, 0.5, 6.3, 8.18, -d / 2, -d / 2 + 0.8, mat.appliance); b.box(-w / 2 + 0.1, w / 2 - 0.1, 5.44, 5.46, -d / 2 + 0.1, d / 2 - 0.1, X.iron);
+  }
+  function fridge(b, w, d, h) {
+    const S = mat.appliance, zf = d / 2; b.box(-w / 2, w / 2, 0, h, -d / 2, zf - 0.1, S, 0.02); b.box(-w / 2, w / 2, 0, 0.3, zf - 0.1, zf - 0.05, X.kick);
+    b.box(-w / 2 + 0.02, -0.012, 3.0, h - 0.03, zf - 0.1, zf, S, 0.03); b.box(0.012, w / 2 - 0.02, 3.0, h - 0.03, zf - 0.1, zf, S, 0.03); b.box(-w / 2 + 0.02, w / 2 - 0.02, 0.32, 2.95, zf - 0.1, zf, S, 0.03);
+    [-0.12, 0.12].forEach(x => { b.rod([x, 3.6, zf + 0.12], [x, 5.9, zf + 0.12], 0.03, mat.chrome, 8); b.rod([x, 3.7, zf], [x, 3.7, zf + 0.12], 0.02, mat.chrome, 6); b.rod([x, 5.8, zf], [x, 5.8, zf + 0.12], 0.02, mat.chrome, 6); });
+    b.rod([-w / 2 + 0.4, 2.65, zf + 0.12], [w / 2 - 0.4, 2.65, zf + 0.12], 0.03, mat.chrome, 8);
+  }
+  function wallOven(b, w, d, h) { // cabinet tower with oven and microwave (sits on the counter run)
+    b.box(-w / 2, w / 2, 0, h, -d / 2, d / 2 - 0.06, mat.cab); const zf = d / 2 - 0.06;
+    [[0.35, 2.05], [2.25, 3.25]].forEach(([y0, y1], i) => { b.box(-w / 2 + 0.12, w / 2 - 0.12, y0, y1, zf, zf + 0.05, mat.appliance, 0.01); b.box(-w / 2 + 0.3, w / 2 - (i ? 0.7 : 0.3), y0 + 0.2, y1 - (i ? 0.15 : 0.45), zf + 0.05, zf + 0.06, X.screen); b.rod([-w / 2 + 0.35, y1 - (i ? 0.08 : 0.25), zf + 0.15], [w / 2 - 0.35, y1 - (i ? 0.08 : 0.25), zf + 0.15], 0.025, mat.chrome, 6); });
+    shaker(b, -w / 2 + 0.03, w / 2 - 0.03, 3.35, h - 0.07, zf, mat.cab); pullV(b, w / 2 - 0.2, 3.6, zf + 0.06, 0.4);
+  }
+  function dishwasher(b, w) { b.box(-w / 2, w / 2, 0.35, 2.85, 0, 0.07, mat.appliance, 0.01); b.box(-w / 2, w / 2, 0, 0.35, -0.2, -0.05, X.kick); b.rod([-w / 2 + 0.2, 2.6, 0.16], [w / 2 - 0.2, 2.6, 0.16], 0.025, mat.chrome, 8); [-1, 1].forEach(s => b.rod([s * (w / 2 - 0.25), 2.6, 0.07], [s * (w / 2 - 0.25), 2.6, 0.16], 0.02, mat.chrome, 6)); }
+  function faucet(b, x, y, z, s = 1) { // gooseneck, spout toward +z
+    b.cyl(x, z, 0.07 * s, 0.06 * s, y, y + 0.12 * s, mat.chrome, 14); b.rod([x, y + 0.1 * s, z], [x, y + 1.0 * s, z], 0.035 * s, mat.chrome, 10);
+    b.tor(x, y + 1.0 * s, z + 0.32 * s, 0.32 * s, 0.035 * s, mat.chrome, 0, Math.PI, -Math.PI / 2, 16); b.rod([x, y + 1.0 * s, z + 0.64 * s], [x, y + 0.82 * s, z + 0.64 * s], 0.04 * s, mat.chrome, 10);
+    b.rod([x + 0.06 * s, y + 0.5 * s, z], [x + 0.32 * s, y + 0.62 * s, z], 0.025 * s, mat.chrome, 6);
+  }
+  function basin(b, x0, x1, z0, z1, top, depth = 0.7) { // open stainless sink bowl set into a counter hole
+    const y = top - depth, S = mat.appliance; b.box(x0, x1, y - 0.03, y, z0, z1, S); b.box(x0, x0 + 0.03, y, top, z0, z1, S); b.box(x1 - 0.03, x1, y, top, z0, z1, S); b.box(x0, x1, y, top, z0, z0 + 0.03, S); b.box(x0, x1, y, top, z1 - 0.03, z1, S);
+    b.cyl((x0 + x1) / 2, (z0 + z1) / 2, 0.1, 0.1, y, y + 0.006, X.iron, 14);
+  }
+  function toilet(b, w, d) { b.sub(toiletCore, 0, 0, -d / 2 + 1.22); }
+  function toiletCore(b) { // tank at -z, about 1.6' wide x 2.2' deep
+    const P = mat.porcelain; b.box(-0.75, 0.75, 1.42, 2.55, -1.15, -0.62, P, 0.08); b.box(-0.79, 0.79, 2.55, 2.66, -1.18, -0.58, P, 0.04); b.box(0.5, 0.68, 2.3, 2.36, -0.6, -0.56, mat.chrome, 0.02);
+    b.cbox(0, 0.55, -0.3, 0.75, 1.1, 1.0, P, 0.2); b.sph(0, 1.42, 0.1, 0.62, 0.62, 0.82, P, 0, 0, 0, 24, true);
+    const seat = new T.CylinderGeometry(0.66, 0.66, 0.1, 28); seat.scale(1, 1, 1.28); seat.translate(0, 1.47, 0.1); b.add(seat, P);
+  }
+  function vanity(b, w, d, o = {}) { // cabinet + counter + oval basin(s) + faucet(s) + mirror(s) on the back wall
+    const h = 2.8; baseCab(b, w, d, h, { m: o.m || mat.cabW, dw: w / Math.max(2, Math.round(w / 1.5)) });
+    b.box(-w / 2 - 0.03, w / 2 + 0.03, h, h + 0.13, -d / 2, d / 2 + 0.04, mat.counter, 0.015);
+    const n = o.n || 1, sp = w / n;
+    for (let i = 0; i < n; i++) {
+      const cx = -w / 2 + sp * (i + 0.5); const g = new T.CylinderGeometry(0.62, 0.62, 0.012, 28); g.scale(1, 1, 0.72); g.translate(cx, h + 0.132, 0.12); b.add(g, X.ceramic); b.cyl(cx, 0.15, 0.06, 0.06, h + 0.139, h + 0.142, X.iron, 10);
+      b.cyl(cx, -d / 2 + 0.25, 0.05, 0.045, h + 0.13, h + 0.75, mat.chrome, 12); b.rod([cx, h + 0.7, -d / 2 + 0.25], [cx, h + 0.66, -d / 2 + 0.62], 0.03, mat.chrome, 8); b.rod([cx, h + 0.66, -d / 2 + 0.25], [cx + 0.18, h + 0.72, -d / 2 + 0.25], 0.02, mat.chrome, 6);
+      if (o.mirror !== false) { const mw = Math.min(2.6, sp - 0.5); b.box(cx - mw / 2 - 0.08, cx + mw / 2 + 0.08, 3.6, 6.3, -d / 2 - 0.02, -d / 2 + 0.02, X.walnut, 0.02); b.box(cx - mw / 2, cx + mw / 2, 3.68, 6.22, -d / 2 + 0.02, -d / 2 + 0.03, X.mirror); }
+    }
+  }
+  function showerFix(b, h = 6.6) { // shower head and valve on a wall at -z, spray toward +z
+    b.rod([0, h, 0], [0, h + 0.1, 0.55], 0.03, mat.chrome, 8); b.cyl(0, 0.62, 0.22, 0.24, h - 0.05, h + 0.03, mat.chrome, 20);
+    const v = new T.CylinderGeometry(0.22, 0.22, 0.04, 20); v.rotateX(Math.PI / 2); v.translate(0, 4.0, 0.02); b.add(v, mat.chrome); b.rod([0, 4.0, 0.04], [0.28, 4.05, 0.12], 0.03, mat.chrome, 6);
+  }
+  function washerDryer(b, w, d, stacked = true) {
+    const unit = y => { b.box(-w / 2, w / 2, y, y + 2.95, -d / 2, d / 2, X.enamel, 0.05); b.box(-w / 2 + 0.05, w / 2 - 0.05, y + 2.45, y + 2.9, d / 2 - 0.01, d / 2 + 0.02, X.enamel, 0.02); b.box(-0.3, 0.3, y + 2.57, y + 2.78, d / 2 + 0.02, d / 2 + 0.03, X.screen); const k = new T.CylinderGeometry(0.1, 0.1, 0.07, 16); k.rotateX(Math.PI / 2); k.translate(w / 2 - 0.4, y + 2.67, d / 2 + 0.05); b.add(k, mat.chrome);
+      b.tor(0, y + 1.25, d / 2 + 0.03, 0.72, 0.07, mat.chrome, 0, Math.PI * 2, 0, 36); const gl = new T.CylinderGeometry(0.68, 0.68, 0.04, 32); gl.rotateX(Math.PI / 2); gl.translate(0, y + 1.25, d / 2 + 0.02); b.add(gl, X.screen); };
+    unit(0); if (stacked) unit(3.0);
+  }
+  // ---------- living ----------
+  function fireplace(b, w, d, ceil) { // chimney breast with ledgestone face, 36" direct-vent unit, beam mantel
+    b.box(-w / 2, w / 2, 0, ceil, -d / 2, d / 2 - 0.1, mat.paint); b.box(-w / 2 - 0.03, w / 2 + 0.03, 0, 0.5, -d / 2, d / 2 - 0.08, mat.trim);
+    b.box(-2.2, 2.2, 0, 4.35, d / 2 - 0.1, d / 2 - 0.02, mat.stone); b.box(-1.62, 1.62, 0.72, 2.95, d / 2 - 0.02, d / 2 + 0.005, mat.black, 0.01); b.box(-1.5, 1.5, 0.84, 2.83, d / 2 + 0.005, d / 2 + 0.012, X.fire);
+    b.box(-2.45, 2.45, 4.35, 4.72, -d / 2, d / 2 + 0.22, X.walnut, 0.03);
+    [-1.9, 1.9].forEach(x => { b.lathe([[0, 0], [0.13, 0], [0.06, 0.08], [0.04, 0.7], [0.08, 0.76], [0, 0.76]], x, 4.72, d / 2, X.brass, 14); b.cyl(x, d / 2, 0.045, 0.045, 5.48, 5.95, mat.bed, 10); });
+    vase(b, 1.3, 4.72, d / 2 - 0.05, 0.9); b.box(-2.4, 2.4, 0, 0.06, d / 2 - 0.02, d / 2 + 1.55, mat.slate);
+  }
+  function tvWall(b, w, h) { b.box(-w / 2, w / 2, 0, h, -0.06, 0.06, mat.black, 0.02); b.box(-w / 2 + 0.05, w / 2 - 0.05, 0.05, h - 0.05, 0.06, 0.07, X.screen); }
+  function mediaConsole(b, w, d) { // low console with slatted doors and a wall-mounted TV behind it
+    b.box(-w / 2, w / 2, 0.45, 2.0, -d / 2, d / 2 - 0.05, mat.oak, 0.02); legs4(b, -w / 2 + 0.2, w / 2 - 0.2, -d / 2 + 0.2, d / 2 - 0.25, 0, 0.45, X.iron, 0.04, true);
+    for (let x = -w / 2 + 0.08; x < w / 2 - 0.1; x += 0.16) b.box(x, x + 0.11, 0.55, 1.9, d / 2 - 0.05, d / 2, mat.oak);
+    b.sub(c => tvWall(c, Math.min(5.4, w - 0.4), 3.05), 0, 3.0, -d / 2 + 0.06); vase(b, w / 2 - 0.5, 2.0, 0, 0.8); b.col(b.box(-w / 2 + 0.3, -w / 2 + 1.1, 2.0, 2.12, -0.3, 0.3, X.books), 0xd9d4c7);
+  }
+  function rug(b, w, d, m) { const g = new T.BoxGeometry(w, 0.03, d); g.translate(0, 0.015, 0); b.add(g, m || RUGS.trad, false); }
+  function floorLamp(b, s = 1) { b.cyl(0, 0, 0.42, 0.45, 0, 0.06, X.iron, 24); b.rod([0, 0.06, 0], [0, 5.0 * s, 0], 0.03, X.brass, 8); b.cyl(0, 0, 0.62, 0.5, 4.75 * s, 5.65 * s, X.shade, 28, true); b.sph(0, 5.0 * s, 0, 0.12, 0.14, 0.12, X.bulb, 0, 0, 0, 10); }
+  function pendant(b, y0, y1, r = 0.42) { b.rod([0, y0, 0], [0, y1 + 0.45, 0], 0.012, mat.black, 4); b.cyl(0, 0, 0.62 * r * 2, 0.09, y1, y1 + 0.45, mat.black, 24, true); b.sph(0, y1 + 0.1, 0, 0.12, 0.12, 0.12, X.bulb, 0, 0, 0, 12); b.cyl(0, 0, 0.1, 0.1, y0 - 0.05, y0, mat.black, 12); }
+  function drum(b, y0, y1, r = 1.0) { b.rod([0, y0, 0], [0, y1 + 0.75, 0], 0.012, X.brass, 4); b.cyl(0, 0, r, r, y1, y1 + 0.75, X.shade, 36, true); b.cyl(0, 0, r - 0.02, r - 0.02, y1 + 0.05, y1 + 0.07, X.shade, 36); b.sph(0, y1 + 0.35, 0, 0.14, 0.14, 0.14, X.bulb, 0, 0, 0, 10); b.cyl(0, 0, 0.18, 0.18, y0 - 0.05, y0, X.brass, 14); }
+  // ---------- placement ----------
+  const ROT = { S: 0, N: Math.PI, E: Math.PI / 2, W: -Math.PI / 2 };
+  // put(model, plan box X0..X1 × Z0..Z1, floor y, facing ('S','N','E','W' = where the front looks, or radians), label)
+  function put(fn, X0, X1, Z0, Z1, y, face, t, o = {}) {
+    const th = typeof face === 'number' ? face : ROT[face], acrossX = Math.abs(Math.cos(th)) > 0.7;
+    const w = o.w || (acrossX ? Z1 - Z0 : X1 - X0), d = o.d || (acrossX ? X1 - X0 : Z1 - Z0);
+    const b = Bld(); fn(b, w, d); const g = new T.Group(); b.done(g); if (o.blob !== false) blob(g, w, d, o.by);
+    g.position.copy(V((X0 + X1) / 2, y, (Z0 + Z1) / 2)); g.rotation.y = th;
+    (o.parent || (y >= FF2 - 0.1 ? G.f2 : y < -1 ? G.found : G.f1)).add(g);
+    g.children.forEach(m => { m.userData.k = 'furn'; if (m.userData.blob) return; m.userData.info = { t }; pickables.push(m); });
+    return g;
+  }
+  return { X, RUGS, GLOW, Bld, blob, put, rg, sofa, armchair, sectional, diningChair, officeChair, stool, coffee, diningTable, desk, bed, nightstand, dresser, shelves, closet, baseCab, wallCab, tallCab, range, hood, fridge, wallOven, dishwasher, faucet, basin, toilet, vanity, showerFix, washerDryer, fireplace, tvWall, mediaConsole, rug, floorLamp, pendant, drum, plant, lamp, vase, bowl, books, shaker, pullH, pullV, knob, legs4 };
+})();
+// =================== FURNITURE ===================
+// Illustrative furnishings (not on the permit set), placed in the same footprints as before. Models: FX above.
+{
+  const P = FX.put, X = FX.X, y2 = FF2, CW = mat.cabW;
+  const counter = (b, w, d, t = 0.15) => b.box(-w / 2, w / 2, 0, t, -d / 2, d / 2, mat.counter, 0.015);
+  // ---- living room ----
+  P((b, w, d) => FX.fireplace(b, w, d, CEIL1), 0.6, 2.25, 6.87, 12.35, 0, 'S', 'Gas fireplace — 36" direct vent, stone surround', { blob: false });
+  P((b, w) => FX.tvWall(b, w, 2.5), 2.15, 2.27, 7.4, 11.8, 5.1, 'S', 'TV above fireplace', { blob: false });
+  P((b, w, d) => FX.rug(b, w, d, FX.RUGS.trad), 3.5, 14.5, 1.2, 13.5, 0.004, 'E', 'Area rug', { blob: false });
+  P((b, w, d) => FX.sofa(b, w, d), 4.9, 11.8, 0.8, 3.8, 0, 'E', 'Sofa');
+  P((b, w, d) => FX.sofa(b, w, d, { pf: X.accent2 }), 13.1, 15.9, 6.7, 12.1, 0, 'N', 'Loveseat');
+  P((b, w, d) => FX.armchair(b, w, d, { fab: mat.fabric2 }), 2.6, 4.4, 1.0, 3.6, 0, 0.9, 'Arm chair', { w: 2.7, d: 2.7 });
+  P((b, w, d) => FX.coffee(b, w, d, 1.4), 5.6, 10.7, 4.6, 6.6, 0, 'E', 'Coffee table');
+  P((b, w, d) => FX.armchair(b, w, d, { fab: mat.fabric2 }), 6.8, 9.6, 12.6, 15.4, 0, -2.0, 'Reading chair', { w: 2.8, d: 2.8 });
+  P(b => FX.floorLamp(b), 9.9, 10.9, 14.6, 15.6, 0, 'S', 'Floor lamp', { w: 1, d: 1 });
+  P(b => FX.plant(b, 0, 0, 0, 1.05, true), 12.2, 13.2, 0.9, 1.9, 0, 'E', 'Potted plant', { w: 1, d: 1 });
+  P((b, w, d) => { FX.baseCab(b, w, d, 3.0, { m: CW }); b.box(-w / 2 - 0.03, w / 2 + 0.03, 3.0, 3.12, -d / 2, d / 2 + 0.04, mat.oak, 0.015); FX.lamp(b, -w / 2 + 0.9, 3.12, -0.15, 0.9); FX.plant(b, w / 2 - 0.8, 3.12, -0.1, 0.55); FX.books(b, -0.6, 0.9, 3.12, -0.5, 0.25, 0.85, false); }, 10.3, 12.2, 16.6, 23.2, 0, 'N', 'Built-in cabinetry');
+  P((b, w, d) => FX.desk(b, w, d, 2.5), 1.0, 3.6, 16.8, 21.0, 0, 'S', 'Desk');
+  P(b => FX.officeChair(b), 3.4, 5.0, 18.1, 19.7, 0, 'N', 'Desk chair', { w: 1.7, d: 1.7 });
+  // ---- dining ----
+  P((b, w, d) => FX.diningTable(b, w, d, 2.5), 30.3, 33.5, 2.3, 9.9, 0, 'E', 'Dining table');
+  const chair = (Xc, Zc, face) => P(b => FX.diningChair(b), Xc - 0.75, Xc + 0.75, Zc - 0.75, Zc + 0.75, 0, face, 'Dining chair', { w: 1.5, d: 1.6 });
+  [3.5, 6.1, 8.7].forEach(Z => { chair(29.4, Z, 'S'); chair(34.4, Z, 'N'); }); chair(31.9, 1.4, 'E'); chair(31.9, 10.8, 'W');
+  P(b => FX.drum(b, CEIL1, 6.0, 1.0), 31.4, 32.4, 5.6, 6.6, 0, 'S', 'Pendant light (illustrative)', { blob: false, w: 1, d: 1 });
+  P((b, w, d) => { // hutch: cabinet base, quartz top, glass-door upper with plates
+    FX.baseCab(b, w, d, 3.0, { m: mat.cab }); b.box(-w / 2 - 0.03, w / 2 + 0.03, 3.0, 3.12, -d / 2, d / 2 + 0.04, mat.counter, 0.015);
+    const z0 = -d / 2, z1 = -d / 2 + 1.08, x0 = -2.7, x1 = 2.7, ya = 3.12, yb = 7.0, C = mat.cab;
+    b.box(x0, x1, ya, yb, z0, z0 + 0.05, C); b.box(x0, x0 + 0.07, ya, yb, z0, z1, C); b.box(x1 - 0.07, x1, ya, yb, z0, z1, C); b.box(x0 - 0.05, x1 + 0.05, yb - 0.12, yb, z0, z1 + 0.06, C, 0.01);
+    [4.35, 5.6].forEach(y => b.box(x0 + 0.07, x1 - 0.07, y, y + 0.06, z0, z1 - 0.06, C));
+    [3.12, 4.41, 5.66].forEach(y => { for (let i = 0; i < 6; i++) { const g = new T.CylinderGeometry(0.36, 0.36, 0.04, 24); g.rotateX(Math.PI / 2 - 0.12); g.translate(x0 + 0.5 + i * 0.85, y + 0.4, z0 + 0.22); b.add(g, X.ceramic); } });
+    const n = 3, dw = (x1 - x0 - 0.14) / n;
+    for (let i = 0; i < n; i++) { const a = x0 + 0.09 + i * dw, c = a + dw - 0.04, zf = z1 - 0.06; b.box(a, a + 0.12, ya + 0.04, yb - 0.16, zf, z1, C); b.box(c - 0.12, c, ya + 0.04, yb - 0.16, zf, z1, C); b.box(a, c, ya + 0.04, ya + 0.16, zf, z1, C); b.box(a, c, yb - 0.28, yb - 0.16, zf, z1, C); b.box(a + 0.12, c - 0.12, ya + 0.16, yb - 0.28, zf + 0.02, zf + 0.03, X.clear); FX.knob(b, i % 2 ? a + 0.2 : c - 0.2, 4.9, z1 + 0.02); }
+  }, 24.12, 26.1, 5.1, 11.1, 0, 'S', '2\'×6\' hutch');
+  P(b => FX.plant(b, 0, 0, 0, 1.1, true), 26.8, 27.8, 0.9, 1.9, 0, 'E', 'Potted plant', { w: 1, d: 1 });
+  // ---- kitchen ----
+  const ki = 'Kitchen cabinetry';
+  P((b, w, d) => FX.baseCab(b, w, d), 27.8, 33.4, 26.2, 28.19, 0, 'W', ki);
+  P((b, w, d) => FX.baseCab(b, w, d), 35.9, 37.6, 26.2, 28.19, 0, 'W', ki);
+  P((b, w, d) => counter(b, w, d), 27.7, 33.4, 26.1, 28.19, 2.9, 'W', 'Quartz countertop', { blob: false });
+  P((b, w, d) => counter(b, w, d), 35.9, 37.5, 26.1, 28.19, 2.9, 'W', 'Quartz countertop', { blob: false });
+  P((b, w, d) => FX.range(b, w, d), 33.4, 35.9, 26.2, 28.19, 0, 'W', 'Range');
+  P((b, w, d) => FX.hood(b, w, d), 33.3, 36.0, 26.6, 28.19, 0, 'W', 'Hood', { blob: false });
+  P((b, w, d) => FX.fridge(b, w, d, 7.0), 24.8, 27.8, 26.0, 28.19, 0, 'W', 'Refrigerator');
+  P((b, w, d) => FX.wallOven(b, w, d, 4.35), 29.5, 32.0, 26.2, 28.19, 3.05, 'W', 'Wall oven / microwave', { blob: false });
+  [[27.8, 29.5], [32.0, 33.3], [36.0, 37.6]].forEach(([a, c]) => P((b, w, d) => FX.wallCab(b, w, d, 2.8), a, c, 26.9, 28.19, 4.6, 'W', ki, { blob: false }));
+  box(27.8, 37.5, 3.05, 4.6, 28.14, 28.19, X.subway, G.f1, { t: 'Tile backsplash' }, 'furn'); box(33.3, 36.0, 4.6, 5.45, 28.14, 28.19, X.subway, G.f1, { t: 'Tile backsplash' }, 'furn');
+  // south run (fronts face north), sink and dishwasher
+  P((b, w, d) => FX.baseCab(b, w, d), 37.6, 39.467, 13.9, 18.1, 0, 'N', ki);
+  P((b, w, d) => FX.baseCab(b, w, d), 37.6, 39.467, 18.1, 20.8, 0, 'N', 'Sink base');
+  P((b, w, d) => FX.baseCab(b, w, d, 2.9, { drawers: true }), 37.6, 39.467, 22.9, 26.2, 0, 'N', ki);
+  P((b, w, d) => FX.baseCab(b, w, d), 37.6, 39.467, 26.2, 28.19, 0, 'N', ki, { blob: false });
+  P((b, w) => FX.dishwasher(b, w), 37.6, 37.6, 20.8, 22.9, 0, 'N', 'Dishwasher', { blob: false, d: 0.1 });
+  box(37.66, 39.4, 0.35, 2.85, 20.8, 22.9, mat.appliance, G.f1, { t: 'Dishwasher' }, 'furn');
+  [[13.8, 18.3, 37.5, 39.467], [20.5, 28.19, 37.5, 39.467], [18.3, 20.5, 37.5, 37.9], [18.3, 20.5, 39.2, 39.467]].forEach(([z0, z1, x0, x1]) => P((b, w, d) => counter(b, w, d), x0, x1, z0, z1, 2.9, 'N', 'Quartz countertop', { blob: false }));
+  P((b, w, d) => FX.basin(b, -w / 2, w / 2, -d / 2, d / 2, 3.05, 0.75), 37.9, 39.2, 18.3, 20.5, 0, 'N', 'Sink', { blob: false });
+  P(b => FX.faucet(b, 0, 3.05, 0, 1), 39.2, 39.4, 19.3, 19.5, 0, 'N', 'Faucet', { blob: false });
+  [[13.9, 17.4], [24.2, 28.19]].forEach(([a, c]) => { P((b, w, d) => FX.wallCab(b, w, d, 2.8), 38.3, 39.467, a, c, 4.6, 'N', ki, { blob: false }); box(39.42, 39.467, 3.05, 4.6, a, c, X.subway, G.f1, { t: 'Tile backsplash' }, 'furn'); });
+  { // island with curved bar top, beverage fridge & microwave drawer
+    const isl = 'Island — beverage fridge & microwave drawer';
+    P((b, w, d) => {
+      const C = CW, zf = d / 2 - 0.06, x0 = -w / 2 + 0.06, bw = (w - 0.12) / 4;
+      b.box(x0, w / 2 - 0.06, 0.35, 2.9, -d / 2 + 0.06, zf, C); b.box(-w / 2 + 0.3, w / 2 - 0.3, 0, 0.35, -d / 2 + 0.3, zf - 0.25, X.kick);
+      const bay = i => [x0 + i * bw + 0.03, x0 + (i + 1) * bw - 0.03];
+      { const [a, c] = bay(0); b.box(a, c, 1.75, 2.84, zf, zf + 0.06, mat.appliance, 0.01); b.box(a + 0.12, c - 0.12, 2.25, 2.7, zf + 0.06, zf + 0.066, X.screen); FX.pullH(b, (a + c) / 2, 2.0, zf + 0.06, 0.6, mat.chrome); FX.shaker(b, a, c, 0.4, 1.7, zf, C, 0.14); FX.pullH(b, (a + c) / 2, 1.45, zf + 0.06, 0.45); }
+      [1, 2].forEach(i => { const [a, c] = bay(i); FX.shaker(b, a, c, 2.2, 2.84, zf, C, 0.14); FX.pullH(b, (a + c) / 2, 2.52, zf + 0.06, 0.45); FX.shaker(b, a, c, 0.4, 2.15, zf, C); FX.pullV(b, i === 1 ? c - 0.17 : a + 0.17, 1.75, zf + 0.06, 0.45); });
+      { const [a, c] = bay(3); b.box(a, c, 0.4, 2.84, zf, zf + 0.06, mat.appliance, 0.01); b.box(a + 0.12, c - 0.12, 0.6, 2.66, zf + 0.06, zf + 0.066, X.screen); FX.pullV(b, a + 0.12, 1.6, zf + 0.066, 1.2, mat.chrome); }
+      b.sub(c => { for (let i = 0; i < 4; i++) { const [a, e] = bay(i); FX.shaker(c, a, e, 0.4, 2.84, d / 2 - 0.06, C); } }, 0, 0, 0, Math.PI);
+      [1, -1].forEach(s => b.sub(c => { const n = 3, pw = (d - 0.2) / n; for (let i = 0; i < n; i++) FX.shaker(c, -d / 2 + 0.1 + i * pw + 0.02, -d / 2 + 0.1 + (i + 1) * pw - 0.02, 0.4, 2.84, w / 2 - 0.06, C); }, 0, 0, 0, s * Math.PI / 2));
+    }, 29.0, 34.5, 17.6, 22.6, 0, 'E', isl);
+    const s = new T.Shape(); const pt = (Xp, Zp) => [Zp - CZ, -(Xp - CX)];
+    s.moveTo(...pt(34.5, 16.8)); s.lineTo(...pt(34.5, 23.0)); s.lineTo(...pt(27.0, 23.0)); s.quadraticCurveTo(...pt(26.6, 16.8), ...pt(31.2, 16.8)); s.lineTo(...pt(34.5, 16.8));
+    const g = new T.ExtrudeGeometry(s, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 2, curveSegments: 32 }); g.rotateX(-Math.PI / 2); g.translate(0, 2.915, 0); worldUV(g);
+    tag(new T.Mesh(g, mat.counter), G.f1, { t: isl }, 'furn');
+    [[27.2, 20.3], [27.7, 18.4], [28.9, 17.0]].forEach(([Xs, Zs]) => P(b => FX.stool(b, 2.2), Xs - 0.6, Xs + 0.6, Zs - 0.6, Zs + 0.6, 0, Math.atan2(20.1 - Zs, 31.75 - Xs), 'Counter stool', { w: 1.2, d: 1.2 }));
+    [18.6, 20.1, 21.6].forEach(Zp => P(b => FX.pendant(b, CEIL1, 6.25, 0.42), 31.25, 32.25, Zp - 0.5, Zp + 0.5, 0, 'S', 'Pendant light (illustrative)', { blob: false, w: 1, d: 1 }));
+  }
+  // ---- mudroom / laundry / lav / pantry / study ----
+  P((b, w, d) => { const C = CW; b.box(-w / 2, -w / 2 + 0.08, 0, 1.5, -d / 2, d / 2, C); b.box(w / 2 - 0.08, w / 2, 0, 1.5, -d / 2, d / 2, C); b.box(-w / 2, w / 2, 0, 0.3, -d / 2, d / 2 - 0.1, C); b.box(-0.04, 0.04, 0.3, 1.5, -d / 2, d / 2, C); b.box(-w / 2, w / 2, 0.3, 1.5, -d / 2, -d / 2 + 0.05, C);
+    b.box(-w / 2 - 0.03, w / 2 + 0.03, 1.5, 1.6, -d / 2, d / 2 + 0.04, mat.oak, 0.02); b.box(-w / 2 + 0.05, w / 2 - 0.05, 1.6, 1.78, -d / 2 + 0.1, d / 2 - 0.05, mat.fabric2, 0.07);
+    [-1, 1].forEach(s => b.box(s > 0 ? 0.15 : -w / 2 + 0.2, s > 0 ? w / 2 - 0.2 : -0.15, 0.32, 1.15, -d / 2 + 0.15, d / 2 - 0.12, X.wicker, 0.04)); }, 30.1, 33.45, 29.0, 31.0, 0, 'E', 'Mudroom bench');
+  P((b, w, d) => { const C = CW, h = 2.7, n = 3, cw = w / n;
+    b.box(-w / 2, w / 2, 0, 0.08, -d / 2, d / 2, C); b.box(-w / 2, w / 2, h - 0.08, h, -d / 2, d / 2 + 0.04, C, 0.01); b.box(-w / 2, w / 2, 0, h, -d / 2, -d / 2 + 0.04, C); b.box(-w / 2, w / 2, 1.25, 1.31, -d / 2, d / 2, C);
+    for (let i = 0; i <= n; i++) { const x = Math.max(-w / 2 + 0.04, Math.min(w / 2 - 0.04, -w / 2 + i * cw)); b.box(x - 0.04, x + 0.04, 0, h, -d / 2, d / 2, C); }
+    for (let i = 0; i < n; i++) { const x = -w / 2 + (i + 0.5) * cw; b.box(x - cw / 2 + 0.12, x + cw / 2 - 0.12, 0.08, 1.0, -d / 2 + 0.1, d / 2 - 0.08, X.wicker, 0.04); }
+    b.box(-w / 2, w / 2, -0.55, -0.1, -d / 2, -d / 2 + 0.06, C); for (let i = 0; i < 5; i++) { const x = -w / 2 + 0.35 + i * (w - 0.7) / 4; b.rod([x, -0.32, -d / 2 + 0.06], [x, -0.24, -d / 2 + 0.3], 0.025, X.brass, 6); }
+    b.col(b.box(-w / 2 + 0.1, -w / 2 + 1.1, -2.85, -0.3, -d / 2 + 0.08, -d / 2 + 0.45, X.cloth, 0.08), 0x2f3b4c); b.col(b.box(0.2, 1.0, -2.4, -0.3, -d / 2 + 0.08, -d / 2 + 0.4, X.cloth, 0.08), 0x9e3d32); }, 30.1, 33.45, 28.8, 30.0, 4.8, 'E', 'Cubbies', { blob: false });
+  P((b, w, d) => FX.washerDryer(b, w, d, true), 10.0, 12.6, 25.4, 28.1, 0, 'S', 'Washer & dryer (stacked)');
+  P((b, w, d) => { FX.baseCab(b, w, d, 2.9, { m: CW }); b.box(-w / 2 - 0.02, w / 2 + 0.02, 2.9, 3.05, -d / 2, d / 2 + 0.04, mat.counter, 0.015); }, 12.8, 20.4, 26.0, 28.1, 0, 'W', 'Laundry counter');
+  P((b, w, d) => FX.toilet(b, w, d), 11.6, 13.6, 29.5, 31.2, 0, 'N', 'Toilet');
+  P((b, w, d) => FX.vanity(b, w, d, { n: 1 }), 8.45, 10.3, 33.4, 35.2, 0, 'S', 'Lav vanity');
+  P((b, w, d) => FX.shelves(b, w, d, 7.2, { kind: 'pantry' }), 14.15, 19.6, 28.8, 30.2, 0, 'E', 'Pantry shelving');
+  P((b, w, d) => FX.shelves(b, w, d, 7.2, { m: CW }), 0.65, 7.9, 34.0, 35.2, 0, 'W', 'Study shelves');
+  P((b, w, d) => FX.desk(b, w, d, 2.5), 0.9, 3.4, 29.0, 33.0, 0, 'S', 'Study desk');
+  P(b => FX.officeChair(b), 3.2, 4.8, 30.2, 31.8, 0, 'N', 'Desk chair', { w: 1.7, d: 1.7 });
+  // ---- 2nd floor bedrooms ----
+  P((b, w, d) => FX.bed(b, w, d), 5.6, 10.6, 21.4, 28.15, y2, 'W', 'Queen bed');
+  P((b, w, d) => FX.nightstand(b, w, d), 3.9, 5.3, 26.6, 28.15, y2, 'W', 'Night stand'); P((b, w, d) => FX.nightstand(b, w, d), 10.9, 12.15, 26.6, 28.15, y2, 'W', 'Night stand');
+  P((b, w, d) => FX.bed(b, w, d, { frame: X.velvet, acc: X.accent2 }), 9.3, 14.3, 5.2, 11.88, y2, 'W', 'Queen bed');
+  P((b, w, d) => FX.nightstand(b, w, d, 2.1, { wood: X.walnut }), 7.6, 9.0, 10.4, 11.88, y2, 'W', 'Night stand'); P((b, w, d) => FX.nightstand(b, w, d, 2.1, { wood: X.walnut }), 14.6, 16.0, 10.4, 11.88, y2, 'W', 'Night stand');
+  P((b, w, d) => FX.rug(b, w, d, FX.RUGS.soft), 30, 36, 14, 24, y2 + 0.004, 'S', 'Area rug', { blob: false });
+  P((b, w, d) => FX.bed(b, w, d, { frame: X.charcoal, thr: X.accent }), 24.9, 31.8, 18.6, 25.0, y2, 'S', 'King bed');
+  P((b, w, d) => FX.nightstand(b, w, d), 25.0, 26.6, 16.9, 18.4, y2, 'S', 'Night stand'); P((b, w, d) => FX.nightstand(b, w, d), 25.0, 26.6, 25.2, 26.7, y2, 'S', 'Night stand');
+  P((b, w, d) => FX.dresser(b, w, d, 3.0), 33.9, 39.4, 8.8, 10.6, y2, 'E', '6\' dresser');
+  P((b, w, d) => FX.dresser(b, w, d, 2.6, { lamp: false }), 37.9, 39.45, 16.5, 20.5, y2, 'N', 'Bureau');
+  P((b, w) => FX.tvWall(b, w, 2.6), 39.27, 39.39, 16.8, 20.2, y2 + 3.6, 'N', 'TV', { blob: false });
+  P(b => FX.plant(b, 0, 0, 0, 1.1, true), 37.8, 38.8, 21.6, 22.6, y2, 'E', 'Potted plant', { w: 1, d: 1 });
   // hall bath
-  F(12.62, 15.2, y2, y2 + 0.4, 25.3, 28.15, mat.porcelain, 'Shower base'); F(15.15, 15.2, y2 + 0.4, y2 + 6.8, 25.3, 28.15, mat.glass, 'Glass shower panel');
-  F(16.0, 17.7, y2, y2 + 1.4, 23.9, 25.5, mat.porcelain, 'Toilet'); F(16.0, 17.7, y2 + 1.4, y2 + 2.8, 23.9, 24.5, mat.porcelain, 'Toilet');
-  F(20.7, 24.5, y2, y2 + 2.8, 28.55, 30.18, mat.cabW, '48" vanity'); F(20.7, 24.5, y2 + 2.8, y2 + 2.95, 28.5, 30.18, mat.counter, '48" vanity'); F(21.1, 24.1, y2 + 3.6, y2 + 6.2, 30.13, 30.18, mat.chrome, 'Mirror');
-  F(18.2, 20.2, y2, y2 + 7.0, 23.9, 25.4, mat.cabW, '24" linen');
+  P((b, w, d) => { b.box(-w / 2, w / 2, 0, 0.35, -d / 2, d / 2, mat.porcelain, 0.03); b.cyl(0, 0, 0.12, 0.12, 0.35, 0.356, X.iron, 14); }, 12.62, 15.2, 25.3, 28.15, y2, 'S', 'Shower base', { blob: false });
+  box(15.15, 15.2, y2 + 0.4, y2 + 6.8, 25.3, 28.15, X.clear, G.f2, { t: 'Glass shower panel' }, 'furn');
+  P(b => FX.showerFix(b, 6.6), 12.62, 12.62, 26.5, 26.9, y2, 'S', 'Shower head & valve', { blob: false, d: 0.01 });
+  P((b, w, d) => FX.toilet(b, w, d), 16.0, 17.7, 23.9, 25.5, y2, 'E', 'Toilet');
+  P((b, w, d) => FX.vanity(b, w, d, { n: 1 }), 20.7, 24.5, 28.55, 30.18, y2, 'W', '48" vanity');
+  P((b, w, d) => FX.tallCab(b, w, d, 7.0), 18.2, 20.2, 23.9, 25.4, y2, 'E', '24" linen');
   // primary bath
-  F(27.8, 29.6, y2, y2 + 2.8, 1.6, 7.8, mat.cabW, 'Double vanity'); F(27.8, 29.7, y2 + 2.8, y2 + 2.95, 1.6, 7.8, mat.counter, 'Double vanity');
-  F(36.7, 39.45, y2, y2 + 0.4, 3.4, 8.18, mat.porcelain, 'Shower'); F(36.65, 36.7, y2 + 0.4, y2 + 6.8, 3.4, 8.18, mat.glass, 'Glass shower enclosure');
-  F(37.7, 39.4, y2, y2 + 1.4, 0.6, 2.2, mat.porcelain, 'Toilet'); F(38.8, 39.4, y2 + 1.4, y2 + 2.8, 0.6, 2.2, mat.porcelain, 'Toilet');
-  F(30.0, 32.6, y2, y2 + 7.0, 0.62, 2.0, mat.cabW, '24" linen');
+  P((b, w, d) => FX.vanity(b, w, d, { n: 2 }), 27.8, 29.6, 1.6, 7.8, y2, 'S', 'Double vanity');
+  P((b, w, d) => { b.box(-w / 2, w / 2, 0, 0.35, -d / 2, d / 2, mat.porcelain, 0.03); b.cyl(0, 0, 0.12, 0.12, 0.35, 0.356, X.iron, 14); }, 36.7, 39.45, 3.4, 8.18, y2, 'S', 'Shower', { blob: false });
+  box(36.65, 36.7, y2 + 0.4, y2 + 6.8, 3.4, 8.18, X.clear, G.f2, { t: 'Glass shower enclosure' }, 'furn');
+  P(b => FX.showerFix(b, 6.6), 37.8, 38.2, 8.18, 8.18, y2, 'W', 'Shower head & valve', { blob: false, d: 0.01 });
+  P((b, w, d) => FX.toilet(b, w, d), 37.7, 39.4, 0.6, 2.2, y2, 'N', 'Toilet');
+  P((b, w, d) => FX.tallCab(b, w, d, 7.0), 30.0, 32.6, 0.62, 2.0, y2, 'E', '24" linen');
   // closets
-  F(0.65, 6.6, y2 + 5.5, y2 + 5.6, 9.95, 11.85, mat.cabW, 'Closet shelf'); F(0.65, 6.6, y2 + 5.5, y2 + 5.6, 12.3, 14.2, mat.cabW, 'Closet shelf');
-  F(20.3, 27.3, y2 + 5.5, y2 + 5.6, 0.65, 2.0, mat.cabW, 'Walk-in closet shelving'); F(20.3, 27.3, y2, y2 + 7.0, 10.2, 11.85, mat.cabW, 'Closet storage system by owner');
-  // basement
-  F(1.0, 4.0, BASE + 0.33, BASE + 5.5, 26.0, 28.5, mat.appliance, 'Furnace / mechanical'); F(1.0, 3.0, BASE + 0.33, BASE + 5.0, 29.0, 31.0, mat.appliance, 'Water heater');
+  P((b, w, d) => FX.closet(b, w, d), 0.65, 6.6, 9.95, 11.85, y2, 'W', 'Closet', { blob: false });
+  P((b, w, d) => FX.closet(b, w, d), 0.65, 6.6, 12.3, 14.2, y2, 'E', 'Closet', { blob: false });
+  P((b, w, d) => FX.closet(b, w, d), 20.3, 27.3, 0.65, 2.0, y2, 'E', 'Walk-in closet shelving', { blob: false });
+  P((b, w, d) => { const tw = 1.8, sw = (w - tw) / 2; b.sub(c => FX.closet(c, sw, d, { shelf: 5.6 }), -w / 2 + sw / 2, 0, 0); b.sub(c => FX.closet(c, sw, d, { shelf: 5.6 }), w / 2 - sw / 2, 0, 0);
+    b.box(-tw / 2, tw / 2, 0, 7.0, -d / 2, d / 2 - 0.06, CW); for (let i = 0; i < 4; i++) { const y0 = 0.15 + i * 0.75; FX.shaker(b, -tw / 2 + 0.04, tw / 2 - 0.04, y0, y0 + 0.7, d / 2 - 0.06, CW, 0.12); FX.knob(b, 0, y0 + 0.35, d / 2 + 0.02); }
+    for (let y = 3.6; y < 6.9; y += 1.1) b.col(b.box(-tw / 2 + 0.15, tw / 2 - 0.15, y, y + 0.45, -d / 2 + 0.1, d / 2 - 0.3, X.cloth), [0xe8e4da, 0x8d9aa6, 0x2f3b4c][Math.round(y) % 3]); }, 20.3, 27.3, 10.2, 11.85, y2, 'W', 'Closet storage system by owner', { blob: false });
+  // basement mechanicals
+  P((b, w, d) => { b.box(-w / 2 + 0.15, w / 2 - 0.15, 0, 4.2, -d / 2 + 0.2, d / 2 - 0.1, mat.metal, 0.02); [[0.2, 2.0], [2.1, 4.1]].forEach(([y0, y1]) => b.box(-w / 2 + 0.25, w / 2 - 0.25, y0, y1, d / 2 - 0.1, d / 2 - 0.07, X.enamel, 0.01)); for (let y = 2.4; y < 3.9; y += 0.18) b.box(-w / 2 + 0.5, w / 2 - 0.5, y, y + 0.05, d / 2 - 0.07, d / 2 - 0.06, X.kick);
+    b.box(-w / 2 + 0.1, w / 2 - 0.1, 4.2, 5.17, -d / 2 + 0.15, d / 2 - 0.15, mat.metal); b.rod([0.4, 4.2, -0.2], [0.4, 6.0, -0.2], 0.17, mat.metal, 14); }, 1.0, 4.0, 26.0, 28.5, BASE + 0.33, 'S', 'Furnace / mechanical');
+  P((b, w, d) => { b.cyl(0, 0, 0.9, 0.9, 0.1, 4.55, X.enamel, 28); b.cyl(0, 0, 0.92, 0.88, 4.55, 4.67, X.enamel, 28); b.cyl(0, 0, 0.88, 0.88, 0, 0.1, X.kick, 28); b.rod([0, 4.67, 0], [0, 6.0, 0], 0.13, mat.metal, 12); [-0.45, 0.45].forEach(x => b.rod([x, 4.6, 0.2], [x, 6.0, 0.2], 0.04, mat.metal, 8)); }, 1.0, 3.0, 29.0, 31.0, BASE + 0.33, 'S', 'Water heater');
 }
 
 // =================== FRAMING (instanced) ===================
@@ -1185,37 +1750,88 @@ const BSM = (() => {
   const wallMat = M({ color: 0xefeae0 }), ceilDry = M({ color: 0xf7f6f2 }), ceilDrop = M({ map: gridT }), felt = M({ color: 0x1f6b45, roughness: 0.9 }), blueT = M({ color: 0x1f4e8c, roughness: 0.6 }), steel = M({ color: 0x3a3f44, metalness: 0.5, roughness: 0.4 }), rubber = M({ color: 0x202224 });
   const selMat = new T.MeshBasicMaterial({ color: 0xc8102e, wireframe: true });
   // ---------- furniture library (local: width along x, depth along z, front = +z, origin at floor centre) ----------
-  const bx = (g, x0, x1, y0, y1, z0, z1, m) => { const geo = new T.BoxGeometry(x1 - x0, y1 - y0, z1 - z0); geo.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); const mesh = new T.Mesh(geo, m); mesh.castShadow = mesh.receiveShadow = true; g.add(mesh); return mesh; };
-  const cyl = (g, x, z, r, y0, y1, m) => { const c = new T.Mesh(new T.CylinderGeometry(r, r, y1 - y0, 14), m); c.position.set(x, (y0 + y1) / 2, z); c.castShadow = true; g.add(c); };
-  const sofaB = (g, w, d) => { bx(g, -w / 2, w / 2, 0.35, 1.45, -d / 2, d / 2, mat.fabric); bx(g, -w / 2, w / 2, 1.45, 2.8, -d / 2, -d / 2 + 0.7, mat.fabric); bx(g, -w / 2, -w / 2 + 0.5, 1.45, 2.2, -d / 2, d / 2, mat.fabric); bx(g, w / 2 - 0.5, w / 2, 1.45, 2.2, -d / 2, d / 2, mat.fabric); bx(g, -w / 2 + 0.1, w / 2 - 0.1, 0, 0.35, -d / 2 + 0.1, d / 2 - 0.1, mat.black); };
-  const stool = (g, x, z) => { cyl(g, x, z, 0.6, 2.4, 2.55, mat.oak); cyl(g, x, z, 0.06, 0, 2.4, mat.metal); };
-  const chairB = (g, x, z) => { bx(g, x - 0.75, x + 0.75, 1.45, 1.55, z - 0.75, z + 0.75, mat.oak); bx(g, x - 0.75, x + 0.75, 1.55, 3.1, z + 0.65, z + 0.75, mat.oak); [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => bx(g, x + a * 0.6 - 0.05, x + a * 0.6 + 0.05, 0, 1.45, z + b * 0.6 - 0.05, z + b * 0.6 + 0.05, mat.oak)); };
-  const bedB = (g, w, d) => { bx(g, -w / 2, w / 2, 0.3, 1.2, -d / 2, d / 2, mat.oak); bx(g, -w / 2 + 0.1, w / 2 - 0.1, 1.2, 2.0, -d / 2 + 0.2, d / 2 - 0.1, mat.bed); bx(g, -w / 2, w / 2, 0, 4.0, -d / 2, -d / 2 + 0.2, mat.oak); bx(g, -w / 2 + 0.05, w / 2 - 0.05, 2.0, 2.08, d / 2 - 2.2, d / 2 - 0.05, mat.fabric2); [-1, 1].forEach(s => bx(g, s > 0 ? 0.15 : -w / 2 + 0.4, s > 0 ? w / 2 - 0.4 : -0.15, 2.0, 2.45, -d / 2 + 0.3, -d / 2 + 1.5, mat.bed)); };
+  // Built from the same illustrative models as the house furniture (FX); each piece gets a soft contact shadow.
+  const mk = (w, d, fn, shadow = true) => g => { const b = FX.Bld(); fn(b); b.done(g); if (shadow) FX.blob(g, w, d); };
+  const ballM = M({ vertexColors: true, roughness: 0.12 }), toteM = M({ vertexColors: true, roughness: 0.45 }), netM = M({ color: 0x1b1d20, roughness: 0.9 });
+  const ppT = tex(cvs(512, (g, n, m) => { g.fillStyle = '#1f4e8c'; g.fillRect(0, 0, n, m); g.fillStyle = '#f4f4f0'; g.fillRect(0, 0, n, 6); g.fillRect(0, m - 6, n, 6); g.fillRect(0, 0, 6, m); g.fillRect(n - 6, 0, 6, m); g.fillRect(0, m / 2 - 2, n, 4); for (let i = 0; i < 9000; i++) { g.fillStyle = 'rgba(255,255,255,.035)'; g.fillRect(Math.random() * n, Math.random() * m, 1, 1); } }, 284), 9, 5); ppT.offset.set(0.5, 0.5);
+  const ppM = M({ map: ppT, roughness: 0.55 });
+  const BALL = [0xf2efe6, 0xe8b400, 0x1f4fa8, 0xc8231f, 0x5b2a86, 0xe36a12, 0x1d6b3a, 0x7a1f1f, 0x111111];
   const LIB = {
-    sofa: ['Sofa 7\'', 7, 3, g => sofaB(g, 7, 3)], loveseat: ['Loveseat', 5, 3, g => sofaB(g, 5, 3)], armchair: ['Armchair', 3, 3, g => sofaB(g, 3, 3)],
-    sectional: ['Sectional (L)', 9.5, 7, g => { bx(g, -4.75, 4.75, 0.35, 1.45, -3.5, -0.5, mat.fabric); bx(g, -4.75, 4.75, 1.45, 2.8, -3.5, -2.8, mat.fabric); bx(g, 1.75, 4.75, 0.35, 1.45, -0.5, 3.5, mat.fabric); bx(g, 4.05, 4.75, 1.45, 2.8, -3.5, 3.5, mat.fabric); bx(g, -4.75, -4.25, 1.45, 2.2, -3.5, -0.5, mat.fabric); }],
-    coffee: ['Coffee table', 4, 2, g => { bx(g, -2, 2, 1.25, 1.4, -1, 1, mat.oak); bx(g, -1.9, 1.9, 0, 1.25, -0.9, 0.9, mat.oak); }],
-    tv: ['TV & media console', 6, 1.5, g => { bx(g, -3, 3, 0, 2, -0.75, 0.75, mat.oak); bx(g, -2.6, 2.6, 3.0, 6.0, -0.75, -0.6, mat.black); }],
-    rug: ['Area rug 8×10', 10, 8, g => { bx(g, -5, 5, 0, 0.04, -4, 4, mat.rug); }],
-    bar: ['Wet bar + 3 stools', 8, 4.5, g => { bx(g, -4, 4, 0, 3.4, -2.25, -0.25, mat.cab); bx(g, -4.1, 4.1, 3.4, 3.55, -2.3, 0, mat.counter); [-2.5, 0, 2.5].forEach(x => stool(g, x, 1.3)); }],
-    pool: ['Pool table 8\'', 8.3, 4.6, g => { bx(g, -4.15, 4.15, 2.3, 2.6, -2.3, 2.3, mat.oak); bx(g, -3.8, 3.8, 2.6, 2.62, -1.95, 1.95, felt); bx(g, -3.6, 3.6, 0, 2.3, -1.8, 1.8, mat.oak); }],
-    pingpong: ['Ping-pong table', 9, 5, g => { bx(g, -4.5, 4.5, 2.4, 2.5, -2.5, 2.5, blueT); bx(g, -0.03, 0.03, 2.5, 3.0, -2.6, 2.6, mat.bed); [[-4, -2], [4, -2], [-4, 2], [4, 2]].forEach(([x, z]) => cyl(g, x, z, 0.08, 0, 2.4, steel)); }],
-    dining: ['Table + 6 chairs', 6, 3.5, g => { bx(g, -3, 3, 2.35, 2.5, -1.75, 1.75, mat.oak); [[-2.6, -1.4], [2.6, -1.4], [-2.6, 1.4], [2.6, 1.4]].forEach(([x, z]) => bx(g, x, x + 0.15, 0, 2.35, z, z + 0.15, mat.oak)); [-1.8, 0, 1.8].forEach(x => { chairB(g, x, 2.5); const h = new T.Group(); h.rotation.y = Math.PI; g.add(h); chairB(h, -x, 2.5); }); }],
-    bedQ: ['Queen bed', 5, 6.8, g => bedB(g, 5, 6.8)], bedK: ['King bed', 6.4, 6.8, g => bedB(g, 6.4, 6.8)],
-    night: ['Night stand', 1.8, 1.5, g => bx(g, -0.9, 0.9, 0, 2.1, -0.75, 0.75, mat.oak)], dresser: ['Dresser', 5, 1.7, g => bx(g, -2.5, 2.5, 0, 3, -0.85, 0.85, mat.oak)],
-    desk: ['Desk + chair', 5, 4.5, g => { bx(g, -2.5, 2.5, 2.35, 2.5, -2.25, -0.25, mat.oak); bx(g, -2.4, -1.4, 0, 2.35, -2.2, -0.3, mat.oak); bx(g, 1.4, 2.4, 0, 2.35, -2.2, -0.3, mat.oak); const h = new T.Group(); h.rotation.y = Math.PI; g.add(h); chairB(h, 0, -1.1); }],
-    shelf: ['Bookshelf', 3, 1, g => { bx(g, -1.5, 1.5, 0, 6.5, -0.5, 0.5, mat.oak); for (let y = 1.3; y < 6.4; y += 1.3) bx(g, -1.4, 1.4, y, y + 0.9, -0.45, 0.4, mat.fabric2); }],
-    storage: ['Storage shelving', 6, 1.5, g => { [-2.9, 2.9].forEach(x => [-0.7, 0.7].forEach(z => cyl(g, x, z, 0.06, 0, 6, steel))); [0.4, 2, 3.6, 5.2].forEach(y => bx(g, -3, 3, y, y + 0.08, -0.75, 0.75, steel)); }],
-    treadmill: ['Treadmill', 2.8, 6.5, g => { bx(g, -1.2, 1.2, 0, 0.7, -3.2, 3.2, rubber); bx(g, -1.4, -1.25, 0.7, 4.3, -3.2, -2.8, steel); bx(g, 1.25, 1.4, 0.7, 4.3, -3.2, -2.8, steel); bx(g, -1.4, 1.4, 4.0, 4.5, -3.2, -2.6, steel); }],
-    rack: ['Squat rack', 5, 4, g => { [[-2.3, -1.8], [2.3, -1.8], [-2.3, 1.8], [2.3, 1.8]].forEach(([x, z]) => bx(g, x - 0.15, x + 0.15, 0, 7.5, z - 0.15, z + 0.15, steel)); bx(g, -2.5, 2.5, 7.3, 7.5, -1.9, 1.9, steel); bx(g, -3.5, 3.5, 4.3, 4.45, -0.05, 0.05, mat.chrome); }],
-    bench: ['Weight bench', 1.5, 4.2, g => { bx(g, -0.6, 0.6, 1.3, 1.6, -2.1, 2.1, rubber); bx(g, -0.15, 0.15, 0, 1.3, -1.8, 1.8, steel); }],
-    mat: ['Exercise mat', 2.2, 6, g => bx(g, -1.1, 1.1, 0, 0.05, -3, 3, blueT)],
-    toilet: ['Toilet', 1.7, 2.4, g => { bx(g, -0.65, 0.65, 0, 1.4, -0.4, 1.2, mat.porcelain); bx(g, -0.85, 0.85, 1.4, 2.8, -1.2, -0.4, mat.porcelain); }],
-    vanity: ['Vanity 36"', 3, 1.8, g => { bx(g, -1.5, 1.5, 0, 2.8, -0.9, 0.9, mat.cabW); bx(g, -1.55, 1.55, 2.8, 2.95, -0.95, 0.95, mat.counter); bx(g, -1.2, 1.2, 3.6, 6.2, -0.95, -0.9, mat.chrome); }],
-    shower: ['Shower 3×3', 3.2, 3.2, g => { bx(g, -1.6, 1.6, 0, 0.35, -1.6, 1.6, mat.porcelain); bx(g, -1.6, 1.6, 0.35, 6.8, 1.55, 1.6, mat.glass); bx(g, 1.55, 1.6, 0.35, 6.8, -1.6, 1.6, mat.glass); }],
-    fridge: ['Beverage fridge', 2, 2, g => bx(g, -1, 1, 0, 2.9, -1, 1, mat.appliance)],
-    door: ['Door 32" (in a wall gap)', 3.2, 0.5, g => { bx(g, -1.6, -1.35, 0, 6.95, -0.3, 0.3, mat.trim); bx(g, 1.35, 1.6, 0, 6.95, -0.3, 0.3, mat.trim); bx(g, -1.6, 1.6, 6.7, 6.95, -0.3, 0.3, mat.trim); const h = new T.Group(); h.position.set(-1.33, 0, 0); h.rotation.y = -1.2; g.add(h); bx(h, 0, 2.62, 0, 6.7, -0.06, 0.06, mat.trim); }],
-    lamp: ['Floor lamp', 1.2, 1.2, g => { cyl(g, 0, 0, 0.5, 0, 0.1, mat.black); cyl(g, 0, 0, 0.05, 0, 5.2, mat.black); cyl(g, 0, 0, 0.55, 5.0, 5.9, M({ color: 0xfff4dc, emissive: 0xffd9a0, emissiveIntensity: 0.4 })); }],
+    sofa: ['Sofa 7\'', 7, 3, mk(7, 3, b => FX.sofa(b, 7, 3))], loveseat: ['Loveseat', 5, 3, mk(5, 3, b => FX.sofa(b, 5, 3))], armchair: ['Armchair', 3, 3, mk(3, 3, b => FX.armchair(b, 3, 3, { fab: mat.fabric2 }))],
+    sectional: ['Sectional (L)', 9.5, 7, mk(9.5, 7, b => FX.sectional(b, 9.5, 7))],
+    coffee: ['Coffee table', 4, 2, mk(4, 2, b => FX.coffee(b, 4, 2))],
+    tv: ['TV & media console', 6, 1.5, mk(6, 1.5, b => FX.mediaConsole(b, 6, 1.5))],
+    rug: ['Area rug 8×10', 10, 8, mk(10, 8, b => FX.rug(b, 10, 8, FX.RUGS.dark), false)],
+    bar: ['Wet bar + 3 stools', 8, 4.5, mk(8, 4.5, b => {
+      [[-2.475, 3.05, 3.4], [-0.3, 1.3, 2.85], [2.175, 3.65, 3.4]].forEach(([x, w, h]) => b.sub(c => FX.baseCab(c, w, 2.0, h, { m: mat.cab }), x, 0, -1.25)); b.box(-0.95, 0.35, 2.85, 3.4, -2.25, -0.31, mat.cab);
+      b.box(-4.1, -0.9, 3.4, 3.55, -2.3, 0.05, mat.counter); b.box(0.3, 4.1, 3.4, 3.55, -2.3, 0.05, mat.counter); b.box(-0.9, 0.3, 3.4, 3.55, -2.3, -1.6, mat.counter); b.box(-0.9, 0.3, 3.4, 3.55, -0.6, 0.05, mat.counter);
+      FX.basin(b, -0.9, 0.3, -1.6, -0.6, 3.55, 0.6); FX.faucet(b, -0.3, 3.55, -1.95, 0.8);
+      [-2.5, 0, 2.5].forEach(x => b.sub(c => FX.stool(c, 2.65), x, 0, 1.3));
+    })],
+    pool: ['Pool table 8\'', 8.3, 4.6, mk(8.3, 4.6, b => {
+      const W = FX.X.walnut; b.box(-3.85, 3.85, 1.95, 2.45, -2.0, 2.0, W, 0.03); b.box(-3.72, 3.72, 2.45, 2.55, -1.87, 1.87, felt);
+      [-1, 1].forEach(s => { b.box(-4.15, 4.15, 2.45, 2.7, s > 0 ? 1.87 : -2.3, s > 0 ? 2.3 : -1.87, W, 0.04); b.box(s > 0 ? 3.72 : -4.15, s > 0 ? 4.15 : -3.72, 2.45, 2.7, -1.87, 1.87, W, 0.04);
+        b.box(-3.6, 3.6, 2.55, 2.66, s > 0 ? 1.76 : -1.87, s > 0 ? 1.87 : -1.76, felt, 0.02); b.box(s > 0 ? 3.61 : -3.72, s > 0 ? 3.72 : -3.61, 2.55, 2.66, -1.7, 1.7, felt, 0.02); });
+      [[-3.78, -1.93], [0, -1.98], [3.78, -1.93], [-3.78, 1.93], [0, 1.98], [3.78, 1.93]].forEach(([x, z]) => b.cyl(x, z, 0.17, 0.17, 2.5, 2.71, mat.black, 16));
+      [[-3.2, -1.45], [3.2, -1.45], [-3.2, 1.45], [3.2, 1.45]].forEach(([x, z]) => b.lathe([[0, 0], [0.3, 0], [0.3, 0.16], [0.18, 0.3], [0.24, 0.9], [0.14, 1.5], [0.22, 1.85], [0.22, 1.96], [0, 1.96]], x, 0, z, W, 18));
+      const r = 0.094, y = 2.55 + r; let k = 0;
+      for (let row = 0; row < 5; row++) for (let j = 0; j <= row; j++) { const x = 1.9 + row * r * 1.75, z = (j - row / 2) * r * 2.02; b.col(b.sph(x, y, z, r, r, r, ballM, 0, 0, 0, 12), BALL[1 + (k++ % 8)]); }
+      b.col(b.sph(-1.9, y, 0.1, r, r, r, ballM, 0, 0, 0, 12), BALL[0]);
+      b.rod([-3.3, 2.6, 1.2], [1.4, 2.6, 0.7], 0.022, W, 8, 0.012);
+    })],
+    pingpong: ['Ping-pong table', 9, 5, mk(9, 5, b => {
+      b.box(-4.5, 4.5, 2.38, 2.5, -2.5, 2.5, ppM, 0.01); b.box(-0.025, 0.025, 2.5, 3.0, -2.75, 2.75, netM); b.box(-0.03, 0.03, 2.93, 3.0, -2.75, 2.75, mat.bed);
+      [-2.78, 2.78].forEach(z => b.cyl(0, z, 0.04, 0.04, 2.3, 3.02, steel, 8));
+      [-1, 1].forEach(s => { [-1, 1].forEach(t => b.rod([s * 3.6, 0.1, t * 2.0], [s * 3.3, 2.38, t * 1.9], 0.06, steel, 8)); b.rod([s * 3.55, 0.6, -2.0], [s * 3.55, 0.6, 2.0], 0.045, steel, 8); b.rod([s * 1.0, 2.25, -1.9], [s * 3.3, 2.25, -1.9], 0.04, steel, 6); b.rod([s * 1.0, 2.25, 1.9], [s * 3.3, 2.25, 1.9], 0.04, steel, 6);
+        [-1, 1].forEach(t => b.sph(s * 3.6, 0.08, t * 2.0, 0.09, 0.08, 0.09, rubber, 0, 0, 0, 10)); });
+      [[-2.2, 0.8, 0xc8231f], [2.4, -0.9, 0x1b1d20]].forEach(([x, z, c]) => { b.col(b.cbox(x, 2.515, z, 0.5, 0.03, 0.55, ballM, 0.1), c); b.cbox(x + 0.42, 2.515, z, 0.42, 0.03, 0.09, FX.X.walnut, 0.02); });
+    })],
+    dining: ['Table + 6 chairs', 6, 3.5, mk(6, 3.5, b => { FX.diningTable(b, 6, 3.5); [-1.8, 0, 1.8].forEach(x => { b.sub(c => FX.diningChair(c), x, 0, 2.35, Math.PI); b.sub(c => FX.diningChair(c), x, 0, -2.35); }); })],
+    bedQ: ['Queen bed', 5, 6.8, mk(5, 6.8, b => FX.bed(b, 5, 6.8))], bedK: ['King bed', 6.4, 6.8, mk(6.4, 6.8, b => FX.bed(b, 6.4, 6.8, { frame: FX.X.charcoal }))],
+    night: ['Night stand', 1.8, 1.5, mk(1.8, 1.5, b => FX.nightstand(b, 1.8, 1.5))], dresser: ['Dresser', 5, 1.7, mk(5, 1.7, b => FX.dresser(b, 5, 1.7, 3))],
+    desk: ['Desk + chair', 5, 4.5, mk(5, 4.5, b => { b.sub(c => FX.desk(c, 5, 2.0, 2.5), 0, 0, -1.25); b.sub(c => FX.officeChair(c), 0, 0, 0.6, Math.PI); })],
+    shelf: ['Bookshelf', 3, 1, mk(3, 1, b => FX.shelves(b, 3, 1, 6.5, { m: mat.oak }))],
+    storage: ['Storage shelving', 6, 1.5, mk(6, 1.5, b => {
+      [-2.92, 2.92].forEach(x => [-0.68, 0.68].forEach(z => b.box(x - 0.06, x + 0.06, 0, 6, z - 0.06, z + 0.06, steel)));
+      [0.4, 2, 3.6, 5.2].forEach(y => b.box(-3, 3, y, y + 0.08, -0.75, 0.75, steel, 0.01));
+      [0.48, 2.08, 3.68].forEach((y, r) => [-1.95, 0, 1.95].forEach((x, i) => { if ((r + i) % 4 === 3) return; const c = [0xb9c2c9, 0x2f3236, 0x6d8fa8][(r + i) % 3]; b.col(b.box(x - 0.85, x + 0.85, y, y + 1.0, -0.62, 0.62, toteM, 0.05), c); b.col(b.box(x - 0.9, x + 0.9, y + 1.0, y + 1.1, -0.66, 0.66, toteM, 0.03), r === 1 ? 0xd8b42a : 0x2f3236); }));
+      b.col(b.box(-2.6, -1.3, 5.28, 6.0, -0.55, 0.55, toteM, 0.01), 0xb08a5a); b.col(b.box(0.6, 2.6, 5.28, 5.8, -0.6, 0.55, toteM, 0.01), 0xc29a66);
+    })],
+    treadmill: ['Treadmill', 2.8, 6.5, mk(2.8, 6.5, b => {
+      b.box(-1.2, 1.2, 0.2, 0.62, -2.9, 3.2, mat.black, 0.08); b.box(-0.95, 0.95, 0.62, 0.66, -2.5, 3.0, rubber, 0.02); b.box(-1.25, 1.25, 0.2, 1.0, -3.25, -2.45, mat.black, 0.14);
+      [-1, 1].forEach(s => { b.rod([s * 1.22, 0.85, -2.9], [s * 1.12, 4.15, -3.05], 0.09, steel, 10); b.rod([s * 1.25, 3.55, -3.0], [s * 1.3, 3.65, -1.9], 0.05, steel, 8); b.sph(s * 1.0, 0.1, 3.0, 0.12, 0.1, 0.12, rubber, 0, 0, 0, 8); });
+      b.cbox(0, 4.3, -3.05, 2.5, 0.55, 0.8, mat.black, 0.08, 0.55); b.cbox(0, 4.42, -2.92, 1.3, 0.34, 0.04, FX.X.screen, 0.01, 0.55);
+    })],
+    rack: ['Squat rack', 5, 4, mk(5, 4, b => {
+      [[-2.3, -1.8], [2.3, -1.8], [-2.3, 1.8], [2.3, 1.8]].forEach(([x, z]) => b.box(x - 0.125, x + 0.125, 0, 7.5, z - 0.125, z + 0.125, steel, 0.01));
+      [-1, 1].forEach(s => { b.box(-2.425, 2.425, 7.25, 7.5, s * 1.8 - 0.125, s * 1.8 + 0.125, steel); b.box(s * 2.3 - 0.125, s * 2.3 + 0.125, 7.25, 7.5, -1.8, 1.8, steel); b.box(s * 2.3 - 0.13, s * 2.3 + 0.13, 0, 0.2, -2.0, 2.0, steel, 0.02); b.box(s * 2.3 - 0.1, s * 2.3 + 0.1, 2.8, 2.95, -1.8, 1.8, steel, 0.02);
+        b.box(s * 2.3 - 0.1, s * 2.3 + 0.1, 4.2, 4.45, 1.93, 2.18, mat.black, 0.02); });
+      b.rod([-3.6, 4.5, 2.0], [3.6, 4.5, 2.0], 0.05, mat.chrome, 10);
+      [-1, 1].forEach(s => { [0.74, 0.55].forEach((r, i) => { const g = new T.CylinderGeometry(r, r, 0.11, 32); g.rotateZ(Math.PI / 2); g.translate(s * (2.7 + i * 0.12), 4.5, 2.0); b.add(g, mat.black); }); const k = new T.CylinderGeometry(0.08, 0.08, 0.06, 16); k.rotateZ(Math.PI / 2); k.translate(s * 2.91, 4.5, 2.0); b.add(k, mat.chrome); });
+    })],
+    bench: ['Weight bench', 1.5, 4.2, mk(1.5, 4.2, b => {
+      b.box(-0.55, 0.55, 1.32, 1.62, -2.05, 2.05, FX.X.charcoal, 0.1); b.box(-0.12, 0.12, 0.95, 1.32, -1.8, 1.8, steel, 0.01);
+      [-1.75, 1.75].forEach(z => { b.box(-0.75, 0.75, 0, 0.16, z - 0.1, z + 0.1, steel, 0.02); b.box(-0.1, 0.1, 0.16, 0.95, z - 0.1, z + 0.1, steel); });
+    })],
+    mat: ['Exercise mat', 2.2, 6, mk(2.2, 6, b => b.box(-1.1, 1.1, 0, 0.05, -3, 3, blueT, 0.02), false)],
+    toilet: ['Toilet', 1.7, 2.4, mk(1.7, 2.4, b => FX.toilet(b, 1.7, 2.4))],
+    vanity: ['Vanity 36"', 3, 1.8, mk(3, 1.8, b => FX.vanity(b, 3, 1.8))],
+    shower: ['Shower 3×3', 3.2, 3.2, mk(3.2, 3.2, b => {
+      b.box(-1.6, 1.6, 0, 0.35, -1.6, 1.6, mat.porcelain, 0.03); b.cyl(0, 0, 0.12, 0.12, 0.35, 0.36, mat.chrome, 14);
+      b.box(-1.6, 1.6, 0.35, 6.8, 1.55, 1.6, FX.X.clear); b.box(1.55, 1.6, 0.35, 6.8, -1.6, 1.55, FX.X.clear);
+      b.box(1.54, 1.61, 0.35, 6.8, 1.54, 1.61, mat.chrome); b.box(-1.6, 1.6, 6.78, 6.82, 1.54, 1.61, mat.chrome); b.box(1.54, 1.61, 6.78, 6.82, -1.6, 1.6, mat.chrome);
+      b.sub(c => FX.showerFix(c), 0, 0, -1.6);
+    })],
+    fridge: ['Beverage fridge', 2, 2, mk(2, 2, b => {
+      b.box(-1, 1, 0.12, 2.9, -1, 0.9, mat.appliance, 0.03); b.box(-1, 1, 0, 0.12, -0.95, 0.8, FX.X.kick);
+      b.box(-0.92, 0.92, 0.2, 2.82, 0.9, 0.95, mat.appliance, 0.02); b.box(-0.8, 0.8, 0.32, 2.7, 0.95, 0.965, FX.X.screen, 0.01); b.rod([0.72, 0.8, 1.08], [0.72, 2.3, 1.08], 0.025, mat.chrome, 8);
+    })],
+    door: ['Door 32" (in a wall gap)', 3.2, 0.5, mk(3.2, 0.5, b => {
+      b.box(-1.6, -1.35, 0, 6.95, -0.3, 0.3, mat.trim, 0.01); b.box(1.35, 1.6, 0, 6.95, -0.3, 0.3, mat.trim, 0.01); b.box(-1.6, 1.6, 6.7, 6.95, -0.3, 0.3, mat.trim, 0.01);
+      const face = (c, a, z0) => { FX.shaker(c, a ? -2.5 : 0.12, a ? -0.12 : 2.5, 3.6, 6.55, z0, mat.trim); FX.shaker(c, a ? -2.5 : 0.12, a ? -0.12 : 2.5, 0.15, 3.35, z0, mat.trim); };
+      b.sub(c => { c.box(0, 2.62, 0, 6.7, -0.06, 0.06, mat.trim, 0.01); face(c, false, 0.06); c.sub(e => face(e, true, 0.06), 0, 0, 0, Math.PI); [0.1, -0.1].forEach(z => FX.knob(c, 2.38, 3.0, z, mat.chrome)); }, -1.33, 0, 0, -1.2);
+    }, false)],
+    lamp: ['Floor lamp', 1.2, 1.2, mk(1.2, 1.2, b => FX.floorLamp(b))],
   };
   // ---------- presets ----------
   const MECH = [[8.5, 24.42, 8.5, 30.4], [8.5, 33.2, 8.5, 35.18]];
@@ -1272,13 +1888,14 @@ const BSM = (() => {
     });
     S.items.forEach(([type, X, Z, rot], i) => {
       const L = LIB[type]; if (!L) return; const g = new T.Group(); L[3](g); g.position.copy(V(X, FLR + 0.04, Z)); g.rotation.y = rot * Math.PI / 180;
-      g.traverse(o => { if (o.isMesh) { o.userData.k = 'furn'; o.userData.info = { t: L[0], d: `${L[1]}' × ${L[2]}'. Tap Edit layout to move or rotate.` }; o.userData.bItem = i; o.castShadow = o.receiveShadow = true; } });
+      g.traverse(o => { if (o.isMesh) { o.userData.k = 'furn'; o.userData.info = { t: L[0], d: `${L[1]}' × ${L[2]}'. Tap Edit layout to move or rotate.` }; o.userData.bItem = i; o.receiveShadow = !o.userData.blob; } });
       g.userData.bItem = i; grp.add(g); meshesItems.push(g);
     });
     for (let i = pickables.length - 1; i >= 0; i--) if (pickables[i].userData.bsm) pickables.splice(i, 1);
-    grp.traverse(o => { if (o.isMesh) { o.userData.bsm = true; pickables.push(o); } });
+    grp.traverse(o => { if (o.isMesh && !o.userData.blob) { o.userData.bsm = true; pickables.push(o); } });
     // hide the generic basement furniture we placed earlier except mechanicals (kept)
     if (typeof applyMode === 'function' && window.__ready) applyMode();
+    if (window.__ready) REAL.envAll();
     drawSel(); refreshUI(); save();
   }
   // ---------- selection highlight ----------
@@ -1286,7 +1903,7 @@ const BSM = (() => {
   function drawSel() {
     selBox.visible = false; if (!sel) return;
     const obj = sel.kind === 'item' ? meshesItems.find(g => g.userData.bItem === sel.i) : meshesWalls.find(m => m.userData.bWall === sel.i);
-    if (!obj) { sel = null; return; } selBox.box.setFromObject(obj); selBox.box.expandByScalar(0.15); selBox.visible = true;
+    if (!obj) { sel = null; return; } obj.updateWorldMatrix(true, false); selBox.box.makeEmpty(); (sel.kind === 'item' ? obj.children : [obj]).forEach(o => { if (!o.userData.blob) selBox.box.expandByObject(o); }); selBox.box.expandByScalar(0.15); selBox.visible = true;
   }
   // ---------- UI: panel section ----------
   const el = id => document.getElementById(id);
@@ -1424,11 +2041,9 @@ function applySun() {
   // true north / east in world coords (plan north is ~28° east of true north)
   const Nw = new T.Vector3(SITE.north[1], 0, SITE.north[0]), Ew = new T.Vector3(SITE.east[1], 0, SITE.east[0]);
   const dir = Nw.clone().multiplyScalar(Math.cos(az) * Math.cos(el)).add(Ew.clone().multiplyScalar(Math.sin(az) * Math.cos(el))); dir.y = Math.sin(el);
-  sun.position.copy(dir.multiplyScalar(200)); sun.target.position.set(0, 0, 0);
+  REAL.sunDir.copy(dir).normalize(); sun.position.copy(dir.multiplyScalar(200)); sun.target.position.set(0, 0, 0);
   const day = Math.max(0, Math.min(1, el / 0.12));
-  sun.intensity = 2.2 * day; hemi.intensity = 0.25 + 0.35 * day; amb.intensity = 0.1 + 0.05 * day;
-  const c = new T.Color(0x0e1624).lerp(new T.Color(0xcfdde6), day); scene.background = c; scene.fog.color = c;
-  hemi.color.setHex(day > 0.2 ? 0xe8f1f8 : 0x7f95c4); hemi.intensity = 0.12 + 0.43 * day; amb.intensity = 0.05 + 0.1 * day;
+  REAL.light(day, el); // sun, sky light, sky colours and fog
   night = Math.max(0, Math.min(1, (0.03 - el) / 0.12)); applyLights();
   document.getElementById('monv').textContent = MN[m - 1];
   const hh = Math.floor(h), mm = Math.round((h - hh) * 60); document.getElementById('hrv').textContent = `${((hh + 11) % 12) + 1}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'am' : 'pm'}`;
@@ -1439,10 +2054,12 @@ function applyLights() {
   const f = lightMode === 'on' ? 1 : lightMode === 'off' ? 0 : night;
   LIGHTS.forEach(l => l.intensity = 1.25 * f * l.userData.k0);
   mat.glass.emissive.setHex(0xffc98a); mat.glass.emissiveIntensity = 0.85 * f; mat.lampGlow.emissiveIntensity = 2.2 * f;
+  FX.GLOW.forEach(([m, k]) => m.emissiveIntensity = k * f);
 }
 document.querySelectorAll('#lightsSeg button[data-l]').forEach(b => b.onclick = () => { lightMode = b.dataset.l; document.querySelectorAll('#lightsSeg button[data-l]').forEach(x => x.classList.toggle('on', x === b)); applyLights(); });
 document.getElementById('evening').onclick = () => { hr.value = 18.5; applySun(); view('front'); };
 document.getElementById('shad').onchange = e => { renderer.shadowMap.enabled = e.target.checked; sun.castShadow = e.target.checked; scene.traverse(o => { if (o.material) o.material.needsUpdate = true; }); };
+document.querySelectorAll('#qualSeg button').forEach(b => { b.classList.toggle('on', b.dataset.q === REAL.q); b.onclick = () => { REAL.set(b.dataset.q); document.querySelectorAll('#qualSeg button').forEach(x => x.classList.toggle('on', x === b)); resize(); }; });
 
 // =================== COLOURS ===================
 const FIN = [
@@ -1594,7 +2211,7 @@ document.getElementById('tog').onclick = () => { const p = document.getElementBy
 if (innerWidth < 600) document.getElementById('panel').classList.add('hide');
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w < 600 ? 55 : 45; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
-applyMode(); applySun(); applyCut(); aerialNote();
+applyMode(); applySun(); applyCut(); aerialNote(); REAL.finish();
 if (innerWidth < 600) camera.position.copy(V(95, 42, -88)); else camera.position.copy(V(62, 30, -58)); controls.target.copy(V(20, 9, 15));
 let last = performance.now(); const needle = document.getElementById('needle');
 function frame(now) {
@@ -1607,6 +2224,7 @@ function frame(now) {
     const a = t.clone().project(camera), b = t.clone().add(new T.Vector3(SITE.north[1], 0, SITE.north[0]).multiplyScalar(5)).project(camera);
     needle.setAttribute('transform', `rotate(${(Math.atan2(b.x - a.x, (b.y - a.y) * innerHeight / innerWidth) * 180 / Math.PI).toFixed(1)} 20 20)`);
   }
+  REAL.fit(walk.on ? camera.position : controls.target, walk.on ? 25 : camera.position.distanceTo(controls.target));
   renderer.render(scene, camera); requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
