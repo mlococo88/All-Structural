@@ -22,6 +22,68 @@
   const ckIx = (R, name) => R.checks.findIndex(c => c.n === name);
   const rowAt = (R, x) => R.grid.reduce((b, r) => Math.abs(r.x - x) < Math.abs(b.x - x) ? r : b, R.grid[0]);
 
+  /* EZNI (2026-11-25, engineer: "no calculus in the app output"): the concrete tensile force of 5.9.2.3.1b worked by parts instead of
+     as an integral. Fibre stresses are linear over the depth (+ = compression), so the tension zone runs from the tension fibre to the
+     depth c = h|f_t| / (|f_t| + |f_c|) (the whole depth where both fibres are in tension). The girder outline (halfPolygon, the one
+     sectionWidthAt reads; voids ignored, as the engine) is cut into horizontal layers at its corners and at c; each layer is a trapezoid
+     of widths b_a (tension-fibre side) and b_b, so A = (b_a + b_b)/2 · t, its centroid is at a depth d_a + t(b_a + 2b_b)/(3(b_a + b_b)),
+     and F = A · f(centroid): exact for a linear stress over a trapezoid. T = ΣF. Display only: the step's result stays the engine's
+     releaseTensionForce (240 strips); tests/engine/psbridge-ez-noint.test.mjs checks the two agree to the displayed precision.
+     tensionParts(G, fTop, fBot) -> { from: 'top' | 'bottom' | null, ft, fo, c, full, parts: [{ name, da, db, ba, bb, t, A, dbar, f, F, k }], T }
+       (da, db, dbar: depths below the tension fibre, in; consecutive pieces of one named part, e.g. a curved fillet, merged: A summed,
+       dbar their area centroid, k the number of pieces)
+     tensionSteps(add, o) adds the steps: the tension depth (o.P + '.c'), one per part (o.P + '.p1' …: F_i = A_i f_i, the area, centroid
+       and stress at the centroid worked in the note) and the total (o.P: T = F_1 + F_2 + …, value o.T the engine's, o.path its R path);
+       o = { P, G, fTop, fBot, T, sym, label, x, src (where the fibre stresses are worked: a sentence), what (default 'Release fibre stresses'), ref, path }. Returns the parts. */
+  function tensionParts(G, fTop, fBot) {
+    const h = G.h, top = fTop <= fBot, ft = top ? fTop : fBot, fo = top ? fBot : fTop;   // ft: the tension fibre (most negative); fo: the other
+    if (!(ft < 0)) return { from: null, ft, fo, c: 0, full: false, parts: [], T: 0 };
+    const full = fo < 0, c = full ? h : h * (-ft) / (-ft + fo);
+    const yOf = u => top ? h - u : u, fAt = u => -ft - (fo - ft) * u / h;   // f(u): tension magnitude at depth u below the tension fibre
+    const ys = [...new Set(halfPolygon(G).map(p => +p[1]).filter(y => y > 1e-9 && y < h - 1e-9))];
+    const us = [0, ...ys.map(y => top ? h - y : y).filter(u => u < c - 1e-9), c].sort((a, b) => a - b);
+    const wAt = (ua, ub) => { const e = 1e-6 * (ub - ua), w1 = sectionWidthAt(G, yOf(ua + e)), w2 = sectionWidthAt(G, yOf(ub - e)), s = (w2 - w1) / (ub - ua - 2 * e);
+      return [w1 - s * e, w2 + s * e]; };   // the layer's widths at its two edges (read just inside it, where the outline is straight)
+    const [ttf, ttf2, tbf, tbf2] = G.d || [0, 0, 0, 0], isI = !G.isNext && !G.isBox && !G.isDeck;
+    const nameOf = (y0, y1) => { const m = (y0 + y1) / 2;
+      if (G.isNext && G.next) return m > h - G.next.ft ? 'flange' : 'stems (outline to the outer stem faces, as the engine)';
+      if (!isI) return 'full width (voids ignored, as the engine)';
+      return m > h - ttf ? 'top flange' : m > h - ttf - ttf2 ? 'top flange taper' : m < tbf ? 'bottom flange' : m < tbf + tbf2 ? 'bottom flange taper' : 'web'; };
+    const parts = [];
+    for (let i = 0; i < us.length - 1; i++) {
+      const da = us[i], db = us[i + 1], t = db - da; if (t < 1e-9) continue;
+      const [ba, bb] = wAt(da, db), A = (ba + bb) / 2 * t, dbar = da + (ba + bb > 0 ? t * (ba + 2 * bb) / (3 * (ba + bb)) : t / 2), f = fAt(dbar);
+      const name = nameOf(Math.min(yOf(da), yOf(db)), Math.max(yOf(da), yOf(db))), q = parts[parts.length - 1];
+      if (q && q.name === name) { const A2 = q.A + A; q.dbar = (q.A * q.dbar + A * dbar) / A2; q.A = A2; q.db = db; q.t = db - q.da; q.bb = bb; q.k++; q.f = fAt(q.dbar); q.F = q.A * q.f; }
+      else parts.push({ name, da, db, ba, bb, t, A, dbar, f, F: A * f, k: 1 });   // k: the outline's straight-sided pieces in the part (a curved fillet: several)
+    }
+    return { from: top ? 'top' : 'bottom', ft, fo, c, full, parts, T: parts.reduce((s, q) => s + q.F, 0) };
+  }
+
+  function tensionSteps(add, o) {
+    const { n, par } = PW(), tp = tensionParts(o.G, o.fTop, o.fBot), G = o.G, h = G.h, fib = tp.from, w = fib === 'top' ? 'below the top' : 'above the soffit';
+    const stress = `f_top = ${n(o.fTop, 3)} ksi, f_bot = ${n(o.fBot, 3)} ksi (+ = compression)`;
+    if (!fib) { add({ id: o.P, label: o.label, sym: o.sym, eq: '', sub: '', value: o.T, unit: 'kip', d: 1, ref: o.ref, note: `No fibre in tension: ${stress}, ${o.src}` }, undefined, o.path); return tp; }
+    const ft = -tp.ft, fo = tp.fo, Ft = fib === 'top' ? 'f_{top}' : 'f_{bot}', Fo = fib === 'top' ? 'f_{bot}' : 'f_{top}', cs = fib === 'top' ? 'c_{top}' : 'c_{bot}';
+    if (tp.full) add({ id: o.P + '.c', label: `Depth of the tension zone (x = ${n(o.x, 2)} ft): both fibres in tension, the whole depth`, sym: cs, eq: 'h', sub: n(h, 2), value: tp.c, unit: 'in', d: 2,
+      note: `${o.what || 'Release fibre stresses'} ${stress}, ${o.src}` }, h);
+    else add({ id: o.P + '.c', label: `Depth of the tension zone ${w} (x = ${n(o.x, 2)} ft; fibre stresses linear over the depth)`, sym: cs, eq: `\\frac{h\\,|${Ft}|}{|${Ft}| + |${Fo}|}`,
+      sub: `\\frac{${n(h, 2)}(${n(ft, 3)})}{${n(ft, 3)} + ${n(fo, 3)}}`, value: tp.c, unit: 'in', d: 2, note: `${o.what || 'Release fibre stresses'} ${stress}, ${o.src}` }, h * ft / (ft + fo));
+    const fEq = (q, i) => tp.full ? `f_${i} = |${fib === 'top' ? 'f_top' : 'f_bot'}| + (|${fib === 'top' ? 'f_bot' : 'f_top'}| − |${fib === 'top' ? 'f_top' : 'f_bot'}|) ȳ_${i} / h = ${n(ft, 3)} + (${n(-fo, 3)} − ${n(ft, 3)})(${n(q.dbar, 3)})/${n(h, 2)}`
+      : `f_${i} = |${fib === 'top' ? 'f_top' : 'f_bot'}|(1 − ȳ_${i}/c) = ${n(ft, 3)}(1 − ${n(q.dbar, 3)}/${n(tp.c, 3)})`;
+    tp.parts.forEach((q, j) => { const i = j + 1;
+      const aTxt = q.k === 1 ? `A_${i} = (b_a + b_b)/2 × t = (${n(q.ba, 2)} + ${n(q.bb, 2)})/2 × ${n(q.t, 3)} = ${n(q.A, 2)} in² (b_a, b_b: the outline's widths at ${n(q.da, 2)} and ${n(q.db, 2)} in)`
+        : `A_${i} = ${n(q.A, 2)} in²: the outline's ${q.k} straight-sided pieces between these depths (a curved fillet), each (b_a + b_b)/2 × t, summed`;
+      const yTxt = q.k === 1 ? `centroid ȳ_${i} = d_a + t(b_a + 2b_b)/(3(b_a + b_b)) = ${n(q.da, 3)} + ${n(q.t, 3)}(${n(q.ba, 2)} + 2(${n(q.bb, 2)}))/(3(${n(q.ba, 2)} + ${n(q.bb, 2)})) = ${n(q.dbar, 3)} in ${w}`
+        : `centroid ȳ_${i} = Σ A ȳ / Σ A over the pieces = ${n(q.dbar, 3)} in ${w}`;
+      add({ id: `${o.P}.p${i}`, label: `Tension zone, part ${i}: ${q.name}, ${n(q.da, 2)} to ${n(q.db, 2)} in ${w}`, sym: `F_{${i}}`, eq: `A_{${i}}\\,f_{${i}}`, sub: `${n(q.A, 2)}(${n(q.f, 4)})`, value: q.F, unit: 'kip', d: 2,
+        note: `${aTxt}; ${yTxt}; ${fEq(q, i)} = ${n(q.f, 4)} ksi (tension at the centroid). F = A f(centroid) is exact for a stress linear over the depth.` }, q.A * q.f); });
+    add({ id: o.P, label: o.label, sym: o.sym, eq: tp.parts.map((q, j) => `F_{${j + 1}}`).join(' + '), sub: tp.parts.map(q => n(q.F, 2)).join(' + '), value: o.T, unit: 'kip', d: 1, ref: o.ref,
+      note: `Sum of the parts ${n(tp.T, 2)} kip; the result used is the engine's value ${n(o.T, 2)} kip (the gross outline cut into 240 horizontal strips; voids ignored, which over-states T).` }, undefined, o.path);
+    void par;
+    return tp;
+  }
+
   function endzone(inp, R) {
     const { kit, n, g, par } = PW(), K = kit('ez'), add = K.add;
     const G = R.g, ss = R.ss, L = R.L, o = inp.opt, Pi = ss.Aps * R.fpi;
@@ -53,12 +115,14 @@
         note: 'A detailing rule, not a force check; the bars must also be shaped to enclose the strands (a detail the app cannot verify).' }, Math.max(cf.parts[0].r, cf.parts[1].r, cf.parts[2].r), `checks.${kC}.r`);
     }
     // bonded release-tension steel (5.9.2.3.1b)
+    let relParts = null;   // EZNI: the parts of T_top / T_bot (tensionParts), for the card's table (ui/endzone.js); display only
     if (o.relBondedReinf) {
       const rs = R.relSteel, kR = ckIx(R, 'Release tens. steel (5.9.2.3.1b)'), cT = R.checks[ckIx(R, 'Release tens')], cB = R.checks[ckIx(R, 'Release tens (+M, bot)')], rT = rowAt(R, cT.loc), rB = rowAt(R, cB.loc);
       add({ id: 'rel.fs', label: 'Stress in the bonded steel', sym: 'f_{s}', eq: '\\min(0.5\\,f_{y},\\ 30)', sub: `\\min(0.5(${n(+o.relFy || 60, 0)}),\\ 30)`, value: rs.fs, unit: 'ksi', d: 1, ref: A10 + 'Table 5.9.2.3.1b-1' }, Math.min(0.5 * (+o.relFy || 60), 30), 'relSteel.fs');
-      add({ id: 'rel.Ttop', label: `Concrete tensile force at release, top tension (x = ${n(rT.x, 2)} ft)`, sym: 'T_{top}', eq: '\\int_{f<0} (-f)\\,b(y)\\,dy', sub: `f_{top} = ${par(rT.relTop, 3)},\\ f_{bot} = ${par(rT.relBot, 3)}\\ \\text{ksi}`, value: rs.Ttop, unit: 'kip', d: 1, ref: A10 + 'Table 5.9.2.3.1b-1',
-        note: 'Fibre stresses linear over the girder depth (release, Stresses tab); the tension area integrated over the section width at 240 strips (the engine\'s).' }, undefined, 'relSteel.Ttop');
-      add({ id: 'rel.Tbot', label: `Concrete tensile force at release, bottom tension (x = ${n(rB.x, 2)} ft)`, sym: 'T_{bot}', eq: '\\int_{f<0} (-f)\\,b(y)\\,dy', sub: `f_{top} = ${par(rB.relTop, 3)},\\ f_{bot} = ${par(rB.relBot, 3)}\\ \\text{ksi}`, value: rs.Tbot, unit: 'kip', d: 1 }, undefined, 'relSteel.Tbot');
+      const src = 'the release stresses of the Stresses tab at this station (§st.rt and §st.rtb).', ref = A10 + 'Table 5.9.2.3.1b-1';
+      relParts = {};
+      relParts.top = tensionSteps(add, { P: 'rel.Ttop', G, fTop: rT.relTop, fBot: rT.relBot, T: rs.Ttop, sym: 'T_{top}', x: rT.x, src, ref, path: 'relSteel.Ttop', label: `Concrete tensile force at release, top tension (x = ${n(rT.x, 2)} ft)` });
+      relParts.bot = tensionSteps(add, { P: 'rel.Tbot', G, fTop: rB.relTop, fBot: rB.relBot, T: rs.Tbot, sym: 'T_{bot}', x: rB.x, src, ref: '', path: 'relSteel.Tbot', label: `Concrete tensile force at release, bottom tension (x = ${n(rB.x, 2)} ft)` });
       add({ id: 'rel.As', label: `Bonded steel required (governing: ${rs.where})`, sym: 'A_{s,req}', eq: '\\frac{\\max(T_{top}, T_{bot})}{f_{s}}', sub: `\\frac{${n(rs.T, 2)}}{${n(rs.fs, 1)}}`, value: rs.AsReq, unit: 'in^{2}', d: 2, ref: A10 + 'Table 5.9.2.3.1b-1' }, rs.fs > 0 ? rs.T / rs.fs : 0, 'relSteel.AsReq');
       add({ id: 'rel.dc', label: 'Ratio, bonded release-tension steel', sym: 'D/C', eq: '\\frac{A_{s,req}}{A_{s,prov}}', sub: `\\frac{${n(rs.AsReq, 3)}}{${n(rs.AsProv, 2)}}`, value: R.checks[kR].r, unit: '', d: 3, ok: R.checks[kR].pass,
         note: 'The 0.24√f′ci release tension limit is used only with this steel (Stresses tab).' }, rs.AsReq > 1e-9 ? (rs.AsProv > 0 ? rs.AsReq / rs.AsProv : 99) : 0, `checks.${kR}.r`);
@@ -92,7 +156,8 @@
       if (!(inp.cont && inp.cont.on)) add({ id: 'db.max', label: 'Longest debond length, simple span (display; the engine checks it as a warning)', sym: 'x_{db,max}', eq: '\\min\\left(0.20\\,L,\\ \\frac{L}{2} - \\frac{\\ell_{d}}{12}\\right)', sub: `\\min\\left(0.20(${n(L, 2)}),\\ \\frac{${n(L, 2)}}{2} - \\frac{${n(R.ldDebond, 1)}}{12}\\right)`, value: Math.min(0.2 * L, L / 2 - R.ldDebond / 12), unit: 'ft', d: 2, ref: A10 + '5.9.4.3.3(G)' });
     }
     void g;
-    return K.done();
+    const out = K.done(); if (relParts) out.relParts = relParts;
+    return out;
   }
 
   function camber(inp, R) {
@@ -137,5 +202,5 @@
     return K.done();
   }
 
-  window.PSBWorkedEnd = { endzone, camber };
+  window.PSBWorkedEnd = { endzone, camber, tensionParts, tensionSteps };   // tensionParts: EZNI (2026-11-25), also for tests/engine/psbridge-ez-noint.test.mjs
 })();
