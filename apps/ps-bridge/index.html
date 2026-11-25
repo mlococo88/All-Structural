@@ -57,7 +57,7 @@
     'engine/deckdist.js',    // DD (2026-11-24): the deck distribution reinforcement on the effective span length of 9.7.2.3, applied after computeAll (§4)
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
     'engine/pierblock.js',   // PS-34: the pier compression block against the family's thickness (NEXT stems, box bottom slab, slabs; a warning only)
-    'engine/demands.js',     // batch D1 (2026-11-15): the demand source of each girder type (this app / custom table / MIDAS file, the old app's import)
+    'engine/demands.js',     // batch D1 (2026-11-15): the demand source of each girder type (this app / custom table; NOMCT 2026-11-25: saved imported demands converted or kept read only)
     'engine/design.js',      // PR 2b: the one girder design and its engine inputs (base + the bridge values, PBD.applyBridge)
     'engine/bridge.js',      // PR 3a-1: the girder types on the girder lines of each span (PS-8)
     '../../shared/barrier.js', // BARG (2026-11-24): a barrier's area, weight, width at the deck and centroid from its geometry (shared with the Steel Bridge app; no DOM)
@@ -133,7 +133,6 @@
     'ui/compare.js',  // batch G4 (2026-11-15): the Compare output tab (the old app's design sweep; table and bar graphic)
     'ui/autodesign.js', // item A (2026-11-14): the Auto design input tab (settings, Run) and output tab (candidates, Apply as one Undo step)
     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
-    'ui/mctnav.js',   // batch G9 (2026-11-15): the old app's "↩ MCT Analysis" header button (shown when opened from the MCT Generator)
     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
@@ -167,7 +166,6 @@
   #hdrUR{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;}
   #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
   #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
-  #hdr .mctBack{font-size:8.5pt;margin-left:10px;padding:1px 8px;}   /* batch G9: the old app's "↩ MCT Analysis" */
   #main{flex:1 1 auto;display:flex;min-height:0;}
   /* 2026-11-15 (batch A): the footer of the old app (Prestressed Bridge Design.html .footer): the version line and the design-aid disclaimer */
   #appFoot{flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 16px;padding:3px 14px;border-top:1px solid var(--color-border);background:var(--slate-100);color:#475569;font-family:var(--font-ui);font-size:7.5pt;letter-spacing:.04em;text-transform:uppercase;}
@@ -347,9 +345,7 @@
   }
   @media print{#sbSplit{display:none!important}}
   /* this app (PR 1) */
-  #mctBanner.mctNew{border-left:4px solid #ea580c;background:#fff7ed;} #mctBanner select{width:auto;margin:0 4px;} .mctGeo a{color:#9a3412;font-weight:600;}
-  .dmBanner{border:1px solid var(--accent);border-radius:6px;background:#EFF6FF;padding:6px 9px;margin:6px 0;font-family:var(--font-ui);font-size:9pt;} .dmHead{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;} .dmSpans{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;} .dmSpans .pri{font-weight:700;outline:2px solid var(--accent);}
-  .dmVals summary{cursor:pointer;font-family:var(--font-ui);font-size:9pt;margin:6px 0;} .dmGuide{max-width:760px;width:calc(100% - 32px);border:2px solid #0f172a;padding:16px 20px;font-family:var(--font-ui);font-size:9.5pt;line-height:1.5;} .dmGuide::backdrop{background:rgba(22,33,46,.55);} .dmGuide h3{margin:0 0 4px;} .dmGuide h4{margin:12px 0 4px;border-bottom:1px solid var(--color-border);}
+  .dmVals summary{cursor:pointer;font-family:var(--font-ui);font-size:9pt;margin:6px 0;}
   .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-family:var(--font-ui);font-size:9pt;color:#475569;}
   /* this app (PR 3a-1): girder types (ui/types.js) */
   .tyScope{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;padding:6px 8px;border:1px solid var(--color-border);border-radius:6px;background:var(--slate-100);font-family:var(--font-ui);font-size:9pt;}
@@ -396,7 +392,7 @@
       <div>
         <h1>Prestressed Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>
         <div class="byline">AASHTO LRFD 10th Ed. (2024) <span id="saveState" aria-live="polite"></span></div>
-        <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a> <button type="button" id="bMct" class="mctBack" hidden title="Back to the MIDAS / MCT analysis app (shown when this page was opened from it)">↩ MCT Analysis</button>
+        <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
       </div>
       <div id="hdrBtns">
         <span id="hdrUR"><!-- PR 6: Undo and Redo (the steel app's header, apps/steel-bridge/index.html), kept together when the header wraps -->
@@ -601,7 +597,7 @@
   const dmCtx = { changed: () => changed(), toast: (t, u) => toast(t, u), redraw: () => { saveUi(); drawInputs(); } };
   /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
   const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed(),
-    toast: (t, u) => toast(t, u), redraw: () => drawOut(),   // batch D3: + the MCT banners' notice and redraw
+    toast: (t, u) => toast(t, u), redraw: () => drawOut(),   // the stale banners' notice and redraw
     all: () => (errs.length ? null : allResults(true)), redrawIn: () => drawInputs(), pick: (k, g) => pick(k, g),
     // HO-D2 (2026-11-21): the stale check reads the page's cached results only: a girder type x line (the one shown: result()), every line
     // when already computed (allResults() without force: null while running), the input error count, and the Project tab's card
@@ -609,16 +605,16 @@
       const inp = window.PSBDesign.cellInputs(P, k, g), R = cellR(inp); return R.error ? null : { inp, R }; },
     allNow: () => (errs.length ? null : allResults()), errN: () => errs.length,
     goin: () => { ui.itab = 'proj'; saveUi(); drawInputs(); const el = $('psbHo'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start' }); } };   // batch F3: pick = the design beam chip's Show G<i>   // batch F: every girder type on every line (the page's cache, as the Report); the card's "Last sent"
-  HOUI.init(() => drawOut(), hoCtx);   // the "new data" marks follow the other tools' sends (storage event); batch D3: the MCT banners too
+  HOUI.init(() => drawOut(), hoCtx);   // the "new data" marks follow the other tools' sends (storage event)
   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => pb.importJSON(),   // PR 5: asks first on unsaved changes, then the file chooser
-    replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); if (window.PSBSections) window.PSBSections.migrate(Q); ui.itab = 'proj'; loadAs(Q, null); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored; PR 5: not a saved project (chip "not saved")
+    replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); if (window.PSBSections) window.PSBSections.migrate(Q); const dn = window.PSBDemands.migrate(Q); ui.itab = 'proj'; loadAs(Q, null); if (rn || dn.length) toast([rn].concat(dn).filter(Boolean).join(' ')); } };   // NOMCT: an old design's imported demands -> the custom table when exact (engine/demands.js migrate)   // PR 3a-4 (PS-17): the old model's other designs restored; PR 5: not a saved project (chip "not saved")
   /* typesDone(r): a girder-type control was handled (ui/types.js): redraw (ui only) or save and redraw, with its message */
   function typesDone(r) { if (!r || r.cancel) return; if (r.ui && !r.note) { saveUi(); if (!r.keep) drawInputs(); return; } saveUi(); changed(); if (r.note) toast(r.note); }
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
     if (el.dataset.ad) { if (window.PSBAutoDesignUI.onChange(el, P)) changed(); return; }   // item A: the Auto design settings (P.autodesign)
-    if (el.dataset.dm) { DMUI.onChange(el, P, ui, dmCtx); return; }   // batch D1: the Demands card (source, MIDAS file, custom table)
+    if (el.dataset.dm) { DMUI.onChange(el, P, ui, dmCtx); return; }   // batch D1: the Demands card (source, custom table)
     if (el.dataset.ty) { typesDone(TY.onChange(el, P, ui)); return; }   // PR 3a-1
     if (el.dataset.dl && DLUI.onChange(el, P)) { changed(); return; }   // PR 3a-3
     if (el.dataset.lo) { const q = P.xs.lldf = Object.assign({ skewV: 'all', extMin: false }, P.xs.lldf && typeof P.xs.lldf === 'object' ? P.xs.lldf : null);   // LL-O: the distribution options (the Steel Bridge app's xs.lldf fields)
@@ -784,7 +780,6 @@
     let h = '';
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
     h += secNotice();   // PS-31: the old box / voided slab section corrected (or removed)
-    h += HOUI.mctBanner(P);   // batch D3: the MCT demands hand-off and geometry changes (click only)
     h += HOUI.staleBar(hoCtx);   // HO-D2 (2026-11-21): the hand-offs out of date since this project sent / loaded them (click only)
     h += HOUI.beamChip(P);    // batch F3: the old app's Design beam chip (LL & DL's design beam; read only, Show G<i> by click)
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
@@ -841,7 +836,7 @@
   const gotoStep = (t, id) => { gotoOut(t); if (id) { const el = window.SharedSteps.reveal($('out'), id); if (el) el.scrollIntoView({ block: 'center' }); } };
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (b) gotoOut(b.dataset.otab); });
   $('out').addEventListener('click', e => {
-    if (HOUI.onMct(e, hoCtx)) return;   // batch D3: the MCT banners
+    if (HOUI.onBar(e, hoCtx)) return;   // the stale banner and the design beam chip above the output tabs (NOMCT: the MCT banners removed)
     if (e.target.closest('[data-secdismiss]')) { P.notices = Object.assign({}, P.notices, { sec: window.PSBSections.sig(P) }); changed(); return; }   // PS-31: closed for this project (shown again if another section is corrected)
     if (e.target.closest('[data-dedismiss]')) { const D = window.PSBDesign.deDiff(P); P.notices = Object.assign({}, P.notices, { de: D.sig }); changed(); return; }   // PS-23: dismissed for this project
     const a = e.target.closest('[data-icgo]'); if (a) { e.preventDefault(); gotoErr(+a.dataset.icgo); return; }
@@ -852,8 +847,6 @@
       else gotoStep(tab, st); return; }
     const sr = e.target.closest('[data-sumrun]'); if (sr) { e.preventDefault(); runCtl(sr.dataset.sumrun); return; }
     const tc = e.target.closest('[data-tycell]'); if (tc) { e.preventDefault(); const [k, g, tab] = tc.dataset.tycell.split('|'); P.design = { g: +g, s: P.types[+k].span }; if (autosave) autoFailed = !M.save(LS, P); record(); gotoOut(tab); drawInputs(); return; }   // PR 3a-2
-    // batch D2: "Design span n →" of the Analysis tab's imported-member view: the girder type shown uses span n of its MIDAS file (one Undo step)
-    const dd = e.target.closest('[data-dmdesign]'); if (dd) { e.preventDefault(); const T = DMUI.shownType(P); if (T) { window.PSBDemands.setSpan(P, T.id, +dd.dataset.dmdesign); ui.dmView = 'design'; saveUi(); changed(); toast(`${T.label}: span ${dd.dataset.dmdesign} of the MIDAS file is used now (Loads tab, Demands card).`, true); } return; }
     const gi = e.target.closest('[data-goin]'); if (gi) { e.preventDefault(); goIn(gi.dataset.goin, () => $('inputPanel').scrollIntoView({ block: 'start' })); return; }   // GSUB: 'tab@target'
     // a link to another output tab (and to a worked step there): that tab, then the step with its topic opened
     const gt = e.target.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); const h = gt.getAttribute('href') || '';
@@ -904,7 +897,7 @@
       // PR 2f: an old-app file (or an old MIDAS demands file, refused there with its reason): "From the old app"
       if (!r.ok && (r.legacy || /"_schema"\s*:\s*"psbeam-external-demands"/.test(String(rd.result)))) { LGUI.importText(String(rd.result), f.name, lgCtx); return; }
       if (!r.ok) { alert(r.error); return; }
-      loadAs(r.project, null); };   // PR 5: asked first on unsaved changes (pb.importJSON, as the steel app); not a saved project (chip "not saved")
+      loadAs(r.project, null); if (r.dmNotes && r.dmNotes.length) toast(r.dmNotes.join(' ')); };   // NOMCT: the saved imported demands converted (or kept read only)   // PR 5: asked first on unsaved changes (pb.importJSON, as the steel app); not a saved project (chip "not saved")
     rd.readAsText(f); });
 
   /* ---------- saved projects (PR 5; the steel app's STDS-B standard save and GHS2 GitHub sync, apps/steel-bridge/index.html) ----------
@@ -1011,7 +1004,6 @@
   /* PR 6: Undo / Redo buttons and keys, as the steel app: Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo (⌘ on a Mac). Text being typed in a field
      (an input event since its last change / blur) keeps the browser's own undo of that field; nothing while a dialog is open. */
   $('bUndo').addEventListener('click', undo); $('bRedo').addEventListener('click', redo);
-  if (window.PSBMctNav) window.PSBMctNav.mount($('bMct'), window);   // batch G9: "↩ MCT Analysis" when opened from the MCT Generator
   document.addEventListener('input', e => { if (e.target && e.target.dataset) e.target.dataset.typing = '1'; }, true);
   document.addEventListener('change', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
   document.addEventListener('blur', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);

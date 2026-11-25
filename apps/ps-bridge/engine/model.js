@@ -74,6 +74,10 @@
                       demand table) or 'midas' (a MIDAS demands file, kept as read). Absent (every project saved before) = every type uses this
                       app's analysis, as before: those projects are byte-identical and compute as before (no migration). An old-app design
                       with MIDAS demands (engine/legacy.js) gets them here for its type (PS-18), so it computes as the old app.
+                      NOMCT (2026-11-25): + converted: { from: 'imported file', at } (optional): a type saved with src 'midas' is set on
+                      open to src 'table' with table.rows holding the same values when the engine then reads exactly the same demands
+                      (engine/demands.js convert / migrate), else kept as it is (read only); midas and span are never removed. No file
+                      is imported any more (the MIDAS import and the MCT hand-offs were removed: no MCT input or output).
      xs.lldf: { skewV: 'all' | 'ext', extMin: true | false }  added 2026-11-23 (LL-O), optional within version 1, the Steel Bridge app's
                       names and values (its xs.lldf.skewV, xs.lldf.extMin): the shear skew correction on all girders or the exterior
                       girders only, and "exterior not less than interior" (engine/lldf-opt.js). Absent, or 'all' and false (every
@@ -211,8 +215,10 @@
     if (BR && p.base && typeof p.base === 'object') { const n = BR.migrate(p); if (n) notes.push(n); }   // PR 3a-1: girder types (a project saved before: its design girder = type T1)
     if (BR && typeof window !== 'undefined' && window.PSBLegacy && p.legacy) { const n = window.PSBLegacy.restore(p); if (n) notes.push(n); }   // PR 3a-4 (PS-17): an old bridge model's other designs as girder types
     if (typeof window !== 'undefined' && window.PSBSections) { const n = window.PSBSections.migrate(p); if (n) notes.push(n); }   // PS-31: an old box / voided slab name -> the corrected standard section (P.legacySection)
+    const dmNotes = BR && window.PSBDemands && window.PSBDemands.migrate ? window.PSBDemands.migrate(p) : [];   // NOMCT (2026-11-25): saved imported demands -> the custom table when exact, else kept read only
+    dmNotes.forEach(n => notes.push(n));
     const v = validate(p);
-    return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
+    return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes, dmNotes };
   }
 
   /* save(storage, p): writes the project to KEYS.current. Returns true, or false if storage refused (quota, privacy mode). */
