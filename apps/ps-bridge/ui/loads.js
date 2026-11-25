@@ -11,7 +11,7 @@
   const A = 'AASHTO LRFD 10th Ed. ';
   const TOPICS = [
     { key: 'own', title: 'Owner load rules (η, m)', ref: A + '1.3.2.1', ids: /^ld\.(eta|mLL)$/, res: /^ld\.eta$/ },
-    { key: 'dl', title: 'Dead loads per girder (DC1, DC2, DW)', ref: A + '3.5.1', ids: /^ld\.(wg|wdeck|whaunch|wDC1|Pdia|wDC2|wDW)$/, res: /^ld\.wDC1$/ },
+    { key: 'dl', title: 'Dead loads per girder (DC1, DC2, DW)', ref: A + '3.5.1', ids: /^ld\.(wg|wdeck|havg|whaunch|wDC1|Pdia|wDC2|wDW)$/, res: /^ld\.wDC1$/ },
     // PR 3a-3: the Steel Bridge app's DC2 / DW distribution to each line (engine/bridge-dl.js, steps dl.*; only when distributed)
     { key: 'dld', title: 'DC2 and DW distributed to the girder lines (the Steel Bridge app\'s method)', ref: A + '3.5.1, 4.6.2.2.1; MassDOT BDM 3.5.3; RIDOT BDM 3.3.1', ids: /^dl\./, res: /^dl\.G\d+\.DC2$/ },
     { key: 'hlm', title: 'HL-93 moment per lane (simple span)', ref: A + '3.6.1.2, 3.6.1.3', ids: /^ld\.(Mtr|Mtd|Mln|M)$/, res: /^ld\.M$/ },
@@ -41,7 +41,8 @@
     h += k.card('Dead loads on the design girder', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Load</th><th class="lft">Section and source</th><th>Value</th><th></th></tr></thead><tbody>
       ${row('DC1 girder self-weight w<sub>g</sub>', 'non-composite; from the section', ev('wG', 4, 'klf'), wk('sec.g.wsw', '§', 'sec'))}
       ${row('DC1 deck slab', `non-composite; ${cp.extG ? 'exterior: (S/2 + overhang)' : 'tributary'} width`, ev('cp.wdkDeck', 4, 'klf'), cp.wdkDeck > 0 || +inp.ts > 0 ? wk('ld.wdeck') : '')}
-      ${cp.wdkHaunch > 0 ? row('DC1 haunch', 'non-composite; top flange width × haunch', ev('cp.wdkHaunch', 4, 'klf'), wk('ld.whaunch')) : ''}
+      ${R.hdc && !R.hdc.same ? row('DC1 haunch', `non-composite; ${R.g.isNext ? 'flange' : 'top flange'} width × the average haunch t̄<sub>h</sub> = t<sub>h</sub> + ${R.hdc.neg ? '2|Δ<sub>deck</sub>|/3' : 'Δ<sub>deck</sub>/3'} = ${ev('hdc.tavg', 3, 'in')} ${wk('ld.havg')} (Δ<sub>deck</sub> = ${ev('hdc.d', 3, 'in')} ${wk('cb.deck', '§', 'camb')}, Camber & deflection tab)`, ev('cp.wdkHaunch', 4, 'klf'), wk('ld.whaunch'))
+        : cp.wdkHaunch > 0 ? row('DC1 haunch', 'non-composite; top flange width × haunch', ev('cp.wdkHaunch', 4, 'klf'), wk('ld.whaunch')) : ''}
       ${(() => { const q1 = dist ? DL.line(P, dg) : null; return q1 && q1.DC1 != null   // PR 9: + the line's share of the added DC1 line loads
         ? row('DC1 additional (forms, …)', `non-composite; entered (Loads tab) + G${dg}'s share of the DC1 line loads (Cross-section tab), ${k.fx(q1.DC1, 4)} klf`, `${k.fx(+inp.loads.wNC, 4)} klf`, wk(`dl.G${dg}.DC1x`))
         : row('DC1 additional (forms, …)', 'non-composite; entered (Loads tab)', `${k.fx(+inp.loads.wNC, 4)} klf`, ''); })()}

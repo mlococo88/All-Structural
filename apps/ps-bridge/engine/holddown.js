@@ -62,6 +62,9 @@
   const compute6 = inp => { const R = compute5(inp); return window.PSBDeckDist && R && R.deck ? window.PSBDeckDist.apply(inp, R) : R; };
   // HP (2026-11-25, engineer decision: t_h is the minimum haunch, at midspan; §4): the haunch along the girder t_h + Δ_deck (1 − ψ) instead of
   // the engine's t_h + Δ_deck ψ (engine/haunch.js; R.haunch only, no check, load or ratio) and the RIDOT 9.4.6 warning over 4 in
-  const compute = inp => { const R = compute6(inp); return window.PSBHaunch ? window.PSBHaunch.apply(inp, R) : R; };
+  const compute7 = inp => { const R = compute6(inp); return window.PSBHaunch ? window.PSBHaunch.apply(inp, R) : R; };
+  // HDC (2026-11-25, engineer decision; §4): DC1 carries the average haunch t_h + Δ_deck/3 (engine/haunch.js run: the whole chain in two
+  // passes, the haunch weight lowering Δ_deck); a section without a haunch (box, deck slab): the chain's result as before
+  const compute = inp => (window.PSBHaunch && window.PSBHaunch.run ? window.PSBHaunch.run(inp, compute7) : compute7(inp));
   window.PSBHoldDown = { NAME, FRAC, apply, compute, fracOf };
 })();

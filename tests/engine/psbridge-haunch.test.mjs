@@ -23,9 +23,12 @@ const design = (f) => { const P = W.PSBModel.defaultProject(); if (f) f(P); asse
 const next45 = (f) => design(P => { P.base.girder = 'NEXT 24F'; P.spans.lengths = [45]; P.xs.bays = P.xs.bays.map(() => 10); P.base.ts = 8; P.base.th = 2;
   P.base.rows = [{ n: 16, y: 2.875, dbnd: 0, nd: 0 }, { n: 16, y: 4.875, dbnd: 0, nd: 0 }, { n: 12, y: 6.875, dbnd: 0, nd: 0 }]; P.base.harp.n = 0;
   P.base.loads.wNC = 0; P.base.loads.wBar = 0.5; P.base.loads.wDW = 0.3; if (f) f(P); });
+/* HP tests: the profile alone (PSBHaunch without run: HDC off) against no module; HDC tests: the page's result (profile + DC1) against the
+   profile alone */
+const withH = (h, f) => { const keep = W.PSBHaunch; W.PSBHaunch = h; try { return f(); } finally { W.PSBHaunch = keep; } };
+const profOnly = inp => withH(Object.assign({}, W.PSBHaunch, { run: undefined }), () => W.PSBHoldDown.compute(JSON.parse(JSON.stringify(inp))));
 function both(P) {
-  const R = W.PSBHoldDown.compute(W.PSBDesign.inputs(P)), keep = W.PSBHaunch;
-  W.PSBHaunch = undefined; let R0; try { R0 = W.PSBHoldDown.compute(W.PSBDesign.inputs(P)); } finally { W.PSBHaunch = keep; }
+  const R = profOnly(W.PSBDesign.inputs(P)), R0 = withH(undefined, () => W.PSBHoldDown.compute(W.PSBDesign.inputs(P)));
   return { R, R0 };
 }
 function diff(a, b, at = '', out = [], seen = new Set()) {
@@ -65,10 +68,10 @@ test('RIDOT BDM 9.4.6: one warning when the haunch is thicker than 4 in (RIDOT o
   const P = next45(P => { P.base.owner = 'RIDOT'; }), R = W.PSBHoldDown.compute(W.PSBDesign.inputs(P));
   assert.equal(R.hp.owner, 'RIDOT'); assert.equal(R.hp.lim, 4);
   const w = R.warns.filter(x => W.PSBHaunch.WARN_RE.test(x)); assert.equal(w.length, 1); assert.equal(w[0], R.hp.warn);
-  assert.ok(/haunch up to 5\.35 in \(at the bearings/.test(w[0]), w[0]);
+  assert.ok(/haunch up to 5\.30 in \(at the bearings/.test(w[0]), w[0]);   // HDC: Δ_deck 3.302 with the average haunch weight
   for (const ow of ['AASHTO', 'MassDOT', 'CTDOT']) { const Q = next45(P => { P.base.owner = ow; }), Rq = W.PSBHoldDown.compute(W.PSBDesign.inputs(Q));
     assert.ok(!Rq.warns.some(x => W.PSBHaunch.WARN_RE.test(x)), ow); assert.equal(Rq.hp.lim, null); }
-  // 4 in or less: t_h = 0.5 in + Δ (3.40 in with the lighter haunch) = 3.90 in at the bearings
+  // 4 in or less: t_h = 0.5 in + Δ (about 3.37 in with the lighter haunch) at the bearings
   const Q = next45(P => { P.base.owner = 'RIDOT'; P.base.th = 0.5; }), Rq = W.PSBHoldDown.compute(W.PSBDesign.inputs(Q));
   assert.ok(Rq.hp.max <= 4, String(Rq.hp.max)); assert.ok(!Rq.warns.some(x => W.PSBHaunch.WARN_RE.test(x)));
   // box beam: no haunch in this engine, no warning
@@ -98,4 +101,51 @@ test('worked steps: midspan and bearings carry the result; every tab case: only 
     assert.deepEqual(d, wi >= 0 ? [`warns.${wi}`] : [], name);
   }
   assert.ok(n >= 7, 'cases ' + n);
+});
+
+/* ---------- HDC (2026-11-25, §4): DC1 from the average haunch t̄_h = t_h + Δ_deck/3, two passes (engine/haunch.js run) ----------
+   Hand check, the NEXT 24F design above: L = 540 in, b = 120 in, w_c,d,DL = 0.150 kcf, β = 120(0.150)/144 = 0.125 klf per in;
+   k = 5 L⁴ / (12 · 384 E_c I_g) = 0.32209 in per klf (E_c, I_g of the engine); pass 1 Δ_0 = 3.3458 in;
+   Δ = 3.3458 / (1 + 0.32209(0.125)/3) = 3.3458 / 1.013420 = 3.3015 in; t̄_h = 2 + 3.3015/3 = 3.1005 in;
+   w_h = 120(3.1005)/144(0.150) = 0.3876 klf (before 120(2)/144(0.150) = 0.2500); ΔM_DC1 at midspan = 0.1376(45)²/8 = 34.8 k-ft,
+   Strength I M_u 2335.2 -> 2378.6 k-ft (+1.25 × 34.8 = 43.5, the engine +43.3). */
+test('HDC hand check: NEXT 24F 45 ft, t_h = 2 in: t̄_h 3.1005 in, w_h 0.2500 -> 0.3876 klf, Δ_deck 3.346 -> 3.302 in, M_u 2335.2 -> 2378.6 k-ft', () => {
+  const P = next45(), inp = W.PSBDesign.inputs(P), R = W.PSBHoldDown.compute(inp), Rp = profOnly(inp), h = R.hdc;
+  assert.equal(h.b, 120); assert.equal(h.wc, 0.15); assert.equal(h.beta, 0.125); near(h.k, 5 * 540 ** 4 / (12 * 384 * Rp.cp.Ecg * Rp.g.I), 1e-12, 'k');
+  assert.ok(Object.is(h.d0, Rp.cam.afterDeck)); assert.equal(h.d0.toFixed(4), '3.3458'); assert.equal(h.k.toFixed(5), '0.32209');
+  near(h.d, h.d0 / (1 + h.k * h.beta / 3), 1e-12, 'Δ solved'); near(R.cam.afterDeck, h.d, 1e-9, 'pass 2 Δ = solved Δ'); assert.equal(h.d.toFixed(4), '3.3015');
+  near(h.tavg, 2 + h.d / 3, 1e-12, 't̄_h'); assert.equal(h.tavg.toFixed(4), '3.1005');
+  near(R.cp.wdkHaunch, 120 * h.tavg / 144 * 0.15, 1e-12, 'w_h'); assert.equal(R.cp.wdkHaunch.toFixed(4), '0.3876'); assert.equal(Rp.cp.wdkHaunch.toFixed(4), '0.2500'); assert.equal(h.w0, Rp.cp.wdkHaunch);
+  near(R.wDk - Rp.wDk, R.cp.wdkHaunch - Rp.cp.wdkHaunch, 1e-12, 'w_DC1 grows by the haunch only');
+  const fl = Q => Q.checks.find(c => c.n === 'Flexure'); assert.equal(fl(Rp).v.toFixed(1), '2335.2'); assert.equal(fl(R).v.toFixed(1), '2378.6');
+  assert.equal(fl(Rp).r.toFixed(3), '0.480'); assert.equal(fl(R).r.toFixed(3), '0.489');
+  assert.equal(R.cam.dDK.toFixed(4), '0.4469'); assert.equal(Rp.cam.dDK.toFixed(4), '0.4026');
+  // the haunch profile of PR HP uses pass 2's Δ_deck
+  near(R.haunch[0].buildup, 2 + R.cam.afterDeck, 1e-12, 'bearing haunch'); assert.equal(R.haunch[5].buildup, 2);
+  // the section properties, e_g and the haunch-in-properties option keep t_h
+  ['Ic', 'ybc', 'Ac', 'Sbc', 'Stg', 'Std', 'hc', 'wdkDeck', 'wdkHW'].forEach(f => assert.ok(Object.is(R.cp[f], Rp.cp[f]), 'cp.' + f));
+  assert.ok(Object.is(R.df.eg, Rp.df.eg), 'e_g'); assert.ok(Object.is(R.dfm, Rp.dfm), 'DF_M');
+  const Q = next45(P => { P.base.haunchInProps = true; }), iq = W.PSBDesign.inputs(Q), Rq = W.PSBHoldDown.compute(iq), Rqp = profOnly(iq);
+  ['Ic', 'ybc', 'Ac', 'hc'].forEach(f => assert.ok(Object.is(Rq.cp[f], Rqp.cp[f]), 'haunch in props: cp.' + f)); assert.ok(Rq.cp.Ic > Rp.cp.Ic);
+  // worked steps: t̄_h and w_h carry the result; every pair agrees
+  const Wk = W.PSBWorked.loads(inp, R), v = id => Wk.steps.find(s => s.id === id);
+  assert.ok(Object.is(v('ld.havg').value, h.tavg)); assert.ok(Object.is(v('ld.whaunch').value, R.cp.wdkHaunch)); assert.equal(Wk.paths['ld.havg'], 'hdc.tavg');
+  Wk.pairs.forEach(p => assert.ok(Math.abs(p.shown - p.engine) <= 1e-9 * Math.max(1, Math.abs(p.engine)), `${p.id}: ${p.shown} vs ${p.engine}`));
+});
+
+test('HDC: Δ_deck < 0: t̄_h = t_h + 2|Δ_deck|/3 (never below t_h); box beams: nothing changes', () => {
+  const P = next45(P => { P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; }), inp = W.PSBDesign.inputs(P), R = W.PSBHoldDown.compute(inp), h = R.hdc;
+  assert.ok(h.neg && h.d < 0 && h.d0 < 0); near(h.d, h.d0 / (1 - 2 * h.k * h.beta / 3), 1e-12, 'Δ solved'); near(R.cam.afterDeck, h.d, 1e-9);
+  near(h.tavg, 2 - 2 * h.d / 3, 1e-12); assert.ok(h.tavg > 2); assert.ok(R.cp.wdkHaunch > h.w0);
+  const B = design(P => { P.base.girder = 'AASHTO BIII-36 (39in)'; P.base.ts = 6; P.base.harp.n = 0; P.base.rows = [{ n: 16, y: 2, nd: 4, dbnd: 8 }, { n: 4, y: 37, nd: 0, dbnd: 0 }];
+    P.xs.bays = [3, 3, 3, 3]; P.xs.ohL = 1.5; P.xs.ohR = 1.5; P.spans.lengths = [70]; });
+  const ib = W.PSBDesign.inputs(B), Rb = W.PSBHoldDown.compute(ib), Rbp = profOnly(ib);
+  assert.equal(Rb.hdc, undefined); assert.deepEqual(diff(Rb, Rbp), [], 'box: the result as before');
+});
+
+test('HDC: no balance (Δ_0 < 0, 2kβ/3 ≥ 1; decision pending engineer review): t_h kept, one warning', () => {
+  const P = next45(P => { P.spans.lengths = [120]; P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; }), inp = W.PSBDesign.inputs(P), R = W.PSBHoldDown.compute(inp), Rp = profOnly(inp), h = R.hdc;
+  assert.ok(h && h.diverge && h.same && h.d0 < 0 && 2 * h.k * h.beta / 3 >= 1, JSON.stringify(h));
+  assert.ok(Object.is(R.cp.wdkHaunch, Rp.cp.wdkHaunch)); assert.equal(R.warns.filter(w => /cannot be balanced/.test(w)).length, 1);
+  assert.deepEqual(diff(R, Rp).filter(p => !/^hdc/.test(p)), [`warns.${R.warns.length - 1}`]);
 });
