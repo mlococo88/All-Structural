@@ -9769,3 +9769,35 @@ None.
 - **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
 - **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
 - **Other copies:** none.
+
+## 2026-11-25 — PR: claude/ps-gird-subtabs (PR pending) (GSUB) — the Girders & strands input tab split into sub-tabs: Girder types · Section · Strands · Reinforcement (display only)
+### Request (engineer, 2026-11-25)
+The Girders & strands input tab was about 4,000 px long with 11 cards. Approved layout: a sub-tab row inside the tab.
+- **Girder types:** the Girder types card (with no girder types: the Design girder card) and "Shown on the output tabs".
+- **Section:** Girder shape (library, custom section, section-property overrides).
+- **Strands:** Straight strand rows and Draped strands with the strand pattern figure beside them (two columns where the panel is at least 720 px wide; stacked below it: rows, figure, draped), then "Edit strands on the section".
+- **Reinforcement:** Shear reinforcement (stirrups), Longitudinal reinforcement (5.7.3.5 tie), Release tension steel, Splitting and confinement steel.
+- "Entered values for" (the girder-type scope) above the Section, Strands and Reinforcement sub-tabs.
+### Where / Before / After
+- `ui/girdsubs.js` (new, `window.PSBGirdSubs`): `SUBS`, `CARDS` (card id → sub-tab), `norm`, `subOf(card id | sub key | project path)`, `parse('tab@target')`, `pane(P, ui, V, sk)` (the sub-tab row, `role="tablist"`, buttons `role="tab"` with `aria-selected` / `aria-controls`; the scope choice; four `role="tabpanel"` panels, the hidden ones with `hidden`), `count(errors, tabOf)`. Every panel is drawn, so the input checks and TY.mark mark every field and the delegated handlers on `#inPanes` reach them.
+- `index.html` script list: `'ui/girdsubs.js'` after `'ui/types.js'`.
+- `index.html panes()`: before `gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V) + <Strand pattern card> + PSBStrandEdit.card(...)` → after `gird: GS.pane(P, ui, V, sk)` (the Strand pattern card's HTML moved into `pane()` unchanged except `id="card-strandPat"`).
+- `index.html`: `ui.gsub = GS.norm(ui.gsub)` after the `ui.otab` default (kept in `psb2.ui` with `itab`; a saved ui without it opens Girder types; no new key). `drawInputs`: the strand pattern and the strand editor are mounted when `ui.itab === 'gird' && ui.gsub === 'str'` (before: `ui.itab === 'gird'`). `markErrors`: the same numbered dot (`.inDot`, `has-err`) on the sub-tab holding the field (`GS.count`). `gotoErr`: `ui.gsub = GS.subOf(e.path)` on this tab. New `goIn(spec, top)`: the tab, the sub-tab of the target, then the card (`scrollIntoView`, a short outline flash `gFlash`) or the field (`PSBInputCheckUI.focus`); without a target the link's old scroll. Used by the `[data-goin]` handlers of `#inPanes` and `#out` and by the `goin` callbacks of the Report, Drawings and the check summary column (before: `ui.itab = t; saveUi(); drawInputs(); …`). New `gsubTo(k, focus)` and a `keydown` handler (ArrowLeft / ArrowRight / Home / End) on the sub-tab row. CSS `.gSubs` (the input tabs' style, smaller), the error dot, `.gStr` two columns (`@container (min-width:720px)`), print: `.gSubs` hidden as `.inTabs`.
+- `ui/inputs.js cards(tab, P, R, only)`: optional `only(cardId)`; the Straight strand rows card moved unchanged into `rowsCard(P)`; with no `only` the output is the same HTML as before (test).
+- Links to the tab name a target, `data-goin="gird@<card id | field path | sub key>"` (before `data-goin="gird"`): `index.html` (line-type note → `card-types`; output note → `types`; section-corrected notice → `card-shape`), `ui/endzone.js` (`card-split`, `base.opt.relAs`, `base.opt.relBondedReinf`), `ui/loads.js` (`card-design` ×2, `types`), `ui/nomen.js` (`card-shape` ×5, `base.harp.n`, `card-rows`), `ui/plan.js` (`card-types`), `ui/section.js` (`card-rows`), `ui/shear.js` (`card-stirrups`, `base.opt.longAsBot`), `ui/stresses.js` (`base.cont.AsTop`), `ui/sumelev.js` (`card-rows`), `ui/summary.js` (`card-types` ×2, `types`), `ui/types.js` (outBar → `card-types`; shownCard `q.where === 'gird'` → `card-types`), `ui/inputs.js` designCard (`q.where === 'gird'` → `card-design`), `engine/fields.js` continuity note (`base.cont.AsTop`), `ui/drawings.js` SRC (`gird@str`, `gird@card-strandPat`, `gird@card-types`, `gird@card-split`), `report/builders.js` (`[[tab:in:gird@types|…]]`, `[[tab:in:gird@card-types|…]]`). The Report's links carry the target (`report/fromtab.js` unchanged: `[[tab:in:gird@card-split|…]]`).
+- `ui/types.js onClick 'edit'` ("Edit its inputs"): also `ui.gsub = 'sec'`; its notice adds "(Girders & strands: from the Section sub-tab)".
+### Problem
+Display only: a long tab. No input, value, default, field id, calculation, saved key or project format changed.
+### Governing provision
+None (display only).
+### Check case
+Built-in new project: Girders & strands → Girder types shows the two types (Interior S1, Exterior S1); Strands shows 3 rows (10 at 2 in, 10 at 4 in, 8 at 6 in), 12 draped, the pattern "PCI BT-72: 40 strands (28 straight, 12 draped)". Splitting steel legs −1: the tab dot 1 and the Reinforcement dot 1; the Shear tab's stirrups link opens Reinforcement at the stirrups card.
+### How verified
+`tests/engine/psbridge-gird-subtabs.test.mjs` (new); `tests/smoke/ps-bridge-gsub.mjs` (new); main vs this branch: every cell's engine inputs and result (6 projects) hashed identical; every input and select of the tab (id, path, value, checked, options) identical across the sub-tabs, base scope and a girder type's scope, two projects; the PS smokes touching the tab updated to pick the sub-tab (assertions kept, a sub-tab dot and the drawings link's sub-tab added).
+### Saved data
+`psb2.ui` gains `gsub` (the same key as `itab`); an old saved ui without it opens Girder types. No project change.
+### Decisions (pending engineer review)
+- GSUB-a. "Entered values for" is not shown on Girder types (nothing there depends on it; "Edit its inputs" there sets it).
+- GSUB-b. "Edit its inputs" opens the Section sub-tab (the type's inputs start there).
+- GSUB-c. On narrow panels (below 720 px) the Strands sub-tab stacks rows, figure, draped strands; the strand editor stays full width below.
+- GSUB-d. A link that names the tab in general (the output tabs' "Girders & strands tab" note, the Report's assumptions) opens Girder types; one about a card or a field opens its sub-tab and scrolls to it (a field is focused).
