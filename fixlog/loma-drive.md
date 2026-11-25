@@ -14,3 +14,12 @@ Not an engineering calculation tool: no formulas, load or resistance factors, un
 - **Features:** finished, framing and x-ray modes; section cuts; 3D floor isolate; plan views; sun and shadow study with true north; finish swatches and presets; night lighting; walk-through; site map (north up) and neighbourhood view; tap-for-info on every element.
 - **How verified:** rendered headless (Chrome/SwiftShader) for each view; walk-mode stair climb tested.
 - **Open items:** lot lines, driveway, utilities and the existing-house comparison are not modelled. A topo survey would replace the lidar fit.
+
+## 2026-11-25 — Existing-house outline on its own toggle
+
+- **Problem:** The red MassGIS roof outline of the existing house is drawn at grade around the foundation. It was grouped with "Labels & lidar points", so it read as a stray pink line along the top of the foundation.
+- **Where:** `apps/loma-drive/index.html`, site context block. Anchor text: `exInfo, 'exo'`.
+- **Before:** `member(..., M({ color: 0xc8102e }), SG, exInfo, 'lbl');`
+- **After:** `member(..., M({ color: 0xc8102e }), SG, exInfo, 'exo');` plus a new "Existing house outline" checkbox (`data-g="exo"`, off by default) and `exoOn` in `applyMode()`.
+- **Governing provision:** n/a (display only; no computed values).
+- **How verified:** rendered headless; no console errors; outline hidden by default and shown when checked.

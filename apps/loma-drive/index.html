@@ -86,6 +86,7 @@ select{min-height:36px;border-radius:9px;border:1px solid var(--line);background
   <label class="ck"><input type="checkbox" data-g="terrain" checked>Terrain</label>
   <label class="ck"><input type="checkbox" data-g="site" checked>Neighbors &amp; streets</label>
   <label class="ck"><input type="checkbox" data-g="labels">Labels &amp; lidar points</label>
+  <label class="ck"><input type="checkbox" data-g="exo">Existing house outline</label>
  </div></div>
  <div class="sec"><h2>Mode</h2><div class="row" id="modes">
   <button class="b on" data-m="fin">Finished</button><button class="b" data-m="frm">Framing</button><button class="b" data-m="xray">X-ray</button>
@@ -1026,7 +1027,7 @@ label('Basement', 20, BASE + 4.5, 20, G.found); label('Attic', 20, PLATE2 + 4, 1
   });
   // existing house roof outline (MassGIS) as a dashed footprint for reference
   const exInfo = { t: 'Existing house roof outline (MassGIS)', d: '≈40.9\' × 38.2\' with the rear deck notch — the new house sits on the same footprint; the outline was used to place and orient the model (plan north ≈ 28° east of true north).' };
-  [[-0.42, 37.75], [32.72, 37.76], [32.73, 26.94], [40.48, 26.94], [40.49, -0.39], [-0.41, -0.41], [-0.42, 37.75]].reduce((a, b) => { member(V(a[0], grade(a[0], a[1]) + 0.1, a[1]), V(b[0], grade(b[0], b[1]) + 0.1, b[1]), 0.25, 0.12, M({ color: 0xc8102e }), SG, exInfo, 'lbl'); return b; });
+  [[-0.42, 37.75], [32.72, 37.76], [32.73, 26.94], [40.48, 26.94], [40.49, -0.39], [-0.41, -0.41], [-0.42, 37.75]].reduce((a, b) => { member(V(a[0], grade(a[0], a[1]) + 0.1, a[1]), V(b[0], grade(b[0], b[1]) + 0.1, b[1]), 0.25, 0.12, M({ color: 0xc8102e }), SG, exInfo, 'exo'); return b; });
   // streets
   const roadInfo = n => ({ t: n, d: 'Centerline from US Census TIGER/Line; width assumed 20\'.' });
   for (const [name, pts] of Object.entries(SITE.roads)) {
@@ -1071,11 +1072,12 @@ const LIGHTS = [];
 flushInst();
 
 // =================== MODES / VISIBILITY ===================
-let mode = 'fin', labelsOn = false, furnOn = true;
+let mode = 'fin', labelsOn = false, furnOn = true, exoOn = false;
 function applyMode() {
   scene.traverse(o => {
     const k = o.userData.k; if (!k) return;
     if (k === 'lbl') { o.visible = labelsOn; return; }
+    if (k === 'exo') { o.visible = exoOn; return; }
     if (k === 'furn') { o.visible = furnOn && mode === 'fin'; return; }
     if (mode === 'fin') o.visible = k !== 'frm';
     else if (mode === 'frm') o.visible = !(k === 'fin' || k === 'furn');
@@ -1086,7 +1088,7 @@ function applyMode() {
 }
 document.querySelectorAll('#modes button').forEach(b => b.onclick = () => { mode = b.dataset.m; applyMode(); });
 document.querySelectorAll('#layers input').forEach(inp => inp.onchange = () => {
-  const g = inp.dataset.g; if (g === 'labels') { labelsOn = inp.checked; applyMode(); } else if (g === 'furn') { furnOn = inp.checked; applyMode(); } else G[g].visible = inp.checked;
+  const g = inp.dataset.g; if (g === 'labels') { labelsOn = inp.checked; applyMode(); } else if (g === 'furn') { furnOn = inp.checked; applyMode(); } else if (g === 'exo') { exoOn = inp.checked; applyMode(); } else G[g].visible = inp.checked;
 });
 const setLayer = (g, v) => { const i = document.querySelector(`#layers input[data-g=${g}]`); i.checked = v; i.onchange(); };
 
