@@ -304,3 +304,29 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 ### Open items
 - Decision (pending engineer review): the rule (ok agrees with value ≤ 1 within 1e-3) and a failing step below 1.0 read as not a ratio
   (chip `NG` with no number); a D/C with a limit other than 1.0 must declare `ratio: true` to keep its number. None found in the audit.
+
+## 2026-11-24 — PR: claude/sb-ng-relation (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (NGREL) — line(): a failing comparison prints the relation that holds ("33.75 > 17.75, NG", not "33.75 ≤ 17.75, NG"); opt-in, on only in the Steel Bridge app   [display only; no value, ok flag, verdict, formula or reference changes]
+### Request (engineer, approved Steel Bridge follow-up)
+A failing step printed the satisfied form of its requirement with numbers that violate it: Constructibility GS14 "f_bu + f_ℓ/3 ≤ φ_fF_nc = 35.05 + 0.00/3 = 35.05 ≤ 19.09, NG", Flexure Service II "|f_f| ≤ 0.95R_hF_yf = 50.67 ≤ 0.95(1.000)(50.00) = 47.50, NG". The numeric line should read the relation that holds (">" where the demand exceeds the limit, "<" for an unmet "≥"); the symbolic requirement stays.
+### Where / Before / After
+- `shared/steps.js`, above `function line(s, html, o)` (anchor `/* NGREL (2026-11-24;`): new `opt = { ngRel: false }`, `NGR`, `FLIPR`, `UNITW`, `NUMX`, `numOf(seg)`, `topLevel(t)`, `ngRel(sub)`, `subOf(s)`.
+  `ngRel(sub)`: when sub holds exactly one relation at depth 0 (outside `{ } ( ) [ ]`) and it is `\le`, `\leq`, `≤`, `\ge`, `\geq` or `≥`, and the part after the last top-level "=" before it and the part after the last top-level "=" after it are each a number alone (optional sign, thousands `{,}` or `,`, optional unit in `\text{…}` or ksi / psi / ksf / psf / kip / kips / lb / in / ft / kip-ft / kip-in / in^{2..4} / klf / plf / kip/ft / kip/in / cycles / years), and the two numbers as shown violate it (a > b for ≤, a < b for ≥): the relation becomes `\gt` (for ≤) or `\lt` (for ≥) (`>` / `<` for the Unicode forms); otherwise sub is returned unchanged.
+  `subOf(s) = opt.ngRel && s.ok === false && s.sub ? ngRel(s.sub) : s.sub`.
+- `line()`: before `if (s.sub && s.sub !== s.eq) { parts.push(R(s.sub)); last = s.sub; }` → after `if (s.sub && s.sub !== s.eq) { const sb = subOf(s); parts.push(R(sb)); last = sb; }`. sym and eq (the requirement) are never changed; the step object is not modified.
+- Export: `window.SharedSteps = { step, work, …` → `{ opt, ngRel, step, work, …` (the rest unchanged).
+- Off by default: every tool renders exactly as before unless its page sets `SharedSteps.opt.ngRel = true`. Only the Steel Bridge app does (apps/steel-bridge/ui/sub.js; fixlog/steel-bridge.md NGREL).
+### Problem
+The engines write the satisfied form of a requirement into sub ("… \le …") whatever the numbers; the ok flag, the "NG" and the red marking (#1709) were right, the printed relation was not.
+### Governing provision
+None (display only). No formula, factor, unit, value, ok flag or code reference changes.
+### Check case
+`line({ sym: 'f_{bu}', eq: '\le \phi_{f}F_{nc}', sub: '33.75 \le 17.75', value: 'NG', ok: false }, false)`: before (and with opt.ngRel false) `f_(bu) ≤ φ_fF_(nc) = 33.75 ≤ 17.75, NG`; with opt.ngRel true `f_(bu) ≤ φ_fF_(nc) = 33.75 > 17.75, NG`; ok true or undefined: unchanged. `ngRel('0.80 \ge 1.00')` = `0.80 \lt 1.00`; unchanged: `10 \le 20`, `17.75 \le 17.75` (equal as shown), `2 + 3 \le 4` (an expression), `5 \le 0.42D`, `1.75 \le 2.75 \le 2.63` (two relations), `\max(1,\ 3 \le 2)` (inside brackets). `tests/engine/steps-ngrel.test.mjs`.
+### How verified
+- `tests/engine/steps-ngrel.test.mjs` (new); `tests/engine/steps-*.test.mjs`; the whole engine suite (`node tests/engine/run.mjs`, 4 chunks) and `tests/check-syntax.mjs`.
+- Other tools: unchanged by construction (the new code runs only when `opt.ngRel` is true, which no other page sets; `subOf` returns `s.sub` otherwise).
+- Tools that load the file (their engine tests in the suite above): `ASCE7-16 Load Generator.html`, `BasePlateAnchorDesigner.html`, `Bridge Substructure Loading.html`, `Concrete Beam Capacity.html`, `Gusset Plate Rating.html`, `Light Pole and Sign Post.html`, `Moving Load Generator.html`, `Pile Designer.html`, `Prestressed Bridge Design.html`, `Retaining Wall Designer.html`, `Section Property Calculator.html`, `Shear and Moment Diagrams.html`, `Spread Footing.html`, `Steel Beam Design - AISC 15th.html`, `Stone Masonry Arch Load Rating.html`, `Timber Beam Check.html`, `abutment_calculator.html`, `apps/crane-pick/index.html`, `apps/ps-bridge/index.html`, `apps/steel-bridge/index.html`, `elastomeric_design_module.html`, `index.html`, `lldf.html`.
+### Other copies
+None.
+### Open items
+- Decision (pending engineer review), NGREL-1: opt-in per page; the other tools keep the satisfied form on a failing line until the engineer asks for the same there (one line in each page: `SharedSteps.opt.ngRel = true`).
+- NGREL-2: a failing step whose numbers are equal as shown (e.g. 17.75 vs 17.751) keeps "≤" (the relation is decided from the numbers printed).

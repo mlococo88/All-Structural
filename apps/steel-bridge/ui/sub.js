@@ -41,5 +41,9 @@
   const mark = (s, ST) => { const q = ST && s ? ST.get(s.id) : null;
     return q === 'fail' ? { cls: 'no ng', tag: '<span class="ngTag">NG</span> ' } : q === 'warn' ? { cls: 'no wn', tag: '<span class="ngTag wn">Warning</span> ' }
       : { cls: s && s.ok === false ? 'no' : '', tag: '' }; };
+  /* NGREL (2026-11-24; engineer, approved): this app's failing comparison steps print the relation that holds ("33.75 > 17.75, NG", not
+     "33.75 ≤ 17.75, NG"): shared/steps.js line() flips the one \le / \ge of a failing step's sub when its two numbers violate it, on the
+     tabs, in the Report and in its plain text. Off in every other tool (SharedSteps.opt.ngRel, default false). Display only. */
+  if (window.SharedSteps && window.SharedSteps.opt) window.SharedSteps.opt.ngRel = true;
   window.SBDSub = { html, fix, stepSt, items, rows, rowFail, mark };
 })();
