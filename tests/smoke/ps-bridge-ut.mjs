@@ -27,7 +27,7 @@ const shot = async (sel, name) => { if (!SHOT) return; const el = await p.$(sel)
 const set = async (pth, v, sel) => { const q = `[data-path="${pth}"]`; if (sel) await p.selectOption(q, v); else { await p.fill(q, String(v)); await p.dispatchEvent(q, 'change'); } await p.waitForTimeout(350); await itab('xsec'); await p.waitForSelector('#card-dl'); };
 const calc = () => p.evaluate(() => { const P = PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, i = PSBDesign.inputs(P), R = PSBHoldDown.compute(JSON.parse(JSON.stringify(i)));
   const m = R.grid.reduce((a, r) => Math.abs(r.x - R.L / 2) < Math.abs(a.x - R.L / 2) ? r : a);
-  return { ut: i.ut || null, wNC: i.loads.wNC, Mu: R.MuMid, s3: m.s3Bot, Sb: R.g.Sb, Sbc: R.cp.Sbc, A: R.g.A, e: m.e, Pe: m.Aps * R.fpe, R: R.ut ? JSON.parse(JSON.stringify(R.ut)) : null, dDK: R.cam.dDK, nChecks: R.checks.length, abs: R.checks.filter(c => /^UF absent: /.test(c.n)).map(c => c.n) }; });
+  return { ut: i.ut || null, wNC: i.loads.wNC, Mu: R.MuMid, s3: m.s3Bot, Sb: R.g.Sb, Sbc: R.cp.Sbc, A: R.g.A, e: m.e, Pe: m.Aps * R.fpe, R: R.ut ? JSON.parse(JSON.stringify(R.ut)) : null, dDK: R.cam.dDK, wh: R.cp.wdkHaunch, L: R.L, nChecks: R.checks.length, abs: R.checks.filter(c => /^UF absent: /.test(c.n)).map(c => c.n) }; });
 try {
   await p.waitForSelector('#tabBar [data-otab]');
   await p.evaluate(() => { localStorage.clear(); const P = PSBModel.newProject(); P.project.name = 'Noncomposite utilities smoke (made-up bridge)'; localStorage.setItem('psb2.project.current', PSBModel.exportJSON(P)); });
@@ -63,8 +63,11 @@ try {
   ['#st-dl.G2.UTN', '#st-dl.G2.UF', '#st-ld.ut.wNC', '#st-ld.ut.MuU', '#st-ld.ut.fb', '#st-ld.ut.abs', '#st-ld.ut.cam'].forEach(h => assert.ok(L.links.includes(h), h));
   assert.match(L.lbl, /Utility \(noncomposite, DW factors\)/);
   assert.ok(L.abs && L.abs.rows === before.nChecks && L.abs.n === A.abs.length, JSON.stringify(L.abs)); assert.deepEqual(L.abs.gov.map(t => 'UF absent: ' + t), A.abs);
-  assert.ok(Math.abs((A.Mu - before.Mu) / 12 - 76.5) < 1e-6, 'M_u + 1.50 M_UT + 1.25 M_UF');
-  assert.ok(Math.abs((A.s3 - before.s3) - (-54 * 12 / A.Sb + (A.Pe - before.Pe) * (1 / A.A + A.e / A.Sb))) < 1e-9, 'Service III bottom stress on the girder section');
+  // HDC (2026-11-25, PR claude/ps-haunch-dc1): DC1 carries the average haunch t_h + Δ_deck/3; the added noncomposite load lowers Δ_deck and so the
+  // haunch weight (Δw_h < 0): its midspan moment Δw_h L²/8 (1.25 at Strength, 1.00 at Service) is added to the expected change
+  const dMh = (A.wh - before.wh) * A.L * A.L / 8; assert.ok(A.wh <= before.wh, 'the haunch weight does not grow');
+  assert.ok(Math.abs((A.Mu - before.Mu) / 12 - (76.5 + 1.25 * dMh)) < 1e-6, 'M_u + 1.50 M_UT + 1.25 M_UF (+ 1.25 ΔM_h)');
+  assert.ok(Math.abs((A.s3 - before.s3) - (-(54 + dMh) * 12 / A.Sb + (A.Pe - before.Pe) * (1 / A.A + A.e / A.Sb))) < 1e-9, 'Service III bottom stress on the girder section');
   ok(`Loads & LLDF: w_UT ${q.wUT.toFixed(4)}, w_UF ${q.wUF.toFixed(4)} klf; M_UT ${q.MUT.toFixed(1)}, M_UF ${q.MUF.toFixed(1)} kip-ft; ${L.steps.length} worked steps on the tab; M_u ${(before.Mu / 12).toFixed(1)} → ${(A.Mu / 12).toFixed(1)} kip-ft; Service III f_bot ${before.s3.toFixed(4)} → ${A.s3.toFixed(4)} ksi (S_b ${A.Sb.toFixed(1)} in³)`);
   ok(`present / absent table: ${L.abs.rows} checks, ${L.abs.n} with a larger ratio absent (${L.abs.gov.join('; ') || 'none'})`);
   await p.evaluate(() => { document.querySelector('#card-ut a.wk[href="#st-ld.ut.MuU"]').click(); }); await p.waitForTimeout(300);

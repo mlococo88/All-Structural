@@ -9992,6 +9992,6 @@ AASHTO LRFD 10th Ed. 3.5.1 (dead loads), 5.6.3.5.2 (camber); RIDOT BDM (April 20
 ### Check case
 NEXT 24F, L 45 ft, b 120 in, t_s 8, t_h 2 in, strands 16/16/12 straight, w_NC 0, w_DC2 0.5, w_DW 0.3 klf: E_c 5112.4 ksi, I_g 56,032 in⁴, k 0.32209 in/klf, β 0.125; Δ_0 3.3458 → Δ 3.3015 in; t̄_h 3.1005 in; w_h 0.2500 → 0.3876 klf; Δ_dk 0.4026 → 0.4469 in; M_u 2335.2 → 2378.6 k-ft (flexure ratio 0.480 → 0.489); I_c, e_g, DF unchanged.
 ### How verified
-`psbridge-haunch.test.mjs` (hand check, Δ < 0, no balance, box unchanged, section properties and e_g unchanged, steps); origin/main vs branch on 657 designs (495 changed, 32 verdict flips; the table in PR #1724); harness B with the old page through the same run; smoke `ps-bridge-haunch.mjs`.
+`psbridge-haunch.test.mjs` (hand check, Δ < 0, no balance, box unchanged, section properties and e_g unchanged, steps); origin/main vs branch on 657 designs (495 changed, 32 verdict flips; the table in PR #1724); harness B with the old page through the same run; smoke `ps-bridge-haunch.mjs`; smoke `ps-bridge-ut.mjs` updated (an added noncomposite utility lowers Δ_deck and so the haunch weight: its midspan moment Δw_h L²/8 is added to the expected M_u and Service III change).
 ### Open items
 The exact parabolic haunch load (half the midspan moment increase of the uniform average); every result computed twice (auto design, Compare slower).
