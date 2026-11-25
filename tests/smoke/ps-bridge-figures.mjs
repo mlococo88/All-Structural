@@ -149,7 +149,7 @@ for (const vw of [1400, 390]) {
   check(r.xsN === r.cells && r.plN === r.all, `${tag}: cross-section ${r.xsN}/${r.cells} sections, plan ${r.plN}/${r.all} girder lines`);
   check(r.hx > 40 && r.hx <= r.cap + 1 && r.hp > 40 && r.hp <= r.cap + 1, `${tag}: heights within the cap (${r.hx.toFixed(0)}, ${r.hp.toFixed(0)} ≤ ${r.cap.toFixed(0)})`);
   check(r.wx > 0.8 * r.wc, `${tag}: full width (${r.wx.toFixed(0)} of ${r.wc.toFixed(0)})`);
-  check(['in:xsec', 'in:gird@card-types', 'out:lds', 'in:layout', 'in:dd', 'out:3d'].every(k => r.links.includes(k)), `${tag}: links ${r.links.join(',')}`);
+  check(['in:xsec', 'in:gird@types', 'out:lds', 'in:layout', 'in:dd', 'out:3d'].every(k => r.links.includes(k)), `${tag}: links ${r.links.join(',')}`);
   check(!r.sideways, `${tag}: no sideways scroll`);
   if (args.shots) await (await p.$('#sum-gfx')).screenshot({ path: path.join(args.shots, `summary-gfx-${vw}.png`) });
   if (vw === 1400) {
