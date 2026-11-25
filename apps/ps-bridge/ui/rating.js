@@ -79,7 +79,7 @@
     at(0, 'bearing'); at(L, 'bearing');
     const shN = (R.shear || []).filter(q => !q.isBearing);
     if (shN.length) { const a = Math.min(...shN.map(q => q.x)), b = Math.max(...shN.map(q => q.x)); at(a, 'shear critical section'); if (b - a > 1e-6) at(b, 'shear critical section'); }
-    for (let j = 1; j <= 9; j++) at(j * L / 10, j === 5 ? 'midspan' : `${j / 10}L`);
+    for (let j = 1; j <= 9; j++) at(j * L / 10, j === 5 ? 'midspan' : `tenth point ${j / 10}L`);
     const lt = R.ss && R.ss.lt > 0 ? R.ss.lt / 12 : 0;
     if (lt) { at(lt, 'transfer point'); at(L - lt, 'transfer point'); }
     [...new Set(((R.ss && R.ss.groups) || []).filter(g => g.dbnd > 0).map(g => g.dbnd))].forEach(d => { at(d, 'debond point'); at(L - d, 'debond point');
