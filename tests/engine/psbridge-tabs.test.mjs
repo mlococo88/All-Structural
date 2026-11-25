@@ -55,7 +55,7 @@ test('PR 2d-1: the owner hold-down check worked (MassDOT, default BT-72: F_hd = 
    L_g = 120 ft, W = 0.825590 × 120 = 99.07 kip, 0.75 W = 74.3 kip; ratio 1.276 (FAIL). */
 test('PR 2d-3: PS-10 hold-down check, default BT-72 under AASHTO (hand check 94.8 vs 74.3 kip)', () => {
   const P = W.PSBModel.defaultProject(); assert.equal(P.base.opt.hdCheck, true); assert.equal(P.base.opt.hdFrac, 0.75);
-  const inp = W.PSBDesign.inputs(P), R0 = W.computeAll(inp), R = W.PSBHoldDown.compute(inp), h = R.ps10;
+  const inp = W.PSBDesign.inputs(P), R0 = W.PSBHaunch.run(inp, i => W.computeAll(i)), R = W.PSBHoldDown.compute(inp), h = R.ps10;   // HDC: the engine with the same average-haunch DC1 (engine/haunch.js run)
   assert.equal(R0.own, undefined); assert.equal(R0.checks.length + 1, R.checks.length, 'one check added');
   assert.deepEqual(JSON.parse(JSON.stringify(R.checks.slice(0, -1))), JSON.parse(JSON.stringify(R0.checks)), 'the engine\'s own checks unchanged');
   const ya = 60, ym = 8, frac = 0.40, L = 120, nh = 12, Ab = 0.217, fpbt = 0.75 * 270;   // the default inputs (harp, strand 0.6 in, f_pbt = 0.75 f_pu)
