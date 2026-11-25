@@ -93,6 +93,8 @@
     'ui/inputs.js',      // PR 2b: the girder design's input cards
     'ui/bridgedl.js',    // PR 3a-3: the Cross-section tab's DC2 / DW distribution card and the Loads & LLDF line table
     'ui/types.js',       // PR 3a-1: the girder types card, the "entered values for" choice, the type and line choice above the output tabs
+    'ui/widein.js',      // WIDE (2026-11-25): "Widen inputs" (the input panel over the whole width) and the input figures opened enlarged
+    'ui/girdsubs.js',    // GSUB (2026-11-25): the sub-tabs of the Girders & strands input tab (Girder types, Section, Strands, Reinforcement)
     'ui/demands.js',     // batch D1 (2026-11-15): the Loads tab's Demands card and the output tabs' demand source line
     'ui/legacy.js',      // PR 2f: the Project tab's "From the old app" card and the import summary
     'ui/bridgexfer.js',  // 2026-11-14 (item 12): BridgeXfer v1 (HANDOFF.md §5, verbatim)
@@ -188,6 +190,44 @@
   .inTabs button[aria-selected="true"],#tabBar button[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 3px 0 var(--color-secondary);}
   .inDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;}
   .inTabs button.has-err .inDot{display:inline-block;}
+  /* GSUB (2026-11-25): the sub-tabs of the Girders & strands tab (ui/girdsubs.js): the input tabs' style, smaller; the error dot as theirs;
+     the Strands sub-tab's strand pattern beside the rows where the panel is wide enough (stacked below 720 px); a card a link opened flashes */
+  .gSubs{display:flex;flex-wrap:wrap;gap:2px;margin:10px 0 4px;border-bottom:1px solid var(--color-border);scroll-margin-top:44px;}
+  .gSubs button{border:1px solid var(--color-border);border-bottom:none;border-radius:5px 5px 0 0;font-size:8.5pt;font-family:var(--font-ui);padding:3px 9px;background:var(--slate-100);color:#475569;}
+  .gSubs button[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 2px 0 var(--color-secondary);}
+  .gSubs button.has-err{border-color:var(--fail);color:#991B1B;}
+  .gSubs button.has-err .inDot{display:inline-block;width:auto;height:auto;min-width:15px;padding:0 4px;border-radius:8px;color:#fff;font-size:7.5pt;font-weight:700;line-height:14px;text-align:center;vertical-align:1px;}
+  .gSub[data-gsubpane="str"]{container-type:inline-size;}
+  @container (min-width:720px){ .gStr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"a f" "b f";grid-template-rows:auto 1fr;column-gap:12px;align-items:start;}
+    .gStrA{grid-area:a;} .gStrB{grid-area:b;} .gStrF{grid-area:f;} }
+  [data-pane="gird"] .sec{scroll-margin-top:44px;}
+  /* WIDE (2026-11-25, ui/widein.js): "Widen inputs" at the end of the input tab row; on (body.psbWide, 900 px and wider only) the input panel takes the
+     whole width: the output panel's content, the splitter and the check summary column hidden (the notices float at the bottom right);
+     --sbIn and the splitter's key untouched. The Strands sub-tab: the strand editor beside the draped strands from 1100 px; the Bridge
+     layout tab: the plan beside the spans and skews. The input figures open enlarged in #figZoomDlg. */
+  #inTabs{display:contents;}
+  .inTabs .wideBtn{margin-left:auto;align-self:center;border:1px solid var(--color-border);border-radius:5px;font-size:8.5pt;padding:2px 9px;margin-bottom:3px;background:var(--paper);color:var(--color-primary);white-space:nowrap;}
+  .inTabs .wideBtn[aria-pressed="true"]{background:#FEF9C3;border-color:#EAB308;color:#713F12;font-weight:600;}
+  @media screen and (max-width:899.98px){ .inTabs .wideBtn{display:none;} }
+  @media screen and (min-width:900px){
+    body.psbWide #sbSplit,body.psbWide #sbDashCol{display:none!important;}
+    body.psbWide #inputPanel{flex:1 1 auto!important;max-width:none!important;border-right:none;}
+    body.psbWide #outputPanel{position:fixed;right:16px;bottom:34px;width:min(460px,40vw);max-height:45vh;padding:0;background:transparent;overflow:auto;z-index:50;pointer-events:none;flex:none;}
+    body.psbWide #outputPanel>:not(#notices){display:none!important;}
+    body.psbWide #notices{pointer-events:auto;}
+    body.psbWide [data-pane="layout"]:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);column-gap:14px;align-items:start;}
+    body.psbWide [data-pane="layout"]>*{grid-column:1;}
+    body.psbWide [data-pane="layout"]>#psbPlan{grid-column:2;grid-row:1 / span 40;}
+  }
+  @container (min-width:1100px){ .gStr{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);grid-template-areas:"a f" "b e";grid-template-rows:auto 1fr;} .gStrE{grid-area:e;} }
+  @container (min-width:720px) and (max-width:1099.98px){ .gStrE{grid-column:1 / -1;} }
+  [data-figzoom]{cursor:zoom-in;} [data-figzoom]:focus-visible{outline:2px solid var(--color-secondary);outline-offset:2px;}
+  .fzBtn{float:right;font-size:8pt;padding:0 7px;margin:-1px 0 0 8px;text-transform:none;letter-spacing:0;}
+  #figZoomDlg{width:min(96vw,1400px);max-width:96vw;max-height:96vh;padding:0;border:1px solid var(--color-border);border-radius:8px;background:var(--paper);box-shadow:0 10px 40px rgba(15,23,42,.35);}
+  #figZoomDlg::backdrop{background:rgba(15,23,42,.55);}
+  #figZoomDlg .fzHead{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--color-border);background:var(--slate-100);font-family:var(--font-ui);font-size:10pt;}
+  #figZoomDlg .fzBody{padding:12px;text-align:center;} #figZoomDlg .fzBody svg{display:block;margin:0 auto 8px;background:#fff;}
+  .sec.gFlash{outline:2px solid var(--warn);outline-offset:1px;}
   #autoBar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:6px 0 2px;font-family:var(--font-ui);font-size:9pt;color:#475569;min-height:26px;} #autoBar[hidden]{display:none;}
   #autoBar .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px;}
   @keyframes sbspin{to{transform:rotate(360deg);}} @media (prefers-reduced-motion:reduce){#autoBar .spin{animation:none;}}
@@ -255,7 +295,7 @@
   #hoStale .notice{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 10px;background:#fffbeb;border:1px solid var(--slate-400);border-left:4px solid #b45309;border-radius:6px;padding:7px 10px;margin:0 0 6px;font-family:var(--font-ui);font-size:9.5pt;}
   #hoStale .notice>div:first-child{flex:1 1 200px;min-width:0;overflow-wrap:anywhere;} #hoStale .nBtns{display:flex;gap:6px;margin-left:auto;}
   @media print{ .hoStaleBar{display:none!important;} }
-  @media print{ #hdrBtns,#notices,#libDlg,.inTabs,#tabBar,#autoBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
+  @media print{ #hdrBtns,#notices,#libDlg,.inTabs,.gSubs,#figZoomDlg,#tabBar,#autoBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
     .steps li{break-inside:avoid;} .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line,.katex .overline-line,.katex .underline-line{border-bottom-color:#000!important;min-height:1px;} .katex-display{overflow:visible;} }
   /* DASH (2026-11-09): the left check summary column (ui/dash.js), as the other apps' (RW/SF/LP #984/#988/#991, GirderDetail #1196): at the far
      left from 1200 px, 240 px (280 px from 1500 px), 42 px when shrunk; the input panel keeps a third of the rest. Not shown below 1200 px, not printed. */
@@ -370,7 +410,7 @@
   <div id="main">
     <aside id="sbDashCol" aria-label="Check summary"></aside><!-- the check summary column, screens 1200 px and wider (ui/dash.js) -->
     <aside id="inputPanel">
-      <div class="inTabs" role="tablist" id="inTabs"></div>
+      <div class="inTabs" id="inTabRow"><div role="tablist" id="inTabs" class="inTabList"></div><button type="button" id="bWide" class="wideBtn" aria-pressed="false">⤢ Widen inputs</button></div><!-- WIDE (2026-11-25): ui/widein.js -->
       <div id="inPanes"></div>
     </aside>
     <div id="sbSplit" role="separator" aria-orientation="vertical" aria-controls="inputPanel outputPanel" aria-label="Width of the input and output panels (arrow keys move it, Home / End to the limits, double-click or Enter resets)" tabindex="0" title="Drag to change the width of the input and output panels; double-click to reset"></div><!-- ui/splitter.js -->
@@ -389,7 +429,7 @@
      autosaved to psb2.project.current on every change; the input tabs on the left, the output tabs on the right; the page's tab choices in
      psb2.ui. Only the Project, Bridge layout and Cross-section inputs of schema v1 are editable; every other tab is a placeholder naming
      what it will hold and the PR that brings it (docs/ps-bridge-plan.md §2.2, §2.3, §5). Nothing is calculated. */
-  const M = window.PSBModel, BR = window.PSBBridge, TY = window.PSBTypesUI, DLUI = window.PSBBridgeDLUI;
+  const M = window.PSBModel, BR = window.PSBBridge, TY = window.PSBTypesUI, DLUI = window.PSBBridgeDLUI, GS = window.PSBGirdSubs, WI = window.PSBWideIn;   // WI: WIDE (2026-11-25)   // GS: GSUB (2026-11-25)
   const HOUI = window.PSBHandoffUI;   // 2026-11-14 (item 12): the Hand-offs card
   const hoCell = () => { const c = BR.hasTypes(P) ? BR.shown(P) : null; return c ? Object.assign({ label: P.types[c.k].label }, c) : null; };
   const $ = id => document.getElementById(id), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -418,6 +458,7 @@
     ['rt', 'Rating'], ['rpt', 'Report'], ['dwg', 'Drawings'], ['ad', 'Auto design'], ['cmp', 'Compare'], ['nom', 'Nomenclature'], ['3d', '3D view']];   // cmp, nom: batch G4, G6
   if (!TABS.some(t => t[0] === ui.itab)) ui.itab = 'proj';
   if (!OTABS.some(t => t[0] === ui.otab)) ui.otab = 'sum';
+  ui.gsub = GS.norm(ui.gsub);   // GSUB (2026-11-25): the Girders & strands sub-tab shown (kept in psb2.ui as itab; a saved ui without it: Girder types)
 
   /* ---------- inputs ---------- */
   const get = path => path.split('.').reduce((o, k) => o == null ? o : o[k], P);
@@ -457,9 +498,7 @@
         + IN.cards('xsec', P)
         + lldfOptCard()   // LL-O (2026-11-23): the two optional live-load distribution options (P.xs.lldf, engine/lldf-opt.js)
         + DLUI.card(P),   // PR 3a-3: DC2 / DW to each girder line (PS-9)
-      gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V)
-        + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`
-        + (window.PSBStrandEdit ? window.PSBStrandEdit.card(sk >= 0 ? P.types[sk].label : '') : ''),   // batch G5: strand editing by clicking the section (ui/strandedit.js)   // 2026-11-15: the "Girder library PR 4" placeholder removed (the library is in the Girder shape card, PS-37)
+      gird: GS.pane(P, ui, V, sk),   // GSUB (2026-11-25): the sub-tabs (ui/girdsubs.js): Girder types, Section, Strands (the strand pattern beside the rows; strand editing, batch G5), Reinforcement   // 2026-11-15: the "Girder library PR 4" placeholder removed (the library is in the Girder shape card, PS-37)
       mat: TY.scopeBar(P, ui, 'mat') + IN.cards('mat', V),
       dd: IN.cards('dd', P),
       loads: TY.scopeBar(P, ui, 'loads') + DMUI.card(P, ui) + IN.cards('loads', V),   // batch D1: the demand source of the girder type in scope
@@ -496,7 +535,7 @@
       return `<td class="lft"><select data-lt="${s}|${g}" aria-label="girder type of line G${g}, span ${s}" style="width:auto">${t.length === 1 ? '' : `<option value="" selected>${t.length ? esc(t.map(k => T[k].label).join(' + ')) + ' (conflict)' : '— none —'}</option>`}${opts.map(([k, q]) => `<option value="${k}"${t.length === 1 && t[0] === k ? ' selected' : ''}>${esc(q.label)}</option>`).join('')}</select></td>`; };
     const rows = Array.from({ length: P.xs.nb }, (_, i) => i + 1).map(g => `<tr><td>G${g}${g === 1 || g === P.xs.nb ? ' (exterior)' : ''}</td>${Array.from({ length: nS }, (_, i) => cell(i + 1, g)).join('')}</tr>`).join('');
     return card('Girder type of each line', `<div class="tscroll"><table class="tbl"><thead><tr><th>Line</th>${Array.from({ length: nS }, (_, i) => `<th class="lft">Span ${i + 1}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="note">The same choice as the line boxes of the girder types on the <a href="#" data-goin="gird">Girders &amp; strands tab</a> (each type's inputs are there): a line moves to the type chosen here.</p>`);
+      <p class="note">The same choice as the line boxes of the girder types on the <a href="#" data-goin="gird@card-types">Girders &amp; strands tab</a> (each type's inputs are there): a line moves to the type chosen here.</p>`);
   }
   /* 2026-11-14: the Bridge layout tab's framing plan (ui/plan.js), when the project has no model error */
   function planCard() {
@@ -512,15 +551,16 @@
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
     markErrors();
     try { TY.mark($('inPanes'), P, ui); } catch (e) { console.warn(e); }   // PR 3a-1: the fields a girder type has of its own
-    if (ui.itab === 'layout' && window.PSBPlan && $('gfx_plan')) { try { window.PSBPlan.mount($('gfx_plan'), P); } catch (e) { console.warn(e); } }   // 2026-11-14: the framing plan at the panel's width
+    if (ui.itab === 'layout' && window.PSBPlan && $('gfx_plan')) { try { window.PSBPlan.mount($('gfx_plan'), P); WI.mark($('gfx_plan'), 'Plan'); } catch (e) { console.warn(e); } }   // WIDE: opens enlarged   // 2026-11-14: the framing plan at the panel's width
     if (pb && $('pbHost')) pb.mount($('pbHost'));   // PR 5: the standard save card
     // PR 2c-1: the strand-pattern graphic of the design (the engine's strand system), on the Girders & strands tab, when the inputs have no error
-    if (ui.itab === 'gird' && !errs.length && window.PSBStrandGfx) { const rc = scopeK() >= 0 ? scopeResult() : result(); if (rc && !rc.R.error) { try { window.PSBStrandGfx.mount($('gfx_strands_in'), { R: rc.R, inp: rc.inp }, { id: 'inStrandFig', title: 'Strand pattern of the design girder', compact: true }); } catch (e) { console.warn(e); } } }
+    if (ui.itab === 'gird' && ui.gsub === 'str' && !errs.length && window.PSBStrandGfx) { const rc = scopeK() >= 0 ? scopeResult() : result(); if (rc && !rc.R.error) { try { window.PSBStrandGfx.mount($('gfx_strands_in'), { R: rc.R, inp: rc.inp }, { id: 'inStrandFig', title: 'Strand pattern of the design girder', compact: true }); WI.mark($('gfx_strands_in'), 'Strand pattern'); } catch (e) { console.warn(e); } } }   // WIDE: opens enlarged
     // batch G5: strand editing by clicking the section (ui/strandedit.js): the straight rows of the scope shown, one change = one Undo step
-    if (ui.itab === 'gird' && !errs.length && window.PSBStrandEdit && $('strandEditHost')) { const sk = scopeK(), rc = sk >= 0 ? scopeResult() : result(); if (rc && !rc.R.error) { try {
+    if (ui.itab === 'gird' && ui.gsub === 'str' && !errs.length && window.PSBStrandEdit && $('strandEditHost')) { const sk = scopeK(), rc = sk >= 0 ? scopeResult() : result(); if (rc && !rc.R.error) { try {
       const V = viewOf(sk), rows = V.base.rows || [], fc = window.PSBStrandEdit.fitCtx(P, sk, rows);
       window.PSBStrandEdit.mount($('strandEditHost'), { R: rc.R, rows, scopeKey: sk >= 0 ? P.types[sk].id : 'base', fits: fc.fits, fitWhy: fc.fitWhy,
-        commit: (r2, msg) => { const W2 = viewOf(scopeK()); W2.base.rows = r2; if (scopeK() >= 0) BR.setOvr(P, scopeK(), W2.base); changed(); toast(msg + '.', true); return {}; } }); } catch (e) { console.warn(e); } } }
+        commit: (r2, msg) => { const W2 = viewOf(scopeK()); W2.base.rows = r2; if (scopeK() >= 0) BR.setOvr(P, scopeK(), W2.base); changed(); toast(msg + '.', true); return {}; } });
+      const hd = document.querySelector('#card-strandEdit .secHead'); if (hd) hd.insertAdjacentHTML('beforeend', WI.enlargeBtn('Edit strands on the section (enlarged view)', 'strandEditHost')); } catch (e) { console.warn(e); } } }   // WIDE: an interactive figure: the Enlarge button
   }
   /* the blocking input errors (engine/inputcheck.js collect: the model, the design girder, every field of the input cards): their fields
      marked with their message (ui/inputcheck.js, the steel app's pattern), counted on their input tab; no results while one exists */
@@ -534,8 +574,24 @@
     errs.forEach(e => { const t = tabOf(e.path); cnt[t] = (cnt[t] || 0) + 1; });
     document.querySelectorAll('#inTabs [data-itab]').forEach(b => { const n = cnt[b.dataset.itab] || 0, d = b.querySelector('.inDot');
       b.classList.toggle('has-err', n > 0); if (d) d.textContent = n ? String(n) : ''; if (n) b.title = `${n} input${n > 1 ? 's' : ''} to fix on this tab`; else b.removeAttribute('title'); });
+    // GSUB (2026-11-25): the same dot on the Girders & strands sub-tab that holds the field
+    const sc2 = GS.count(errs, tabOf);
+    document.querySelectorAll('#gSubs [data-gsub]').forEach(b => { const n = sc2[b.dataset.gsub] || 0, d = b.querySelector('.inDot');
+      b.classList.toggle('has-err', n > 0); if (d) d.textContent = n ? String(n) : ''; if (n) b.title = `${n} input${n > 1 ? 's' : ''} to fix on this sub-tab`; else b.removeAttribute('title'); });
   }
-  function gotoErr(i) { const e = errs[i]; if (!e) return; ui.itab = tabOf(e.path); if (/^base\./.test(e.path) && TY.SCOPED.includes(ui.itab)) ui.scope = e.scope || ''; saveUi(); drawInputs(); window.PSBInputCheckUI.focus(e, icO()); }
+  function gotoErr(i) { const e = errs[i]; if (!e) return; ui.itab = tabOf(e.path); if (ui.itab === 'gird') ui.gsub = GS.subOf(e.path) || ui.gsub; if (/^base\./.test(e.path) && TY.SCOPED.includes(ui.itab)) ui.scope = e.scope || ''; saveUi(); drawInputs(); window.PSBInputCheckUI.focus(e, icO()); }
+  /* GSUB (2026-11-25): goIn(spec, top): a link to an input tab, spec = data-goin 'tab' or 'tab@target' (a card id or a project path, ui/girdsubs.js):
+     the tab (and on Girders & strands the sub-tab that holds the target), then the target scrolled to (a field also focused); top() = the
+     link's earlier scroll when there is no target */
+  function goIn(spec, top) {
+    const g = GS.parse(spec); ui.itab = g.tab; if (g.tab === 'gird') ui.gsub = GS.subOf(g.target) || ui.gsub;
+    saveUi(); drawInputs();
+    const el = !g.target ? null : /^card-/.test(g.target) ? $(g.target) : null;
+    if (el) { el.scrollIntoView({ block: 'start' }); el.classList.add('gFlash'); setTimeout(() => el.classList.remove('gFlash'), 1600); return; }
+    if (g.target && !/^card-/.test(g.target) && GS.subOf(g.target) !== g.target && window.PSBInputCheckUI.focus({ path: g.target }, icO())) return;   // a field (not a sub-tab key)
+    if (top) top();
+  }
+  const panelTop = () => { $('inputPanel').scrollTop = 0; };
   const parseList = v => String(v).split(/[,;\s]+/).filter(Boolean).map(Number);
   /* resize(a, n, fill): a list kept at n values when the span or girder count changes (new values: the last one, else fill) */
   const resize = (a, n, fill) => { const b = (a || []).slice(0, Math.max(0, n)); while (b.length < n) b.push(b.length ? b[b.length - 1] : fill); return b; };
@@ -596,10 +652,24 @@
     changed();
     if (tyNote) toast(tyNote, true);   // PR 6: Undo = the header's Undo of this one step (the count change and the re-assignment together)
   });
+  /* GSUB (2026-11-25): a Girders & strands sub-tab chosen (click, or the arrow keys / Home / End on the sub-tab row): redrawn as an input tab is */
+  function gsubTo(k, focus) {
+    ui.gsub = GS.norm(k); saveUi(); drawInputs();
+    const bar = $('gSubs'); if (!bar) return;
+    if (bar.getBoundingClientRect().top < $('inputPanel').getBoundingClientRect().top) bar.scrollIntoView({ block: 'start' });
+    if (focus) { const b = bar.querySelector(`[data-gsub="${ui.gsub}"]`); if (b) b.focus(); }
+  }
+  $('inPanes').addEventListener('keydown', e => {
+    const b = e.target.closest && e.target.closest('#gSubs [data-gsub]'); if (!b) return;
+    const ks = GS.SUBS.map(q => q[0]), i = ks.indexOf(b.dataset.gsub);
+    const j = e.key === 'ArrowRight' ? (i + 1) % ks.length : e.key === 'ArrowLeft' ? (i + ks.length - 1) % ks.length : e.key === 'Home' ? 0 : e.key === 'End' ? ks.length - 1 : -1;
+    if (j < 0) return; e.preventDefault(); gsubTo(ks[j], true);
+  });
   $('inPanes').addEventListener('paste', e => { DMUI.onPaste(e, P, ui, dmCtx); });   // batch D1: rows pasted into the custom demand table
   $('inPanes').addEventListener('click', e => {
     const t = e.target, go = t.closest('[data-goin]');
-    if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
+    if (go) { e.preventDefault(); goIn(go.dataset.goin, panelTop); return; }   // GSUB: 'tab@target'
+    { const gb = t.closest('[data-gsub]'); if (gb) { e.preventDefault(); gsubTo(gb.dataset.gsub); return; } }   // GSUB: a Girders & strands sub-tab
     { const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }   // PS-35: an input note's link to an output tab (the Loads input tab's J note)
     if (LGUI.onClick(e, lgCtx)) return;
     if (DMUI.onClick(e, P, ui, dmCtx)) return;   // batch D1
@@ -730,7 +800,7 @@
       if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, all: rc.all || null, redraw: () => { saveUi(); drawOut(); }, save: saveUi };   /* save (batch G3): keep a ui choice without a redraw (the Analysis chart's series) */   // all (2026-11-15, batch C): every girder type × line, for the tables of every line
         const d = window.PSBDesign.sel(P);
         const sh = BR.hasTypes(P) ? BR.shown(P) : null;
-        h += `<p class="note">${sh ? `Girder type ${esc(P.types[sh.k].label)} on ` : 'Design girder '}${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird">Girders &amp; strands tab</a>.</p>`
+        h += `<p class="note">${sh ? `Girder type ${esc(P.types[sh.k].label)} on ` : 'Design girder '}${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird@types">Girders &amp; strands tab</a>.</p>`
           + (rc.R.pl && rc.R.pl.mode !== 'ext' && ['an', 'loss', 'str', 'flex', 'shear', 'rt'].includes(ui.otab) ? `<p class="note" id="plTabNote">Pedestrian live load (AASHTO LRFD 10th Ed. 3.6.1.6): the live load on this tab is LL+IM + PL (w<sub>PL</sub> = ${fmt(rc.R.pl.w, 4)} klf on this girder line) <a class="wk" href="#st-ld.pl.MLLPL" data-gotab="lds" title="Worked step">§</a>.</p>` : '')   /* PL-A */
           + (rc.R.ut && ['an', 'loss', 'str', 'flex', 'shear', 'camb', 'rt'].includes(ui.otab) ? `<p class="note" id="utTabNote">Utilities on the noncomposite section: DC1 on this tab includes ${rc.R.ut.wUT ? `the utility w<sub>UT</sub> = ${fmt(rc.R.ut.wUT, 4)} klf (DW load factors)` : ''}${rc.R.ut.wUT && rc.R.ut.wUF ? ' and ' : ''}${rc.R.ut.wUF ? `the future utility allowance w<sub>UF</sub> = ${fmt(rc.R.ut.wUF, 4)} klf (present; not in the camber)` : ''} of this girder line <a class="wk" href="#st-ld.ut.wNC" data-gotab="lds" title="Worked step">§</a>.${rc.R.ut.abs && rc.R.ut.abs.n ? ` With the allowance absent ${rc.R.ut.abs.n} check${rc.R.ut.abs.n > 1 ? 's have' : ' has'} a larger ratio (check summary "UF absent") <a class="wk" href="#st-ld.ut.abs" data-gotab="lds" title="Worked step">§</a>.` : ''}</p>` : '')   /* UT-N */
           + TABUI[ui.otab]().output(ctxOut); }
@@ -756,17 +826,17 @@
       $('out').querySelectorAll('.gfxCard').forEach(c => { if (!c.querySelector('.vk, svg')) c.hidden = true; }); }   // a graphic's card with no graphic for this design
     // PR 2e: the Report of the design girder (ui/report.js): the page's own result; the section choices kept in ui.rpt (psb2.ui), as the steel app
     if (ui.otab === 'rpt' && ok && $('rptHost')) { ui.rpt = ui.rpt || {};
-      try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
+      try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => goIn(t, panelTop) }); }
       catch (e) { $('rptHost').innerHTML = `<div class="alert err" role="alert">Report error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     if (ui.otab === 'ad' && $('adHost')) { try { window.PSBAutoDesignUI.render($('adHost'), adCtx()); } catch (e) { $('adHost').innerHTML = `<div class="alert err" role="alert">Auto design error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     // item 10, part 1: the Drawings tab (display and export only; its choices kept in ui.dwg, psb2.ui)
-    if (ui.otab === 'dwg' && $('dwgHost')) { try { window.PSBDrawingsUI.render($('dwgHost'), { P, ui, saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; }, res: (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g)), all: () => allResults(true) });   /* res (part 2): the girder types' engine results (the page's cache); all (batch H1): every type on every line, for the design summary sheet */ }
+    if (ui.otab === 'dwg' && $('dwgHost')) { try { window.PSBDrawingsUI.render($('dwgHost'), { P, ui, saveUi, goto: t => gotoOut(t), goin: t => goIn(t, panelTop), res: (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g)), all: () => allResults(true) });   /* res (part 2): the girder types' engine results (the page's cache); all (batch H1): every type on every line, for the design summary sheet */ }
       catch (e) { $('dwgHost').innerHTML = `<div class="alert err" role="alert">Drawings error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     // PR 3c: the 3D view of the bridge (display only; its layer and camera choices kept in ui.v3d, psb2.ui)
     if (ui.otab === '3d' && $('v3dHost')) { try { window.PSB3DUI.render($('v3dHost'), { P, ui, saveUi, res: (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g)) });   /* res (PR 8b): each girder type × line's engine result, for the diagrams (cached, cellR) */ } catch (e) { $('v3dHost').innerHTML = `<div class="alert err" role="alert">3D view error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     if (window.PSBDashUI) window.PSBDashUI.refresh();
   }
-  const gotoOut = t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; };
+  const gotoOut = t => { if (WI.isOn()) WI.set(false); ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; };   // WIDE: an output tab needs the output panel: wide mode off first
   /* gotoStep(tab, id): that output tab, then the worked step id with its topic opened (the check summary chips, PR 2c-1) */
   const gotoStep = (t, id) => { gotoOut(t); if (id) { const el = window.SharedSteps.reveal($('out'), id); if (el) el.scrollIntoView({ block: 'center' }); } };
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (b) gotoOut(b.dataset.otab); });
@@ -784,7 +854,7 @@
     const tc = e.target.closest('[data-tycell]'); if (tc) { e.preventDefault(); const [k, g, tab] = tc.dataset.tycell.split('|'); P.design = { g: +g, s: P.types[+k].span }; if (autosave) autoFailed = !M.save(LS, P); record(); gotoOut(tab); drawInputs(); return; }   // PR 3a-2
     // batch D2: "Design span n →" of the Analysis tab's imported-member view: the girder type shown uses span n of its MIDAS file (one Undo step)
     const dd = e.target.closest('[data-dmdesign]'); if (dd) { e.preventDefault(); const T = DMUI.shownType(P); if (T) { window.PSBDemands.setSpan(P, T.id, +dd.dataset.dmdesign); ui.dmView = 'design'; saveUi(); changed(); toast(`${T.label}: span ${dd.dataset.dmdesign} of the MIDAS file is used now (Loads tab, Demands card).`, true); } return; }
-    const gi = e.target.closest('[data-goin]'); if (gi) { e.preventDefault(); ui.itab = gi.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollIntoView({ block: 'start' }); return; }
+    const gi = e.target.closest('[data-goin]'); if (gi) { e.preventDefault(); goIn(gi.dataset.goin, () => $('inputPanel').scrollIntoView({ block: 'start' })); return; }   // GSUB: 'tab@target'
     // a link to another output tab (and to a worked step there): that tab, then the step with its topic opened
     const gt = e.target.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); const h = gt.getAttribute('href') || '';
       if (/^#st-/.test(h)) { const el = window.SharedSteps.reveal($('out'), h.slice(4)); if (el) el.scrollIntoView({ block: 'center' }); }
@@ -817,7 +887,7 @@
      until closed (P.notices.sec = the items closed; optional field, nothing else changed); the Report's §2 states it too. PS-38 / PS-40 (2026-11-14): also a section value revised since the project was saved (title: the decisions, PSBSections.tags). */
   function secNotice() {
     const SC = window.PSBSections, its = SC ? SC.items(P) : []; if (!its.length || (P.notices && P.notices.sec === SC.sig(P))) return '';
-    return `<div class="notice" id="secNotice" role="alert" style="border-left-color:var(--fail)"><div><b>Girder section corrected (${esc(SC.tags(P))}).</b> ${its.map(x => esc(SC.text(x))).join(' ')} <a href="#" data-goin="gird">Girders &amp; strands tab</a>; <a href="#" data-gotab="sec">Section properties</a>.</div><div class="nBtns"><button type="button" data-secdismiss>Close</button></div></div>`;
+    return `<div class="notice" id="secNotice" role="alert" style="border-left-color:var(--fail)"><div><b>Girder section corrected (${esc(SC.tags(P))}).</b> ${its.map(x => esc(SC.text(x))).join(' ')} <a href="#" data-goin="gird@card-shape">Girders &amp; strands tab</a>; <a href="#" data-gotab="sec">Section properties</a>.</div><div class="nBtns"><button type="button" data-secdismiss>Close</button></div></div>`;
   }
   function deNotice() {
     const D = window.PSBDesign.deDiff(P); if (!D.rows.length || (P.notices && P.notices.de === D.sig)) return '';
@@ -954,8 +1024,9 @@
   snap = JSON.stringify(P);   // PR 6: the project as opened is the start of the history
 
   drawInputs(); drawOut(); syncBar();
+  WI.init({ changed: on => { drawInputs(); if (!on) drawOut(); } });   // WIDE (2026-11-25): "Widen inputs"; the figures redrawn at the new width
   if (L.notes && L.notes.length) toast(L.notes.join(' '));   // PR 3a-1 / 3a-4: what the load migrated or restored (stored with the next change)
-  if (window.PSBDashUI) window.PSBDashUI.init({ el: $('sbDashCol'), store, getP: () => P, errors: () => errs, result: () => { if (errs.length) return null; const rc = result(); return rc.R.error ? null : rc.R; }, all: allResults, run: runState, runCtl, pick, goto: gotoStep, fix: gotoErr, goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } });
+  if (window.PSBDashUI) window.PSBDashUI.init({ el: $('sbDashCol'), store, getP: () => P, errors: () => errs, result: () => { if (errs.length) return null; const rc = result(); return rc.R.error ? null : rc.R; }, all: allResults, run: runState, runCtl, pick, goto: gotoStep, fix: gotoErr, goin: t => goIn(t, panelTop) });
 })();
 </script>
 </body>

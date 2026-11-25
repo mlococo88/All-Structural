@@ -9770,6 +9770,67 @@ None.
 - **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
 - **Other copies:** none.
 
+## 2026-11-25 — PR: claude/ps-gird-subtabs (PR #1715: https://github.com/mlococo88/All-Structural/pull/1715) (GSUB) — the Girders & strands input tab split into sub-tabs: Girder types · Section · Strands · Reinforcement (display only)
+### Request (engineer, 2026-11-25)
+The Girders & strands input tab was about 4,000 px long with 11 cards. Approved layout: a sub-tab row inside the tab.
+- **Girder types:** the Girder types card (with no girder types: the Design girder card) and "Shown on the output tabs".
+- **Section:** Girder shape (library, custom section, section-property overrides).
+- **Strands:** Straight strand rows and Draped strands with the strand pattern figure beside them (two columns where the panel is at least 720 px wide; stacked below it: rows, figure, draped), then "Edit strands on the section".
+- **Reinforcement:** Shear reinforcement (stirrups), Longitudinal reinforcement (5.7.3.5 tie), Release tension steel, Splitting and confinement steel.
+- "Entered values for" (the girder-type scope) above the Section, Strands and Reinforcement sub-tabs.
+### Where / Before / After
+- `ui/girdsubs.js` (new, `window.PSBGirdSubs`): `SUBS`, `CARDS` (card id → sub-tab), `norm`, `subOf(card id | sub key | project path)`, `parse('tab@target')`, `pane(P, ui, V, sk)` (the sub-tab row, `role="tablist"`, buttons `role="tab"` with `aria-selected` / `aria-controls`; the scope choice; four `role="tabpanel"` panels, the hidden ones with `hidden`), `count(errors, tabOf)`. Every panel is drawn, so the input checks and TY.mark mark every field and the delegated handlers on `#inPanes` reach them.
+- `index.html` script list: `'ui/girdsubs.js'` after `'ui/types.js'`.
+- `index.html panes()`: before `gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V) + <Strand pattern card> + PSBStrandEdit.card(...)` → after `gird: GS.pane(P, ui, V, sk)` (the Strand pattern card's HTML moved into `pane()` unchanged except `id="card-strandPat"`).
+- `index.html`: `ui.gsub = GS.norm(ui.gsub)` after the `ui.otab` default (kept in `psb2.ui` with `itab`; a saved ui without it opens Girder types; no new key). `drawInputs`: the strand pattern and the strand editor are mounted when `ui.itab === 'gird' && ui.gsub === 'str'` (before: `ui.itab === 'gird'`). `markErrors`: the same numbered dot (`.inDot`, `has-err`) on the sub-tab holding the field (`GS.count`). `gotoErr`: `ui.gsub = GS.subOf(e.path)` on this tab. New `goIn(spec, top)`: the tab, the sub-tab of the target, then the card (`scrollIntoView`, a short outline flash `gFlash`) or the field (`PSBInputCheckUI.focus`); without a target the link's old scroll. Used by the `[data-goin]` handlers of `#inPanes` and `#out` and by the `goin` callbacks of the Report, Drawings and the check summary column (before: `ui.itab = t; saveUi(); drawInputs(); …`). New `gsubTo(k, focus)` and a `keydown` handler (ArrowLeft / ArrowRight / Home / End) on the sub-tab row. CSS `.gSubs` (the input tabs' style, smaller), the error dot, `.gStr` two columns (`@container (min-width:720px)`), print: `.gSubs` hidden as `.inTabs`.
+- `ui/inputs.js cards(tab, P, R, only)`: optional `only(cardId)`; the Straight strand rows card moved unchanged into `rowsCard(P)`; with no `only` the output is the same HTML as before (test).
+- Links to the tab name a target, `data-goin="gird@<card id | field path | sub key>"` (before `data-goin="gird"`): `index.html` (line-type note → `card-types`; output note → `types`; section-corrected notice → `card-shape`), `ui/endzone.js` (`card-split`, `base.opt.relAs`, `base.opt.relBondedReinf`), `ui/loads.js` (`card-design` ×2, `types`), `ui/nomen.js` (`card-shape` ×5, `base.harp.n`, `card-rows`), `ui/plan.js` (`card-types`), `ui/section.js` (`card-rows`), `ui/shear.js` (`card-stirrups`, `base.opt.longAsBot`), `ui/stresses.js` (`base.cont.AsTop`), `ui/sumelev.js` (`card-rows`), `ui/summary.js` (`card-types` ×2, `types`), `ui/types.js` (outBar → `card-types`; shownCard `q.where === 'gird'` → `card-types`), `ui/inputs.js` designCard (`q.where === 'gird'` → `card-design`), `engine/fields.js` continuity note (`base.cont.AsTop`), `ui/drawings.js` SRC (`gird@str`, `gird@card-strandPat`, `gird@card-types`, `gird@card-split`), `report/builders.js` (`[[tab:in:gird@types|…]]`, `[[tab:in:gird@card-types|…]]`). The Report's links carry the target (`report/fromtab.js` unchanged: `[[tab:in:gird@card-split|…]]`).
+- `ui/types.js onClick 'edit'` ("Edit its inputs"): also `ui.gsub = 'sec'`; its notice adds "(Girders & strands: from the Section sub-tab)".
+### Problem
+Display only: a long tab. No input, value, default, field id, calculation, saved key or project format changed.
+### Governing provision
+None (display only).
+### Check case
+Built-in new project: Girders & strands → Girder types shows the two types (Interior S1, Exterior S1); Strands shows 3 rows (10 at 2 in, 10 at 4 in, 8 at 6 in), 12 draped, the pattern "PCI BT-72: 40 strands (28 straight, 12 draped)". Splitting steel legs −1: the tab dot 1 and the Reinforcement dot 1; the Shear tab's stirrups link opens Reinforcement at the stirrups card.
+### How verified
+`tests/engine/psbridge-gird-subtabs.test.mjs` (new); `tests/smoke/ps-bridge-gsub.mjs` (new); main vs this branch: every cell's engine inputs and result (6 projects) hashed identical; every input and select of the tab (id, path, value, checked, options) identical across the sub-tabs, base scope and a girder type's scope, two projects; the PS smokes touching the tab updated to pick the sub-tab (assertions kept, a sub-tab dot and the drawings link's sub-tab added).
+### Saved data
+`psb2.ui` gains `gsub` (the same key as `itab`); an old saved ui without it opens Girder types. No project change.
+### Decisions (pending engineer review)
+- GSUB-a. "Entered values for" is not shown on Girder types (nothing there depends on it; "Edit its inputs" there sets it).
+- GSUB-b. "Edit its inputs" opens the Section sub-tab (the type's inputs start there).
+- GSUB-c. On narrow panels (below 720 px) the Strands sub-tab stacks rows, figure, draped strands; the strand editor stays full width below.
+- GSUB-d. A link that names the tab in general (the output tabs' "Girders & strands tab" note, the Report's assumptions) opens Girder types; one about a card or a field opens its sub-tab and scrolls to it (a field is focused).
+
+## 2026-11-25 — PR: claude/ps-wide-inputs (PR #1719: https://github.com/mlococo88/All-Structural/pull/1719) (WIDE) — "Widen inputs" (the input panel over the whole width) and the input-tab figures opened enlarged (display only)
+### Request (engineer, 2026-11-25)
+See the input-tab graphics and input boxes bigger. A second window was considered and not chosen, since two copies of the app would overwrite each other's saved project.
+### Where / Before / After
+- `ui/widein.js` (new, `window.PSBWideIn`): `init({ changed })`, `isOn()`, `set(on)`, `open(host, title)`, `mark(host, title)`, `enlargeBtn(title, hostId)`. On: `body.psbWide`; after each change `changed(on)`, then window `psb2:panelresize` (detail `{ input, output }`) and `resize` (as `ui/splitter.js`). Turned off when the window drops below 900 px. The dialog `#figZoomDlg` (`<dialog>`, `showModal`): copies of the figure's SVGs (`viewBox` kept, width 100 %), every id prefixed `fz<n>-` with its `url(#…)` / `href="#…"` references rewritten; Escape, Close or a click on the backdrop closes it, and closing empties it.
+- `index.html` HTML: before `<div class="inTabs" role="tablist" id="inTabs"></div>` → after `<div class="inTabs" id="inTabRow"><div role="tablist" id="inTabs" class="inTabList"></div><button type="button" id="bWide" class="wideBtn" aria-pressed="false">⤢ Widen inputs</button></div>` (`#inTabs{display:contents}`: the tab buttons are laid out as before).
+- `index.html` CSS (screen, 900 px and wider): `body.psbWide` hides `#sbSplit` and `#sbDashCol`, gives `#inputPanel` `flex:1 1 auto; max-width:none`, and hides the output panel's content except `#notices`, which float at the bottom right. Bridge layout tab: the Plan card beside the spans and skews. Strands sub-tab: from a 1100 px panel, the strand editor beside the draped strands (`.gStrE`, `ui/girdsubs.js`: the editor card moved into the `.gStr` grid; below 1100 px it sits full width under it, as before). The dialog and button styles. Print: `#figZoomDlg` hidden; the button goes with `.inTabs`.
+- `index.html` script list: `'ui/widein.js'` before `'ui/girdsubs.js'`. `const … WI = window.PSBWideIn`. `drawInputs`: `WI.mark($('gfx_plan'), 'Plan')` and `WI.mark($('gfx_strands_in'), 'Strand pattern')` after their mounts; the strand editor card head gets `WI.enlargeBtn(…, 'strandEditHost')`. `gotoOut`: before `ui.otab = t; …` → after `if (WI.isOn()) WI.set(false); ui.otab = t; …` (every output-tab link, `data-gotab` from the inputs included). After the first draw: `WI.init({ changed: on => { drawInputs(); if (!on) drawOut(); } })`.
+### Problem
+Display only. No input, value, calculation, project format or storage key changed (the toggle is not stored).
+### Governing provision
+None (display only).
+### Check case
+1500 × 900, the splitter dragged to 0.45 (`psb2.splitRatio_v1`):
+- Widen inputs: the input panel goes from 549 px to 1500 px, and the strand pattern from 357 to 805 px.
+- Back to outputs: input 549 px, output 664 px, `--sbIn` 0.45000; `psb2.splitRatio_v1` unchanged.
+- The strand pattern enlarged: about 1374 px wide in the dialog.
+### How verified
+`tests/smoke/ps-bridge-wide.mjs` (new); `tests/smoke/ps-bridge-gsub.mjs`, the PS smokes; `node tests/engine/run.mjs psbridge-model psbridge-gird-subtabs`; `node tests/check-syntax.mjs`.
+### Saved data
+None: no key added (the toggle lasts for the page view).
+### Decisions (pending engineer review)
+- WIDE-a. The toggle is not remembered: each page opens with the outputs shown (no new key).
+- WIDE-b. In wide mode the notices (owner change, girder count, Undo) float at the bottom right, so they stay visible while the output panel is hidden.
+- WIDE-c. A click on the plan or the strand pattern opens it enlarged, also on the figures' hover regions; a tap there no longer pins the hover read-out (hovering still shows it).
+- WIDE-d. The strand editor's "⤢ Enlarge" shows an enlarged view; strands are edited on the figure in the panel (with Widen inputs, the editor is drawn larger there).
+### Open items
+- The Section sub-tab and the Cross-section input tab have no figure today (the section and cross-section figures are on the Section properties and Loads & LLDF output tabs). Adding a section-shape figure to the Section sub-tab is new content: ask the engineer.
+
 ## 2026-11-25 — PR: claude/ps-ez-noint (PR #1714: https://github.com/mlococo88/All-Structural/pull/1714) (EZNI) — End zone & hold-down, bonded release-tension steel: the concrete tensile force worked by parts, no integral (display only; no value or verdict changed)
 ### Request (engineer, 2026-11-25)
 "The end zone has integrals, this should be removed, there should be no need for calculus in this app output." Check 3 of the End zone & hold-down tab (AASHTO LRFD 10th Ed. 5.9.2.3.1b, Table 5.9.2.3.1b-1) showed `T_top = ∫_{f<0} (−f) b(y) dy = f_top = (−0.631), f_bot = 4.696 ksi = 107.7 kip` (and the same for T_bot), the substitution line garbled, with the note "… the tension area integrated over the section width at 240 strips (the engine's)".
