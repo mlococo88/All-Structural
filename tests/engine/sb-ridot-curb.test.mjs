@@ -100,6 +100,11 @@ test('unchanged: AASHTO, MassDOT, CTDOT (the same bridge), RIDOT with the sidewa
   close(loads(proj('RIDOT', { t: 12 })).ll.L.r, 6.5, 'curb face');
 });
 
+test('an analysis without the live load (deck placement, constructibility: opt.ll false) runs as before: no cases, no live load', () => {
+  const P = proj('RIDOT'); for (const gi of [0, 1]) { const R = AN.analyzeGirder(P, gi, { ll: false }); assert.deepEqual([...R.errors], []); assert.equal(R.cases, null); assert.equal(R.ll, null);
+    assert.deepEqual(J(R.st.DC2.M), J(an(P, gi).st.DC2.M)); }
+});
+
 test('saved data: xs.sidewalks.<side>.mount absent = "auto" exactly; the round trip adds no field', () => {
   const P0 = proj('RIDOT'), Pa = proj('RIDOT', { mount: 'auto' });
   assert.equal('mount' in P0.xs.sidewalks.L, false);

@@ -573,7 +573,7 @@
     }
 
     const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, plf, wSteel, loads: CS ? { ...LD, PL: CS.PL2, src: { ...LD.src, PL: CS.srcPL2 } } : LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
-      st, camber, ll, fat, llR, lld, seq, pl: ped, fm, wetCorr, wetTot, skV, cases: CS ? casesOut(CS, DF, xs) : null, bEI: bEI ? { nb: bEI.nb, same: bEI.same, sb: bEI.sb, types: bEI.types.map(t => ({ gi: t.gi, label: t.label, lines: t.lines })) } : null };
+      st, camber, ll, fat, llR, lld, seq, pl: ped, fm, wetCorr, wetTot, skV, cases: CS && CS.c ? casesOut(CS, DF, xs) : null, bEI: bEI ? { nb: bEI.nb, same: bEI.same, sb: bEI.sb, types: bEI.types.map(t => ({ gi: t.gi, label: t.label, lines: t.lines })) } : null };
     R.steps = steps(R);
     if (vehRun) Object.defineProperty(R, 'vehicle', { value: vehRun, enumerable: false });   // not a result: the rating vehicles' runner (above)
     return R;
@@ -581,7 +581,8 @@
 
   /* casesOut(CS, DF1, xs) (RCURB, sb-ridot-curb PR): the two live-load cases of RIDOT BDM 3.4.1.1.1 for the result (R.cases): the loads module's
      lane steps (engine/loads.js cases), per case the distribution factors of this girder, w_PL, the per-lane effects × g, and pick[k][i] (1 | 2)
-     the case taken at station i for effect k (Mpos, Mneg, VRpos, VRneg, VLpos, VLneg; 'fat.<k>' the fatigue truck; R the reactions) */
+     the case taken at station i for effect k (Mpos, Mneg, VRpos, VRneg, VLpos, VLneg; 'fat.<k>' the fatigue truck; R the reactions).
+     Only when the live load was run (an analysis with opt.ll false, e.g. constructibility, has R.cases null). */
   function casesOut(CS, DF1, xs) {
     const I = CS.info, cnt = k => CS.pick[k].filter(v => v === 2).length;
     return { cite: I.cite, sides: I.sides, NL: I.NL, w: I.w, mO: CS.mO, PL: [0, CS.PL2], dfs: [DF1, CS.DF2], steps: I.steps,
