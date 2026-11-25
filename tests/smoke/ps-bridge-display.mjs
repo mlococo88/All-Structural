@@ -28,8 +28,8 @@ try {
   await tab('sum'); await p.waitForSelector('#sum-table', { timeout: 30000 });
   let r = await p.evaluate(() => ({ hi: [...document.querySelectorAll('#sum-table td.s-hi')].map(td => td.innerText.replace(/\s+/g, ' ')), chip: (document.querySelector('#sbDashCol [data-sdgrp="rel"]') || {}).className || '',
     cnt: document.querySelector('#sbDashCol .sdC').innerText }));
-  assert.ok(r.hi.some(t => /0\.944 PASS/.test(t)), JSON.stringify(r.hi)); assert.match(r.chip, /sd-pass sd-hi/); assert.match(r.cnt, /2 FAIL.*38 PASS/s);
-  ok('Summary: Release stresses 0.944 amber (s-hi) PASS; its chip amber (sd-hi); counts 2 FAIL / 38 PASS as before');
+  assert.ok(r.hi.some(t => /0\.944 PASS/.test(t)), JSON.stringify(r.hi)); assert.match(r.chip, /sd-pass sd-hi/); assert.match(r.cnt, /2 FAIL.*40 PASS/s);   // SH-SP (2026-11-25): + the stirrup spacing check of each of the 2 girder types (PASS)
+  ok('Summary: Release stresses 0.944 amber (s-hi) PASS; its chip amber (sd-hi); counts 2 FAIL / 40 PASS (38 before SH-SP + the spacing check of each girder type)');
   await shot('disp-summary');
   // 2. / 3.
   await tab('sec');
