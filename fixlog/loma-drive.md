@@ -32,3 +32,16 @@ Not an engineering calculation tool: no formulas, load or resistance factors, un
 - **No library added:** plain `Image` loads, with no new CDN dependency.
 - **Governing provision:** n/a (display only).
 - **How verified:** headless render with stand-in tiles that draw the MassGIS building outlines at their true lat/lon. The outlines land on the modelled neighbour footprints, and #3's outline lands under the new house. No console errors.
+
+## 2026-11-25 — Basement finishing: finishes, layout presets, wall & furniture editor
+
+- **What:** A new "Basement finishing" panel section with:
+  - presets: Unfinished, Rec & media room, Guest suite, Gym & office;
+  - finish choices: floor (LVP, carpet, tile, sealed concrete, rubber), ceiling (drywall, 2×2 drop, exposed) and wall colour;
+  - an editor ("Edit layout"): draw walls that snap square to the house on a 6" grid, add furniture and fixtures from a library of about 30 items, drag, rotate 90°, delete and undo, plus Copy/Paste layout to share as JSON;
+  - basement ceiling lights tied into the night-lighting control.
+- **Where:** `apps/loma-drive/index.html`, block `BASEMENT FINISHING` (`const BSM = (() => {`). Panel markup `#bPresets`, `#bFloor`, `#bCeil`, `#bWall`, `#bEdit`; editor bar `#bed`.
+- **Saved data:** a new localStorage key `lomaDrive.basement.v1`, prefixed per §5. No existing keys changed. Reads and writes are wrapped in try/catch.
+- **Assumptions (also stated in the tool's info text):** the finished floor sits on the 4" slab; partitions are 2×4 plus drywall, running from the floor to a ceiling under the existing joists; the perimeter is furred, insulated and drywalled. Headroom and code clearance are not checked (engineer's instruction, 2026-11-25).
+- **Governing provision:** n/a (display only; no computed engineering values).
+- **How verified:** headless: each preset rendered top-down; editor adds an item, drags it (position saved), draws a wall (saved as `[13,5,27,5]`); no page errors.
