@@ -3949,7 +3949,11 @@ async function rxImport(file) {
    applied without Apply; nothing on page load.
    PSBF (2026-11-15): the PS Bridge app (apps/ps-bridge) is a second sender (producer id psbridge: its per-project copies and the copy
    superGeometry.by.psbridge are listed; its reactions' per-project copies too, above). A section with section.material other than steel
-   (the PS Bridge app sends 'prestressed concrete'): the option above is off and disabled (the K_g estimate is of a steel shape). */
+   (the PS Bridge app sends 'prestressed concrete'): the option above is off and disabled (the K_g estimate is of a steel shape).
+   HHO (2026-11-25, engineer: the haunch passed to other apps includes the full thickness): when the payload has the optional
+   deck.haunchBrg (the haunch at the CL bearings; the PS Bridge app sends t_h + Δ_deck and keeps deck.haunch = t_h, its minimum at midspan),
+   P.br.haunch takes it (haunchIn): the superstructure depth at the supports (bearing seats, bottom of girder, unit drawings) and the wind
+   exposed depth; the review row and P.geoSrc.haunchBrg (optional) say so. Older payloads and the Steel Bridge app: deck.haunch as before. */
 (function patchGeoHandoff() {
   const NS = 'bridgeSuite.v1.', HS = () => window.SharedHandoffStore, BX = () => window.BridgeXfer;
   const CH = 'superGeometry', SCH = 'bridge-super-geometry', PRODS = ['steelbridge', 'psbridge'], RID = 'subloads';   // PSBF (2026-11-15): + the PS Bridge app (apps/ps-bridge, producer id psbridge)
@@ -4010,12 +4014,18 @@ async function rxImport(file) {
     if (/^s\d+$/.test(D.depth)) return (c.atSupports || [])[+D.depth.slice(1)];
     if (/^p\d+$/.test(D.depth)) return (c.spanMax || [])[+D.depth.slice(1)];
     return c.depth; }
+  /* HHO (2026-11-25, cross-tool with the PS Bridge app; HANDOFF.md §4.14): SubLoads' one haunch (P.br.haunch) sets the superstructure depth
+     at the supports (bearing seats, bottom of girder, the unit drawings) and the wind exposed depth. A payload with the optional
+     deck.haunchBrg (the haunch at the CL bearings; the PS Bridge app: t_h + Δ_deck) gives it; else deck.haunch as before (older payloads,
+     the Steel Bridge app: top of steel to bottom of slab). → { v, brg: true when deck.haunchBrg is used, mid, min } */
+  const haunchIn = p => { const d = (p && p.deck) || {}, hb = d.haunchBrg, ok = typeof hb === 'number' && isFinite(hb) && hb >= 0;
+    return ok ? { v: hb, brg: true, mid: typeof d.haunchMid === 'number' && isFinite(d.haunchMid) ? d.haunchMid : null, min: num(d.haunch) } : { v: num(d.haunch), brg: false }; };
   /* plan(): the new P.br values and the review rows [{ lbl, cur, inc, chg }] */
   function plan() {
     const D = GD, p = D.p, b = P.br, ns = p.spans.length, n1 = ns + 1, n0 = P.units.length, sg = D.sign === 'asis' ? 1 : -1;
     const nu = { spans: p.spans.map(r4), skews: p.supports.map(s => r4(sg * s.skew) || 0), joint: p.supports.map((s, k) => k === 0 || k === ns ? '' : s.joint === 'joint' ? 'joint' : 'cont'),
       bays: p.girders.spacings.map(r4), ohL: r4(p.girders.ohL), ohR: r4(p.girders.ohR), barL: r4(p.edges.L.width), barR: r4(p.edges.R.width),
-      ts: r4(p.deck.ts), haunch: r4(p.deck.haunch), d: r4(depthOf(D, p)), bf: r4(p.section.bf), tf: r4(p.section.tf), tw: r4(p.section.tw) };
+      ts: r4(p.deck.ts), haunch: r4(haunchIn(p).v), d: r4(depthOf(D, p)), bf: r4(p.section.bf), tf: r4(p.section.tf), tw: r4(p.section.tw) };
     const hs = ['L', 'R'].map(sd => p.edges[sd].height).filter(v => typeof v === 'number' && isFinite(v) && v > 0); if (hs.length) nu.barH = r4(Math.max(...hs));
     const err = []; if (!(nu.d > 2 * nu.tf)) err.push('The girder depth must be a positive number larger than twice the flange thickness.');
     const L = v => Array.isArray(v) ? v.map(x => f2(num(x))).join(', ') : f2(num(v)), J = v => v === 'joint' ? 'Exp. joint' : v === 'cont' ? 'Continuous' : 'end';
@@ -4028,7 +4038,7 @@ async function rxImport(file) {
     row('Left overhang', L(b.ohL), L(nu.ohL), 'ft'); row('Right overhang', L(b.ohR), L(nu.ohR), 'ft');
     row('Left barrier width', L(b.barL), L(nu.barL), 'ft'); row('Right barrier width', L(b.barR), L(nu.barR), 'ft');
     row('Barrier height', `${L(b.barH)} in`, nu.barH != null ? `${L(nu.barH)} in` : `${L(b.barH)} in (not sent: kept)`); if (nu.barH == null) rows[rows.length - 1].chg = false;
-    row('Deck thickness', L(b.ts), L(nu.ts), 'in'); row('Haunch', L(b.haunch), L(nu.haunch), 'in');
+    row('Deck thickness', L(b.ts), L(nu.ts), 'in'); { const hi = haunchIn(p); row(hi.brg ? `Haunch (at the CL bearings: deck.haunchBrg; sent t<sub>h</sub> ${f2(num(p.deck.haunch))} in is the minimum at midspan)` : 'Haunch', L(b.haunch), L(nu.haunch), 'in'); }
     row('Girder depth', f3(num(b.d)), f3(nu.d), 'in'); row('Flange width', f3(num(b.bf)), f3(nu.bf), 'in'); row('Flange thickness', f3(num(b.tf)), f3(nu.tf), 'in'); row('Web thickness', f3(num(b.tw)), f3(nu.tw), 'in');
     // units: kept / new / removed (syncSupports' rule)
     const units = [];
@@ -4082,7 +4092,8 @@ async function rxImport(file) {
     const pr = HS().projectOf(p);
     P.geoSrc = { producer: String(p.producer || ''), producerFile: String(p.producerFile || ''), producedAt: String(p.producedAt || ''), project: pr, pid: D.pid || HS().pidOf(pr),
       contentHash: p.contentHash || null, via: D.via, adoptedAt: new Date().toISOString(), fields: Object.keys(nu), depthChoice: D.depth === 'custom' ? `entered ${f3(nu.d)} in` : D.depth === 'max' ? 'largest' : D.depth,
-      depth: nu.d, skewSign: D.sign, lldf: !!D.lldf, ...(pinned ? { skKgKept: pinned } : {}), units: { added: pl.units.filter(u => /: new/.test(u)).length, removed: pl.removed } };
+      depth: nu.d, skewSign: D.sign, lldf: !!D.lldf, ...(pinned ? { skKgKept: pinned } : {}), units: { added: pl.units.filter(u => /: new/.test(u)).length, removed: pl.removed },
+      ...(haunchIn(p).brg ? { haunchBrg: { v: nu.haunch, min: haunchIn(p).min, mid: haunchIn(p).mid } } : {}) };   // HHO: the haunch taken at the bearings (optional field)
     try { if (BX()) BX().markAdopted(CH, RID, p.producedAt || ''); } catch (e) { /* marker only */ }
     shut('gxg-modal'); GD = null; buildSide(); recompute(); autosave();
     flash(`Bridge geometry from ${P.geoSrc.producer} applied (${HS().summary(CH, p)}).`);
@@ -4109,7 +4120,7 @@ async function rxImport(file) {
     return HS().match(HS().group(L.entries), openProject()) != null;
   }
   const srcLine = () => { const s = P.geoSrc; if (!s) return ''; const pr = s.project || {};
-    return `Bridge geometry from ${esc(s.producer)}${s.producerFile ? ` (${esc(s.producerFile)})` : ''}, project ${esc([pr.bridgeId, pr.name].filter(Boolean).join(' — ') || '(not stated)')}, produced ${esc(when(s.producedAt))}, pulled ${esc(when(s.adoptedAt))}: spans, skews${s.skewSign === 'asis' ? ' (sign as sent)' : ' (sign converted)'}, joints, girder spacings, overhangs, barrier widths, deck, haunch, girder depth ${f3(s.depth)} in (${esc(s.depthChoice)}) and flange / web${s.skKgKept ? `; skew-correction K<sub>g</sub> kept at ${f0(s.skKgKept)} in⁴` : s.lldf ? '; the live-load girder data follows the section' : ''}. Elevations, bearings and units are this tool's. Values may have been edited since.`; };
+    return `Bridge geometry from ${esc(s.producer)}${s.producerFile ? ` (${esc(s.producerFile)})` : ''}, project ${esc([pr.bridgeId, pr.name].filter(Boolean).join(' — ') || '(not stated)')}, produced ${esc(when(s.producedAt))}, pulled ${esc(when(s.adoptedAt))}: spans, skews${s.skewSign === 'asis' ? ' (sign as sent)' : ' (sign converted)'}, joints, girder spacings, overhangs, barrier widths, deck, haunch${s.haunchBrg ? ` (${f3(s.haunchBrg.v)} in at the CL bearings, the sender's deck.haunchBrg: its entered minimum ${f3(s.haunchBrg.min)} in plus the camber at deck placement; used for the superstructure depth at the supports, the bearing seats and the wind exposed depth)` : ''}, girder depth ${f3(s.depth)} in (${esc(s.depthChoice)}) and flange / web${s.skKgKept ? `; skew-correction K<sub>g</sub> kept at ${f0(s.skKgKept)} in⁴` : s.lldf ? '; the live-load girder data follows the section' : ''}. Elevations, bearings and units are this tool's. Values may have been edited since.`; };
   const pb = paneBridge; paneBridge = function () { const h = pb();
     const btns = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 16px 8px"><span class="note" data-ho-link style="padding:0;align-self:center">Send/receive data: <a href="#" data-go-ho>Project tab → Hand-offs</a></span></div>${P.geoSrc ? `<p class="note" style="padding:0 16px 6px" id="geo-src">${srcLine()}</p>` : ''}`;   // HOC (2026-11-10): the Pull / Import buttons are in the Project tab's Hand-offs card (hoRow)
     return h.replace('<p class="note">One span per row (Enter adds a row). Changing the number of spans adds or removes piers.</p>', m => m + btns); };
@@ -5791,7 +5802,7 @@ function sldwRender() {
     'br.bays': 'Girder spacings at the bearings, left to right looking ahead station. Sets the number of girders.',
     'br.ohL': 'Deck overhang beyond the left exterior girder (deck edge to CL girder).', 'br.ohR': 'Deck overhang beyond the right exterior girder.',
     'br.barH': 'Barrier height above the deck: part of the exposed depth for wind (3.8.1.2) when barriers are counted.',
-    'br.ts': 'Structural deck thickness: deck dead load geometry, exposed depth and the skew correction K_g estimate.', 'br.haunch': 'Haunch between the deck and the top flange: superstructure depth.',
+    'br.ts': 'Structural deck thickness: deck dead load geometry, exposed depth and the skew correction K_g estimate.', 'br.haunch': 'Haunch between the deck and the top flange at the supports: superstructure depth (bearing seats, wind). A geometry pull from the PS Bridge app takes its haunch at the CL bearings.',
     'br.d': 'Girder depth: superstructure depth for wind, braking and centrifugal force heights, bearing elevations.',
     'br.bf': 'Top flange width (drawings, 3D view and the K_g estimate).', 'br.tf': 'Top flange thickness (drawings and the K_g estimate).', 'br.tw': 'Web thickness (drawings and the K_g estimate).',
     'br.wc': 'Unit weight of the substructure concrete for its self-weight (DC), AASHTO LRFD Table 3.5.1-1.',

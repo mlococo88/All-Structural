@@ -350,6 +350,16 @@
      PSBBridgeDL.edgeFace, the Steel Bridge app's edgeIn), the deck, and the girder section (the largest of each dimension over every
      girder type on its lines; the deepest at each support and in each span), section.material 'prestressed concrete' (optional, §4.14).
      → { ok, payload, sum } or { error } */
+  /* HHO (2026-11-25, engineer: "The haunch that gets passed to other apps should get fixed to include the full thickness"): the haunch at the
+     CL bearings and at midspan of each girder type x line from the corrected profile (engine/haunch.js, R.hp: t_h the minimum at midspan,
+     t_h + Δ_deck at the bearings), the largest of each over the cells; null when a cell has no profile (the module not loaded, an error).
+     → { brg, mid, th, d, at: the cell of the largest bearing haunch } | null */
+  function haunchSent(cells) {
+    const cs = (cells || []).filter(c => c && c.inp);
+    if (!cs.length || !cs.every(c => c.R && !c.R.error && c.R.hp)) return null;
+    const top = cs.reduce((b, c) => (c.R.hp.brg > b.R.hp.brg ? c : b), cs[0]);
+    return { brg: top.R.hp.brg, mid: Math.max(...cs.map(c => c.R.hp.mid)), th: top.R.hp.th, d: top.R.hp.d, at: top };
+  }
   function sgPayload(P, cells) {
     const errs = [], spans = ((P && P.spans && P.spans.lengths) || []).map(Number), ns = spans.length, xs = (P && P.xs) || {}, nb = Math.round(+xs.nb);
     if (!ns || !spans.every(v => isN(v) && v > 0)) errs.push('Enter the span lengths (Bridge layout tab).');
@@ -373,6 +383,7 @@
     // the deck: t_s, the dead-load thickness and the haunch of the girder types (one value each in a project; the largest when types differ)
     const one = f => { const v = [...new Set(cs.map(c => +f(c.inp)))]; return { v: Math.max(...v), many: v.length > 1 }; };
     const ts = one(i => +i.ts), tot = one(i => i.tsSeparate ? +i.tsDL : +i.ts), th = one(i => +i.th);
+    const hS = haunchSent(cs);   // HHO (2026-11-25): deck.haunch keeps t_h (the entered minimum, at midspan); the haunch at the bearings is sent beside it
     const edge = sd => { const e = Ed[sd], b = q['bar' + sd] || {}, curb = e.type === 'curb', o = v => (v == null || v === '' || !isN(+v)) ? null : r4(+v);
       return { type: curb ? 'curb' : 'barrier', width: r4(e.f), faceBasis: e.by, barrierWidth: curb ? null : o(b.bw), curbWidth: curb ? o(b.cw) : null, curbHeight: curb ? o(b.ch) : null, height: null,
         railing: curb ? { loadPoint: o(b.rp), trafficFace: o(b.rf) } : null }; };
@@ -384,7 +395,7 @@
       spans: spans.slice(), continuity: cont ? 'continuous' : 'simple', supports,
       girders: { count: nb, spacings: (xs.bays || []).map(Number), ohL: +xs.ohL, ohR: +xs.ohR },
       edges: { L: edge('L'), R: edge('R') },
-      deck: { ts: ts.v, total: tot.v, haunch: th.v },
+      deck: Object.assign({ ts: ts.v, total: tot.v, haunch: th.v }, hS ? { haunchBrg: r4(hS.brg), haunchMid: r4(hS.mid) } : {}),   // HHO: + the haunch at the bearings and at midspan (optional fields)
       section: { depth: r4(sec.depth), bf: r4(sec.bf), tf: r4(sec.tf), tw: r4(sec.tw), atSupports: atSupports.map(r4), spanMax: spanMax.map(r4), material: 'prestressed concrete',
         definition: 'precast prestressed concrete girders: total depth = the girder depth h (deck and haunch not included); bf = the larger flange width (top, bottom); tw = the web width bw (both webs of a box, both stems of a NEXT beam); tf = the thickest flange or slab of the section; each the largest over every girder type (each on its own)' },
       basis: { skew: 'as entered in this app (Bridge layout tab): the bearing of girder line i is at x = x_support + (z_i - z_mid) tan(skew), z from G1 toward Gn (left to right looking ahead station), so + = the right end of the support line is ahead station',
@@ -394,7 +405,8 @@
         `Girder section (in), precast prestressed concrete: largest over every girder type: depth ${f3(sec.depth)}, flange width ${f3(sec.bf)}, flange thickness ${f3(sec.tf)}, web width ${f3(sec.tw)}. Deepest at each support: ${supports.map(s => `${s.id} ${f3(s.depth)}`).join(', ')}. Deepest in each span: ${spanMax.map((v, i) => `span ${i + 1} ${f3(v)}`).join(', ')}.`,
         'Skew: as entered here, + when the right end of the support line (looking ahead station) is ahead station.',
         `Supports: ${cont ? 'continuous for composite loads over the piers (5.12.3.3)' : 'simple spans (an expansion joint at each pier)'}; the abutments are deck ends. Bearing fixity is not defined in this app and is not sent. Elevations and the substructure are not carried.`,
-        'Barrier height: not an input of this app (not sent). Curb height and the railing load point are sent for a curb edge.'] };
+        'Barrier height: not an input of this app (not sent). Curb height and the railing load point are sent for a curb edge.'].concat(hS ? [
+        `Haunch (in): deck.haunch = t_h = ${f2(th.v)}, the entered minimum haunch, at midspan at the girder centreline; deck.haunchBrg = ${f2(hS.brg)}, the haunch at the CL bearings, ${hS.d >= 0 ? `t_h + Δ_deck (the camber at deck placement) = ${f2(hS.th)} + ${f2(hS.d)}` : `t_h (the girder sags at deck placement, Δ_deck = ${f2(hS.d)}: the thinnest haunch is at the bearings; decision pending engineer review)`} (girder type ${hS.at.label || hS.at.inp.girder} on G${hS.at.g}, span ${hS.at.s}; the largest over every girder type and line); deck.haunchMid = ${f2(hS.mid)}, at midspan. Straight grade, no vertical curve or cross slope.`] : []) };
     const HS = W.SharedHandoffStore;
     if (HS) payload.contentHash = HS.geometryHash(payload);
     const chk = HS ? HS.checkGeometry(payload) : { ok: true, errors: [] };
@@ -431,5 +443,5 @@
 
   W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, srParts, sepInfo, SEPK, psSection, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
     PM, PM_LABELS, pmFields, pmPlan,
-    GEO_ID, srAll, secDims, sgPayload, DB_K, dbState };   // batch F (2026-11-15)
+    GEO_ID, srAll, secDims, sgPayload, haunchSent, DB_K, dbState };   // batch F (2026-11-15)
 })();
