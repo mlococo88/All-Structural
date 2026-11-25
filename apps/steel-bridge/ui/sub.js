@@ -45,5 +45,13 @@
      "33.75 ≤ 17.75, NG"): shared/steps.js line() flips the one \le / \ge of a failing step's sub when its two numbers violate it, on the
      tabs, in the Report and in its plain text. Off in every other tool (SharedSteps.opt.ngRel, default false). Display only. */
   if (window.SharedSteps && window.SharedSteps.opt) window.SharedSteps.opt.ngRel = true;
-  window.SBDSub = { html, fix, stepSt, items, rows, rowFail, mark };
+  /* BEFF (2026-11-25): beffLink(P, gi, j, txt) -> the link to the worked b_eff of line j of type gi (Girders & plates tab, index.html
+     data-beffgo); beffNote(P, gi) -> "b_eff = … in (line Gj, calculated / entered) [worked]" for the output tabs that use b_eff. Display only. */
+  const beffLink = (P, gi, j, txt) => `<a class="wk" href="#" data-beffgo="${gi}:${j}" title="b_eff of line G${j + 1}, worked on the Girders &amp; plates tab (4.6.2.6.1)">${txt || '§ b<sub>eff</sub>'}</a>`;
+  function beffNote(P, gi) {
+    const M = window.SBDModel, AN = window.SBDAnalysis, g = P && P.girders && P.girders[gi]; if (!M || !M.beffOf || !g || !P.xs || (P.deck && P.deck.composite === false)) return '';
+    const j = AN ? AN.lineOf(P, g) : M.designLine(P, g), ov = M.beffOvOf(P, g), b = M.beffOf(P, g, j);
+    return `<p class="note" data-sbbeff="${gi}:${j}">b<sub>eff</sub> = ${isFinite(b) ? (+b).toFixed(2) : '—'} in on line G${j + 1} (${ov ? 'entered: Override b<sub>eff</sub> of the girder type' : 'calculated: the tributary width, AASHTO LRFD 10th Ed. Art. 4.6.2.6.1'}) ${beffLink(P, gi, j, 'worked')}.</p>`;
+  }
+  window.SBDSub = { html, fix, stepSt, items, rows, rowFail, mark, beffLink, beffNote };
 })();

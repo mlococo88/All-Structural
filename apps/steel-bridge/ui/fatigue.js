@@ -63,7 +63,7 @@
         ${h.sel('studs.skew', 'Radial term F<sub>fat</sub> = F<sub>rc</sub>/w', [['auto', 'Auto: a support skewed more than 20°'], ['yes', 'Yes (skewed > 20° or curved)'], ['no', 'No']])}${h.num('studs.Frc', 'Cross-frame force range F<sub>rc</sub>', 'kip')}${h.num('studs.wv', 'Effective deck length w', 'in')}
         ${h.num('studs.splX', 'Field splice stations (no studs over the plates)', '', { text: true })}${h.num('studs.splL', 'Top splice plate length', 'ft')}${h.num('studs.splC', 'Clearance at each plate end', 'in')}
         ${h.sel('studs.beffMode', 'b<sub>eff</sub> for the studs', [['girder', 'Each girder its own b_eff (6.10.10; default)'], ['bridge', 'Bridge-wide, as GirderDetail (one set of zones)']])}
-        <p class="note">GirderDetail checks one set of pitch zones and strength regions for the whole bridge, with one b<sub>eff</sub> (the girder with the largest fatigue shear range, usually the exterior). This app's default is "Each girder its own b<sub>eff</sub>": the pitch (AASHTO LRFD 10th Ed. Art. 6.10.10.1.2) and the strength (Art. 6.10.10.4.2) take the girder's own b<sub>eff</sub> (in its composite section); "Bridge-wide" is GirderDetail's envelope. The difference is reported on the output tab. Splice stations: comma separated; with a hand-off file and none entered, the file's splice gaps are used.</p>`)
+        <p class="note">GirderDetail checks one set of pitch zones and strength regions for the whole bridge, with one b<sub>eff</sub> (the girder with the largest fatigue shear range, usually the exterior). This app's default is "Each girder its own b<sub>eff</sub>": the pitch (AASHTO LRFD 10th Ed. Art. 6.10.10.1.2) and the strength (Art. 6.10.10.4.2) take the girder's own b<sub>eff</sub> (in its composite section); "Bridge-wide" is GirderDetail's envelope, with one b<sub>eff</sub> for every girder: the first exterior girder type's b<sub>eff</sub> on line G1 (calculated: G1's tributary width, 4.6.2.6.1; or the type's entered value when Override b<sub>eff</sub> is ticked; decision pending engineer review, 2026-11-25). The difference is reported on the output tab. Splice stations: comma separated; with a hand-off file and none entered, the file's splice gaps are used.</p>`)
       + h.card('Pitch zones', `${Z.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>From (ft)</th><th>To (ft)</th><th>Studs per row</th><th>Pitch (in)</th><th></th></tr></thead><tbody>
           ${Z.map((z, i) => `<tr>${['x1', 'x2', 'nr', 'p'].map(k => `<td><input type="number" step="${k === 'nr' ? 1 : 'any'}" data-path="studs.zones.${i}.${k}" data-kind="num" value="${esc(z[k])}" aria-label="zone ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-fzdel="${i}" title="Remove this zone">×</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="note">No zones entered: the hand-off file\'s pitch zones (or GirderDetail\'s built-in zones in the example) are used.</p>'}
         <button type="button" id="fz_add">Add zone</button>${Z.length ? ' <button type="button" id="fz_clear">Clear (use the file\'s zones)</button>' : ''}
@@ -105,7 +105,7 @@
      the zones and strength regions are made the way Preliminary sizing makes them for GirderDetail (detailExport): each span in tenths;
      per zone n_r = max(2, min(4, ⌊(b_tf − 2 − d)/4⌋ + 1)), V_f the largest fatigue shear range (V_FAT,pos − V_FAT,neg) of the stations in
      the zone, pitch p = max(6d, min(24, ⌊2 p_req⌋/2)) with p_req = n_rZ_r/(γV_fQ/I), γ = Fatigue I of the inputs, Z_r = 7.0A_sc (Fatigue I); regions from each
-     support to the point of maximum Strength I positive moment of the span (the owner's η, m: factorsOwner). b_eff for the studs: the first exterior girder's of the project
+     support to the point of maximum Strength I positive moment of the span (the owner's η, m: factorsOwner). b_eff for the studs: the first exterior girder type's on G1 (SBDModel.beffBridge; BEFF 2026-11-25)
      (GirderDetail: the girder type with the largest fatigue shear range, usually the exterior), or this girder's. */
   function fromAnalysis(P, gi) {
     const AN = window.SBDAnalysis, FA = window.SBDFatigue, FX = window.SBDFlexure, Q = P.studs, M = window.SBDModel;
@@ -127,11 +127,11 @@
       M_FATpos: f.Mpos[i], M_FATneg: f.Mneg[i], V_DC1: Math.abs(st.DC1.VR[i]), V_DC2: Math.abs(st.DC2.VR[i]), V_DW: Math.abs(st.DW.VR[i]),
       V_FATpos: vf(i)[0], V_FATneg: vf(i)[1], ...(q ? { M_PLpos: q.Mpos[i], M_PLneg: q.Mneg[i] } : {}) }));
     const zones = g.segments.map(s => ({ startX: s.x0, endX: s.x1, web: { depth: s.D, thickness: s.tw }, topFlange: { width: s.topB, thickness: s.topT }, botFlange: { width: s.botB, thickness: s.botT } }));
-    const m = P.materials, d = P.deck, h0 = R.h0, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
+    const m = P.materials, d = P.deck, h0 = R.h0, ext = P.girders.find(q => q.position === 'exterior'), beffB = (window.SBDModel && window.SBDModel.beffBridge ? window.SBDModel.beffBridge(P, g) : (ext || g).beff);
     const pl = { _schema: 'sbd2-analysis', pedestrianInLL: !!q, stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
       ownerRules: { owner: (P.ownerRules || {}).owner || 'AASHTO', haunchInProperties: !h0 },
       girderDetail: { label: g.label || g.id, girder: gi + 1, position: g.position, materials: { Fyf: M.GRADES[m.steel.top].Fy, Fyw: M.GRADES[m.steel.web].Fy, fc: m.concrete.fc, wc: m.concrete.wc, gradeFlange: m.steel.top, gradeWeb: m.steel.web },
-        deck: { ts: d.ts, haunch: d.haunch, beff: g.beff, Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
+        deck: { ts: d.ts, haunch: d.haunch, beff: (window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, g) : g.beff), Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
         skew: { bySupport: ((P.xs || {}).skews || []).slice(), max: Math.max(0, ...((P.xs || {}).skews || []).map(Math.abs)) }, details: {} } };
     // studs: the project's zones (build() takes them over), or Preliminary sizing's auto zones and regions (studsOf, the same for custom rows)
     pl.girderDetail.details = studsOf(P, gi, stations, R.sup, R.spans, h0, R.cont);
@@ -141,7 +141,7 @@
      fromAnalysis unchanged, custom demands PR 2026-11-01, so that custom rows take the same zones and regions; a zone without a row there has
      V_f = 0, as the analysis path gives a zone without stations) */
   function studsOf(P, gi, stations, sup, spans, h0, cont, pedIn) {
-    const FA = window.SBDFatigue, FX = window.SBDFlexure, Q = P.studs, g = P.girders[gi], m = P.materials, d = P.deck, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
+    const FA = window.SBDFatigue, FX = window.SBDFlexure, Q = P.studs, g = P.girders[gi], m = P.materials, d = P.deck, ext = P.girders.find(q => q.position === 'exterior'), beffB = (window.SBDModel && window.SBDModel.beffBridge ? window.SBDModel.beffBridge(P, g) : (ext || g).beff);
     const R = { sup, spans, cont };
     const dd = +Q.d, Zr = 7.0 * Math.PI * dd * dd / 4, segAt = x => g.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || g.segments[g.segments.length - 1];
     const n = window.SBDSections.modularRatio(m.concrete.fc, wcE(m), m.concrete.K1, m.concrete.nRule).n, r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2);
@@ -172,7 +172,7 @@
     let CU = null; if (ctx.pl === undefined && src === 'custom') { const CD = window.SBDCustomDemands; if (!CD) return { err: 'ui/demands.js is not loaded.' }; CU = CD.payload(P, g, 'fat'); if (CU.err) return { err: CU.err }; pl = CU.pl;
       const s0 = pl.member.supports; pl.girderDetail.details = studsOf(P, g, pl.stations, s0, pl.member.spans, pl.ownerRules.haunchInProperties === false, P.spans.continuity !== 'simple' && s0.length > 2, pl.pedestrianInLL === true); }
     const F = P.fatigue, Q = P.studs, own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0);
-    const set = FA.settings(F), m = P.materials, G = P.girders[g] || P.girders[0];
+    const set = FA.settings(F), m = P.materials, G = P.girders[g] || P.girders[0], bG = q => (window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, q) : q.beff);   // BEFF (2026-11-25)
     let sup = [0]; P.spans.lengths.forEach(L => sup.push(+(sup[sup.length - 1] + +L).toFixed(6)));
     if (pl) sup = (pl.member || {}).supports || sup;
     const spans = sup.slice(1).map((x, k) => x - sup[k]), cont = pl ? sup.length > 2 : P.spans.continuity === 'continuous' && sup.length > 2, B = FA.supports({ ok: true, spans, cont });
@@ -186,7 +186,7 @@
     const rows = pl ? FA.detailsFromPayload(pl, { frames, stiffened: !P.stiffeners || P.stiffeners.layout.web !== 'unstiffened', splices: splX.length ? splX : plSpl.map(q => q.x) }) : JSON.parse(JSON.stringify(FA.DEFAULT.rows));
     if (CU && Array.isArray(rows)) { const x0 = Math.min(...CU.xs), x1 = Math.max(...CU.xs); rows.splice(0, rows.length, ...rows.filter(r => +r.x >= x0 - 1e-6 && +r.x <= x1 + 1e-6)); }
     const faIn = { limit: F.limit, gam: { ...F.gam }, ADTT: F.ADTT, p: F.p, life: F.life, gW: m.steel.web, negSec: F.negSec, dist: { ...F.dist }, ev: F.ev && F.ev.on === 'yes' ? { ...F.ev, spans } : { on: 'no' },   // MBE 4th Ed. evaluation (2026-11-10): P.fatigue.ev, optional; spans for R_p's L
-      ts: pl ? dk.ts : P.deck.ts, hh: pl ? dk.haunch : P.deck.haunch, beff: pl ? dk.beff : G.beff, ...(prjN(pl) ? nPrj(m) : { fc: +pm.fc, wc: +pm.wc || 0.15, K1: 1, nRule: 'exact' }),   // F1: the project's n (w_c for E_c, K_1, rounding); a hand-off file's own
+      ts: pl ? dk.ts : P.deck.ts, hh: pl ? dk.haunch : P.deck.haunch, beff: pl ? dk.beff : (window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, G) : G.beff), ...(prjN(pl) ? nPrj(m) : { fc: +pm.fc, wc: +pm.wc || 0.15, K1: 1, nRule: 'exact' }),   // F1: the project's n (w_c for E_c, K_1, rounding); a hand-off file's own
       Ar: pl ? +dk.Ar || 0 : (P.deck.rebar.top.A || 0) + (P.deck.rebar.bot.A || 0), dr: pl ? dk.ts / 2 : P.deck.ts / 2, rows };
     const FR = FA.compute(faIn, { owner: own.owner, lf, dia: !!(window.SBDCrossframes && P.crossframes && window.SBDCrossframes.cfDiaOn(P.crossframes)) }), FC = FR.errors.length ? null : FA.checks(FR);
     // ---- GS17 (file only): every station GirderDetail checks
@@ -199,7 +199,7 @@
     let scIn, scEnv = env;
     if (pl) { const d0 = SC.fromPayload(pl, { beffMode: Q.beffMode, fI: fatI(P) }); if (!d0) return { err: 'The hand-off file has no stud results (GirderDetail Shear connectors, S2-6): re-export it from GirderDetail.' }; scIn = d0.p; if (prjN(pl)) Object.assign(scIn, nPrj(m)); }
     else { scIn = JSON.parse(JSON.stringify(SC.DEFAULT)); Object.assign(scIn, { ts: P.deck.ts, hh: P.deck.haunch, tdeck: P.deck.tdeck, ...nPrj(m), gF: m.steel.top, gW: m.steel.web,
-      beff: Math.max(...P.girders.map(q => +q.beff || 0)) || G.beff, ...(Q.beffMode === 'girder' ? { beffMode: 'girder', beffG: G.beff } : {}) }); }
+      beff: Math.max(...P.girders.map(q => +bG(q) || 0)) || bG(G), ...(Q.beffMode === 'girder' ? { beffMode: 'girder', beffG: bG(G) } : {}) }); }   // BEFF (2026-11-25): each type's b_eff on its line
     Object.assign(scIn, { d: String(Q.d), h: Q.h, st: Q.st, Fu: Q.Fu, Qn10: Q.Qn10, gam: { fat: fatI(P) }, Frc: Q.Frc, wv: Q.wv });   // SCGAM (2026-11-01): was gam: { fat: Q.gamFat }; every path (analysis, file, Custom, example)
     if (Q.skew !== 'auto') scIn.skew = Q.skew; else if (!pl) scIn.skew = (P.xs && (P.xs.skews || []).some(s => Math.abs(s) > 20)) ? 'yes' : 'no';
     if (splX.length) Object.assign(scIn, { splX: splX.join(', '), splL: Q.splL, splC: Q.splC });
@@ -222,7 +222,7 @@
         if (!ch) break; SR = SC.compute(scIn, scEnv); } }
     const SCC = SR.errors.length ? null : SC.checks(SR);
     // the other b_eff mode, for the comparison line (GirderDetail open question)
-    let alt = null; if (!SR.errors.length) { const q = JSON.parse(JSON.stringify(scIn)); if (SR.beffMode === 'girder') { delete q.beffMode; delete q.beffG; } else { q.beffMode = 'girder'; q.beffG = pl ? dk.beff : G.beff; }
+    let alt = null; if (!SR.errors.length) { const q = JSON.parse(JSON.stringify(scIn)); if (SR.beffMode === 'girder') { delete q.beffMode; delete q.beffG; } else { q.beffMode = 'girder'; q.beffG = pl ? dk.beff : bG(G); }
       const A = SC.compute(q, scEnv); if (!A.errors.length) { const C = SC.checks(A), mx = (CK, id) => Math.max(0, ...CK.find(c => c.id === id).items.map(i => i.r).filter(isFinite)); alt = { beff: A.dk.beff, sc1: mx(C, 'SC1'), sc2: mx(C, 'SC2'), sc1o: mx(SCC, 'SC1'), sc2o: mx(SCC, 'SC2') }; } }
     // governing of each list
     const gov = (C, skip) => { let b = null; (C || []).forEach(c => c.items.forEach((it, i) => { if (skip && skip(c, it)) return; if ((isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && it.r != null && (it.st === 'pass' || it.st === 'fail') && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r))) b = { c, it, i }; })); return b; };
@@ -256,7 +256,7 @@
     if (src === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(ctx.P, 'fat', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Fatigue results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="fa_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
-    else if (S.R && !stale) h += results(S.R);
+    else if (S.R && !stale) h += results(S.R, ctx);
     host.innerHTML = h;
     window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const on = (id, ev, f) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, f); }, redraw = () => render(host, ctx);
@@ -308,7 +308,7 @@
   const stepsHtml = (list, kind, ST) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: q => stepLi(q, ST) });   // SBNG: ST, ui/sub.js stepSt
   const go = (k, i, id, txt) => `<a class="wk" href="#st-${esc(id)}" data-go="${k}:${i}:${esc(id)}">${txt || '§'}</a>`;
   const stCell = st => `<td class="${st === 'fail' ? 'fx-ng' : st === 'warn' ? 'fx-hi' : st === 'na' ? 'fx-na' : 'fx-ok'}">${{ pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[st] || esc(st)}</td>`;
-  function results(R) {
+  function results(R, ctx) {   // ctx: the tab's (BEFF, 2026-11-25: the b_eff link)
     const FA = window.SBDFatigue, SC = window.SBDStuds;
     let h = '';
     const gl = [];
@@ -316,7 +316,7 @@
     if (R.g17) gl.push([R.g17.it.r, `${window.SBDSub.html(R.g17.it.loc)}: GS17 flange stress range (Category ${ct(R.g17.it.cat)}, Fatigue ${R.g17.it.lim})`, go('gs', R.g17.i, R.g17.it.step), 'Flanges, every station']);
     if (R.scGov) gl.push([R.scGov.it.r, `${window.SBDSub.html(R.scGov.it.loc)}: ${esc(R.scGov.c.id)} ${window.SBDSub.html(R.scGov.c.title)}`, go('sc', 0, R.scGov.it.step), 'Studs']);
     const top = gl.reduce((a, b) => (!a || b[0] > a[0] ? b : a), null);
-    h += `<section class="sec"><div class="secHead">Fatigue &amp; studs: governing</div><div class="secBody"><p class="note">${R.what}</p>
+    h += `<section class="sec"><div class="secHead">Fatigue &amp; studs: governing</div><div class="secBody"><p class="note">${R.what}</p>${ctx && window.SBDSub && window.SBDSub.beffNote ? window.SBDSub.beffNote(ctx.P, ctx.g || 0) : ''}
       <p class="note">${window.SBDSub.html(FA.setText(R.set))}.</p>
       ${top ? `<p>Governing ratio <b class="${cls(top[0])}">${fmt(top[0], 3)}</b>: ${top[1]} ${top[2]}</p>` : ''}
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing item</th><th>Ratio</th><th></th></tr></thead><tbody>
@@ -347,7 +347,7 @@
       h += `<section class="sec"><div class="secHead">Shear connectors (6.10.10): ${Sr.zones.length} pitch zones, ${Sr.regions.length} strength regions</div><div class="secBody">
         <p class="note" id="sc-edition">${SC_ED}</p>
         ${R.skV && R.skV.on && R.skV.spans.some(q => q.rVf > 1) ? `<p class="note" id="sc-skewvx">The fatigue shear range V<sub>f</sub> of each zone uses the shear skew correction tapered to 1.0 at mid-span (4.6.2.2.3c; Loads input tab, Distribution): g<sub>fat,V</sub>(x) at each station, worked on the <a href="#" data-gotab="an">Analysis tab</a> (steps an.gVx.fat).</p>` : ''}
-        <p class="note">Studs ${fmt(Sr.d, 3)} × ${fmt(Sr.h, 2)} in: Q<sub>r</sub> = ${fmt(Sr.Qr, 2)} kip ${go('sc', 0, 'sc.Qr')}, Z<sub>r</sub> (Fatigue I) = ${fmt(Sr.Zr, 3)} kip ${go('sc', 0, 'sc.ZrI')}; b<sub>eff</sub> = ${fmt(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? 'this girder\'s own, 6.10.10 (default)' : 'bridge-wide, as GirderDetail (option)'}) ${go('sc', 0, 'sc.beff')}; F<sub>fat</sub> = ${fmt(Sr.Ffat, 4)} kip/in; γ Fatigue I = ${fmt(Sr.gf, 2)} (the Fatigue &amp; studs input, one source).</p>
+        <p class="note">Studs ${fmt(Sr.d, 3)} × ${fmt(Sr.h, 2)} in: Q<sub>r</sub> = ${fmt(Sr.Qr, 2)} kip ${go('sc', 0, 'sc.Qr')}, Z<sub>r</sub> (Fatigue I) = ${fmt(Sr.Zr, 3)} kip ${go('sc', 0, 'sc.ZrI')}; b<sub>eff</sub> = ${fmt(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? 'this girder\'s own, 6.10.10 (default)' : 'bridge-wide, as GirderDetail (option): the first exterior girder type\'s b<sub>eff</sub> on G1'}) ${go('sc', 0, 'sc.beff')}${ctx && window.SBDSub && window.SBDSub.beffLink && ctx.P.xs ? ' ' + window.SBDSub.beffLink(ctx.P, Sr.beffMode === 'girder' ? (ctx.g || 0) : Math.max(0, ctx.P.girders.findIndex(q => q.position === 'exterior')), Sr.beffMode === 'girder' ? window.SBDAnalysis.lineOf(ctx.P, ctx.P.girders[ctx.g || 0]) : 0, 'worked') : ''}; F<sub>fat</sub> = ${fmt(Sr.Ffat, 4)} kip/in; γ Fatigue I = ${fmt(Sr.gf, 2)} (the Fatigue &amp; studs input, one source).</p>
         ${R.oldFat ? `<div class="alert">The saved γ Fatigue I (studs) ${esc(R.oldFat.was)} is no longer used (now ${fmt(R.oldFat.now, 2)}, the Fatigue &amp; studs input γ Fatigue I).</div>` : ''}
         ${R.alt ? `<p class="note">For comparison: with ${Sr.beffMode === 'girder' ? 'the bridge-wide (GirderDetail)' : 'this girder\'s own'} b<sub>eff</sub> = ${fmt(R.alt.beff, 2)} in the largest SC1 ratio would be ${fmt(R.alt.sc1, 3)} (now ${fmt(R.alt.sc1o, 3)}) and the largest SC2 ratio ${fmt(R.alt.sc2, 3)} (now ${fmt(R.alt.sc2o, 3)}).</p>` : ''}
         <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Zone</th><th>Studs</th><th>V<sub>f</sub> (kip)</th><th>Limit state</th><th>Z<sub>r</sub> (kip)</th><th>V<sub>sr</sub> (kip/in)</th><th>p<sub>max</sub> (in)</th><th>SC1</th><th>SC3</th><th>SC4</th></tr></thead><tbody>

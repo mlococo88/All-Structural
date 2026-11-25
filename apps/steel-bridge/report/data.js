@@ -114,7 +114,7 @@
     const M = W().SBDModel, SEC = W().SBDSections, OWN = W().SBDOwners, G = M.GRADES, m = P.materials, d = P.deck, gd = P.girders[g] || P.girders[0];
     const lf = OWN.loadFactors(P.ownerRules.owner, P.ownerRules.eta, (P.xs || {}).nb);
     const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
-    const deck = { composite: d.composite, ts: d.ts, haunch: OWN.haunchInProps(d.haunch, lf), beff: gd.beff, rebar: d.rebar };
+    const deck = { composite: d.composite, ts: d.ts, haunch: OWN.haunchInProps(d.haunch, lf), beff: M.beffOf ? M.beffOf(P, gd) : gd.beff, rebar: d.rebar };   // BEFF (2026-11-25)
     const mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
     const piers = (sup || []).slice(1, -1), cont = P.spans.continuity !== 'simple' && piers.length > 0;
     const cards = [];
@@ -123,7 +123,7 @@
       const regs = ['pos']; if (cont && piers.some(x => x >= s.x0 - 1e-6 && x <= s.x1 + 1e-6)) regs.push('neg');
       regs.forEach(region => cards.push({ i, seg: s, region, c: SEC.card(plates, deck, mat, nr.n, { region, rebarInPositive: d.rebarInPositiveMp }) }));
     });
-    return { nr, lf, cards };
+    return { nr, lf, cards, beff: deck.beff };   // BEFF: the b_eff used (the Section properties figure)
   }
 
   window.SBDReportData = { compute, analysis, install, sameFlex, cache: CACHE };

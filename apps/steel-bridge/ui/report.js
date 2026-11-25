@@ -56,7 +56,7 @@
   const slots = n => n.map(x => `<div data-gfxb="${x}"></div>`).join('');
   const DRAW = {
     sec: (h, B) => { const A = window.SBDGfxA, S0 = B.sec; if (!A || !S0 || !S0.cards) return [];
-      return [].concat(...S0.cards.slice(0, 12).map(cd => { h.innerHTML = '<div id="gfx_sec"></div>'; A.section(h.firstChild, { P: B.P, R: { c: cd.c, s: cd.seg, nr: S0.nr, lf: S0.lf, g: B.girder }, seg: cd.i + 1 });
+      return [].concat(...S0.cards.slice(0, 12).map(cd => { h.innerHTML = '<div id="gfx_sec"></div>'; A.section(h.firstChild, { P: B.P, R: { c: cd.c, s: cd.seg, nr: S0.nr, lf: S0.lf, g: B.girder, beff: S0.beff }, seg: cd.i + 1 });
         return grab(h).map(q => ({ ...q, caption: `${q.caption}; segment ${cd.i + 1}, ${cd.region === 'neg' ? 'negative' : 'positive'} flexure` })); })); },
     loads: (h, B) => { const A = window.SBDGfxA, R = B.loads; if (!A || !R || !R.dead) return []; const AN = window.SBDAnalysis, lg = Math.min(AN ? AN.lineOf(B.P, B.girder) : 0, R.dead.N - 1);
       h.innerHTML = '<div id="gfx_ld"></div>'; A.loads(h.firstChild, { P: B.P, R, lg, lr: 0 }); return grab(h); },

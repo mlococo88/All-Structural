@@ -37,7 +37,7 @@
   /* ================= Section properties ================= */
   function secGraphic(P, R, cs, seg) {
     const G = GR(), c = R.c, s = R.s, OW = window.SBDOwners, deck = P.deck, comp = c.comp, d = c.s.d;
-    const hh = comp ? (OW && R.lf ? OW.haunchInProps(deck.haunch, R.lf) : deck.haunch) : 0, ts = comp ? +deck.ts : 0, be = comp ? +R.g.beff : 0, rb = deck.rebar || {};
+    const hh = comp ? (OW && R.lf ? OW.haunchInProps(deck.haunch, R.lf) : deck.haunch) : 0, ts = comp ? +deck.ts : 0, be = comp ? +(R.beff != null ? R.beff : R.g.beff) : 0, rb = deck.rebar || {};
     const W = Math.max(be, s.topB, 30), H = d + hh + ts, h = Math.max(W, H * 1.4) * 0.095, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), dm = D.layer('DIMS', 7);
     const ly = { g: D.layer('GRDR', 5), dk: D.layer('DECK', 7), rb: D.layer('REBAR', 1), c: D.layer('CNTR', 8) };
     const ib = ibeam(D, ly.g, 0, 0, s); if (comp && hh > 0) D.rect(ly.dk, -s.topB / 2, d, s.topB / 2, d + hh);
@@ -88,7 +88,7 @@
   function secModel(P, R, cs) {
     const c = R.c, s = R.s, OW = window.SBDOwners, deck = P.deck, comp = c.comp, d = c.s.d, neg = c.region === 'neg', CS = neg ? SEC_CASES_NEG : SEC_CASES;
     // the geometry of secGraphic (same haunch rule, deck and bars)
-    const hh = comp ? (OW && R.lf ? OW.haunchInProps(deck.haunch, R.lf) : deck.haunch) : 0, ts = comp ? +deck.ts : 0, be = comp ? +R.g.beff : 0, rb = deck.rebar || {}, H = d + hh + ts;
+    const hh = comp ? (OW && R.lf ? OW.haunchInProps(deck.haunch, R.lf) : deck.haunch) : 0, ts = comp ? +deck.ts : 0, be = comp ? +(R.beff != null ? R.beff : R.g.beff) : 0, rb = deck.rebar || {}, H = d + hh + ts;
     const key = comp && CS[cs] ? cs : 'steel', f = key === 'steel' || key === 'cr' ? 1 : key === '3n' ? 3 * R.nr.n : R.nr.n, sc = key === 'steel' ? c.s : key === 'cr' ? c.cr : key === '3n' ? c.c3 : c.cn, M = neg ? -1000 : 1000;
     const ff = y => M * 12 * (y - sc.yb) / sc.I;   // as secGraphic: per 1000 kip-ft (negative region: per −1000 kip-ft, SECN), compression +
     const segs = [{ ya: 0, yb: d, k: 1, mat: 'steel' }]; if (comp && f > 1) segs.push({ ya: d + hh, yb: H, k: 1 / f, mat: 'deck' });

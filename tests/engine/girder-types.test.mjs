@@ -51,7 +51,7 @@ test('newProject(): Interior (the default girder) on G2–G4, Exterior (b_eff tr
   assert.deepEqual(J(M.lineTypes(P)), [[1], [0], [0], [0], [1]]); assert.deepEqual(J(M.unassigned(P)), []);
   assert.equal(P.girders[0].label, 'Interior'); assert.equal(P.girders[1].label, 'Exterior'); assert.equal(P.girders[1].position, 'exterior');
   assert.equal(P.girders[1].beff, 96, 'b_eff = 12 (9.5 / 2 + 3.25) = 96 in'); assert.equal(M.tribBeff(P.xs, 2), 114);
-  const g = J(P.girders[0]); delete g.label; delete g.line; delete g.lines; const d = J(D.girders[0]); delete d.label; assert.deepEqual(g, d);
+  const g = J(P.girders[0]); delete g.label; delete g.line; delete g.lines; delete g.beffOv; const d = J(D.girders[0]); delete d.label; assert.deepEqual(g, d);   // BEFF (2026-11-25): newProject's types are calculated (beffOv false)
   assert.equal(D.girders.length, 1); assert.deepEqual(J(M.validate(P).errors), []);
 });
 

@@ -81,7 +81,7 @@
     const fr = P.framing || {}, d = P.deck, m = P.materials, rb = d.rebar || {}, T = rb.top || { A: 0, c: 0 }, B = rb.bot || { A: 0, c: 0 }, Ar = (+T.A || 0) + (+B.A || 0);
     const layers = [[+T.A || 0, +T.c || 0], [+B.A || 0, d.ts - (+B.c || 0)]];
     const D = { ...(CU ? CU.D0 : { x: R.x, sup: R.sup, V: { L: side('L'), R: side('R') }, PL: q ? true : undefined, MfP: Array.from(f.Mpos), MfN: Array.from(f.Mneg) }), segAt, segs: g.segments, splices: Array.isArray(fr.splices) ? fr.splices : [], tol: +fr.tol >= 0 ? +fr.tol : 0.5 };
-    const gen = { gF: m.steel.top, gW: m.steel.web, Fexx: Wd.Fexx, gam: projGam(P), ts: d.ts, hh: d.haunch, beff: g.beff, fc: m.concrete.fc, wc: m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, K1: m.concrete.K1, nRule: m.concrete.nRule,
+    const gen = { gF: m.steel.top, gW: m.steel.web, Fexx: Wd.Fexx, gam: projGam(P), ts: d.ts, hh: d.haunch, beff: (window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, g) : g.beff), fc: m.concrete.fc, wc: m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, K1: m.concrete.K1, nRule: m.concrete.nRule,
       Ar, dr: Ar > 0 ? layers.reduce((s, q) => s + q[0] * q[1], 0) / Ar : 0, layers };
     const p = WT.fromDemands(D, { gen, w: Wd.w, ground: Wd.ground });
     if (!p.fw.length && !p.tr.length && window.SBDRolled && window.SBDRolled.girderRolled(g)) return { err: `Welds: not applicable to ${g.label || g.id}. Every weld location is on a rolled shape (${[...new Set(g.segments.map(s => window.SBDRolled.label(s)).filter(Boolean))].join(', ')}): a rolled shape has no flange-to-web welds, and there is no shop flange transition.`, na: true };   // ROLL
@@ -153,7 +153,7 @@
     if (srcOf(P) === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(P, 'wt', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Weld results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="wt_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
-    else if (S.R && !stale) h += results(S.R);
+    else if (S.R && !stale) h += results(S.R, ctx);
     host.innerHTML = h;
     window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const on = (id, ev, fn) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, fn); }, redraw = () => render(host, ctx), save = () => { if (ctx.changed) ctx.changed(); else redraw(); };
@@ -187,7 +187,7 @@
   const SUM = [['str', 'Strength (Strength I)', ['FW1', 'FW2']], ['fat', 'Fatigue (Fatigue I)', ['FW3', 'TR1']], ['det', 'Detailing limits (minimum size, transitions)', ['FW4', 'TR2', 'TR3', 'TR4']]];
   function strengthGov(C) { let b = null; C.filter(c => SUM[0][2].includes(c.id) && c.gov >= 0).forEach(c => { const it = c.items[c.gov]; if (it && typeof it.r === 'number' && (!b || RK(it) > RK(b.it) || (RK(it) === RK(b.it) && it.r > b.it.r))) b = { c, it }; }); return b; }
   const RK = it => ({ fail: 3, warn: 2, adv: 1 }[it.st] || 0);
-  function results(B) {
+  function results(B, ctx) {   // ctx: the tab's (BEFF, 2026-11-25: the b_eff link)
     const R = B.R, C = B.C, ck = id => C.find(c => c.id === id) || { items: [] }, WT = window.SBDWelds;
     const row = c => { if (!c.items.length || c.gov < 0) return ''; const it = c.items[c.gov]; return `<tr><td class="lft">${esc(c.id)} ${window.SBDSub.html(c.title)}</td><td class="lft">${window.SBDSub.html(it.loc)}</td>${stCell(it.st, typeof it.r === 'number' ? it.r : null)}<td class="lft" style="font-size:8.5pt">${esc(c.ref)}</td></tr>`; };
     const govRows = SUM.map(([k, t, ids]) => { const rs = C.filter(c => ids.includes(c.id)).map(row).join(''); return rs ? `<tr class="ad-grp"><th colspan="4" class="lft" style="background:#f1f5f9">${esc(t)}</th></tr>${rs}` : ''; }).join('')
@@ -196,7 +196,7 @@
     const head = sg ? `<p style="font-size:11pt;margin:4px 0 6px"><b>Governing strength check:</b> ${esc(sg.c.id)} ${window.SBDSub.html(sg.c.title)}, ${window.SBDSub.html(sg.it.loc)}: ratio <span class="${cls(sg.it.r)}" style="padding:0 6px">${rt3(sg.it.r)}</span></p>` : '';
     const stat = `<p class="note"><b>Status</b> (every item of every check, the detailing limits included): ${nF ? `<span class="fx-ng" style="padding:0 4px">${nF} item${nF > 1 ? 's' : ''} fail</span>` : 'all pass'}${nW ? `; ${nW} warning${nW > 1 ? 's' : ''}` : ''}.</p>`;
     let h = `<section class="sec"><div class="secHead">Welds: governing, ${esc(B.g.label || B.g.id)}</div><div class="secBody">
-      <p class="note">${B.what || ''}</p><p class="note">n = ${fmt(R.MR.n, 3)}; b<sub>eff</sub> = ${fmt(R.dk.beff, 2)} in; F<sub>u</sub> of the web ${fmt(R.Fuw, 0)} ksi; γ<sub>DC</sub> ${fmt(R.g.dc, 3)}, γ<sub>DW</sub> ${fmt(R.g.dw, 3)}, γ<sub>LL</sub> ${fmt(R.g.ll, 3)}${R.env.eta !== 1 || R.env.m !== 1 ? ` (× η ${fmt(R.env.eta, 3)}${R.env.m !== 1 ? `, m ${fmt(R.env.m, 2)}` : ''})` : ''}, γ<sub>fat</sub> ${fmt(R.g.fat, 2)}${R.env.h0 ? '; haunch 0 in the composite properties (owner rule)' : ''}.</p>
+      <p class="note">${B.what || ''}</p><p class="note">n = ${fmt(R.MR.n, 3)}; b<sub>eff</sub> = ${fmt(R.dk.beff, 2)} in${ctx && window.SBDSub && window.SBDSub.beffLink && ctx.P.xs ? ' (' + window.SBDSub.beffLink(ctx.P, ctx.g || 0, window.SBDAnalysis.lineOf(ctx.P, ctx.P.girders[ctx.g || 0]), 'worked') + ')' : ''}; F<sub>u</sub> of the web ${fmt(R.Fuw, 0)} ksi; γ<sub>DC</sub> ${fmt(R.g.dc, 3)}, γ<sub>DW</sub> ${fmt(R.g.dw, 3)}, γ<sub>LL</sub> ${fmt(R.g.ll, 3)}${R.env.eta !== 1 || R.env.m !== 1 ? ` (× η ${fmt(R.env.eta, 3)}${R.env.m !== 1 ? `, m ${fmt(R.env.m, 2)}` : ''})` : ''}, γ<sub>fat</sub> ${fmt(R.g.fat, 2)}${R.env.h0 ? '; haunch 0 in the composite properties (owner rule)' : ''}.</p>
       ${head}${stat}<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Check</th><th class="lft">Governing location</th><th>Ratio</th><th class="lft">Reference</th></tr></thead><tbody>${govRows}</tbody></table></div>
       ${C.filter(c => !c.items.length).map(c => `<p class="note">${esc(c.id)} ${window.SBDSub.html(c.title)}: ${esc(c.naWhy)}</p>`).join('')}</div></section>`;
     h += `<section class="sec"><div class="secHead">Welds: graphics</div><div class="secBody"><div data-gfxb="welds"></div><div data-gfxb="weld-detail"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below

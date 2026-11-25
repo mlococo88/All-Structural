@@ -844,7 +844,7 @@
     if (SB && ly.web === 'stiffened' && AR.sup) { const fr = ly.frames || {}, ints = Array.isArray(fr.at) ? fr.at.map(Number) : SB.framesDefault(AR.sup, +fr.Lb || 25);
       const supX = AR.sup, D = Math.max(...g.segments.map(s => s.D));
       try { const pans = SB.girderBays(ly, D, supX, AR.cont, supX, ints, gi + 1).flatMap(SB.bayPanels), pn = pans.find(q => x >= q.p - 1e-9 && x <= q.q + 1e-9); if (pn && pn.d > 0) { web = 'stiffened'; dO = pn.d; } } catch (e) { warn.push('Stiffener panel at the splice not found: unstiffened web assumed.'); } }
-    p.sec = { ...p.sec, D: sc.L.D, gF: ms.top || '50W', gW: ms.web || '50W', gP: S.gP || ms.top || '50W', L: pick(sc.L), R: pick(sc.R), Rh, ts: d.ts, hh: d.haunch, beff: g.beff, Ar, dr, web, do: dO,
+    p.sec = { ...p.sec, D: sc.L.D, gF: ms.top || '50W', gW: ms.web || '50W', gP: S.gP || ms.top || '50W', L: pick(sc.L), R: pick(sc.R), Rh, ts: d.ts, hh: d.haunch, beff: (window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, g) : g.beff), Ar, dr, web, do: dO,
       fc: m.concrete.fc, wc: m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, K1: m.concrete.K1, nRule: m.concrete.nRule, code: S.code, Fyr: (m.rebar || {}).Fyr || 60, prs: S.prs, same: { top: false, web: false, bot: false } };
     p.dem = dm.dem; p.gam = S.gam; p.bolts = S.bolts; p.clr = S.clr;
     const own = S.plates.find(q => q && Math.abs(+q.x - x) < 1e-6 && (q.g == null || +q.g === gi));

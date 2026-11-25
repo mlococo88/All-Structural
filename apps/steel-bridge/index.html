@@ -430,13 +430,11 @@
     if (dup.length) h += `<div class="alert err">Line${dup.length > 1 ? 's' : ''} ${dup.map(j => `${lnName(j)} (${LT[j].map(tyName).map(esc).join(', ')})`).join('; ')}: more than one type on one line. Assign the line to one type (Cross-section tab, Girder type of each line).</div>`;
     return h;
   }
-  /* typeNotes(gi): the type's lines whose position (exterior / interior) or tributary width differs from the type's own inputs (the type's
-     position and b_eff are used on every line; a note only, nothing changed) */
+  /* typeNotes(gi): the type's lines whose position (exterior / interior) differs from the type's own input (the type's position is used on
+     every line; a note only, nothing changed). BEFF (2026-11-25): the tributary-width note is replaced by the worked b_eff (beffCard). */
   function typeNotes(gi) {
     const g = P.girders[gi], L = M.typeLines(P, gi), out = [];
     const pos = L.filter(j => M.isExtLine(P, j) !== (g.position === 'exterior')); if (pos.length) out.push(`Line${pos.length > 1 ? 's' : ''} ${lnList(pos)} ${pos.length > 1 ? 'are' : 'is'} ${g.position === 'exterior' ? 'interior' : 'exterior'}; this type's position is ${esc(g.position)} (used on every line).`);
-    const bw = L.map(j => [j, M.tribBeff(P.xs, j)]).filter(([, b]) => isFinite(b) && isFinite(+g.beff) && Math.abs(b - +g.beff) > 0.5);
-    if (bw.length) out.push(`Tributary width (4.6.2.6.1) ${bw.map(([j, b]) => `${lnName(j)} ${U.fmt(b, 1)} in`).join(', ')}; this type's b<sub>eff</sub> ${U.fmt(+g.beff, 1)} in is used on every line.`);
     if (!L.length) out.push('No line is assigned to this type: it is not checked on the bridge (the output tabs show it on its design line).');
     return out.length ? `<p class="note" data-sbtypes="notes">${out.join('<br>')}</p>` : '';
   }
@@ -487,6 +485,20 @@
       if (out()) out().innerHTML = rlRun.html; };
     setTimeout(step, 0);
   }
+  /* BEFF (2026-11-25; engineer's choice "Calculated, optional override"): the selected type's b_eff. "Override b_eff" off (default): each
+     line of the type takes its own tributary width (SBDModel.beffOf, AASHTO LRFD 10th Ed. Art. 4.6.2.6.1), worked here per line (steps
+     beff.G<j>, ids beff-G<j> for the links of the output tabs and the Cross-section tab); on: the entered value on every line, as before. */
+  function beffGo(v) {   // 'gi:j': the Girders & plates tab, type gi, scrolled to the worked b_eff of line j
+    const [gi, j] = String(v).split(':').map(Number); if (P.girders[gi] && gi !== ui.g) { ui.g = gi; ui.seg = 0; delAsk = null; markStale(); }
+    ui.itab = 'gird'; saveUi(); drawInputs(); const t = document.getElementById('beff-G' + (j + 1)) || $('beffWork'); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; }
+  }
+  function beffCard(gi) {
+    const g = P.girders[gi], ov = M.beffOvOf(P, g), L = M.typeLines(P, gi), Ls = L.length ? L : [M.designLine(P, g)];
+    const li = j => { const st = M.beffStep(P, g, j); return `<li id="beff-G${j + 1}"><div class="lbl">${window.SBDSub ? window.SBDSub.html(st.label) : esc(st.label)}<span class="ref">${esc(st.ref)}</span></div><div>${ST.line(st, true)}</div>${st.note ? `<div class="nt">${esc(st.note)}</div>` : ''}</li>`; };
+    return `<div class="fRow"><label for="i_beffOv">Override b<sub>eff</sub></label><input type="checkbox" id="i_beffOv" data-beffov="${gi}"${ov ? ' checked' : ''}><span class="unit">${ov ? 'the value below on every line of the type' : 'off: each line its own tributary width (4.6.2.6.1), worked below'}</span></div>
+      <div class="fRow"><label for="i_girders.${gi}.beff">Effective flange width b<sub>eff</sub> (override)</label><input type="number" step="any" id="i_girders.${gi}.beff" data-path="girders.${gi}.beff" data-kind="num" value="${esc(g.beff)}"${ov ? '' : ' disabled title="Tick Override b_eff to use an entered value"'}><span class="unit">in</span></div>
+      <div id="beffWork"><div class="note"><b>b<sub>eff</sub> on each line of ${esc(tyName(gi))}</b>${ov ? ' (entered value)' : ''}:</div><ul class="steps">${Ls.map(li).join('')}</ul></div>`;
+  }
   function typesCard() {
     const nb = P.xs ? M.lineTypes(P).length : 0, gi0 = Math.min(ui.g, P.girders.length - 1), g = P.girders[gi0], L = M.typeLines(P, gi0);
     const rows = P.girders.map((q, gi) => { const Lq = M.typeLines(P, gi); return `<tr class="${gi === gi0 ? 'sel' : ''}"><td><button type="button" data-gsel="${gi}" title="Select this type">${esc(tyName(gi))}</button></td><td>${esc(q.position)}</td><td class="lft">${Lq.length ? lnList(Lq) : '<i>none</i>'}</td><td>${Lq.length ? lnName(M.designLine(P, q)) : ''}</td></tr>`; }).join('');
@@ -499,14 +511,14 @@
       ${unassignedNote()}<div class="tscroll"><table class="tbl"><thead><tr><th>Type</th><th>Position</th><th class="lft">Lines</th><th>Design line</th></tr></thead><tbody>${rows}</tbody></table></div>
       <div style="margin:4px 0"><button type="button" id="bAddType" title="A new type with the plates of ${esc(tyName(gi0))}, no line yet">Add type</button> <button type="button" id="bCopyType" title="A copy of ${esc(tyName(gi0))} (plates, b_eff, position), no line yet">Copy type</button> <button type="button" id="bDelType"${P.girders.length < 2 ? ' disabled title="The only type cannot be deleted"' : ''}>Delete type</button></div>${del}`)
       + card('Selected type', `${sel('_g', 'Girder type', P.girders.map((q, i) => [i, q.label || q.id]), gi0)}${num(`girders.${gi0}.label`, 'Label', '', { text: true })}
-          ${sel(`girders.${gi0}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${cbs}${dsel}${num(`girders.${gi0}.beff`, 'Effective flange width b<sub>eff</sub>', 'in')}${typeNotes(gi0)}`);
+          ${sel(`girders.${gi0}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${cbs}${dsel}${beffCard(gi0)}${typeNotes(gi0)}`);
   }
   /* lineTypeCard(): the Cross-section tab's "Girder type of each line" (a select per line; a line with no type, as a saved project's other
      lines, shows "— none —" until a type is chosen) */
   function lineTypeCard() {
     const LT = M.lineTypes(P); if (!LT.length) return '';
     return card('Girder type of each line', `${unassignedNote()}<div class="tscroll"><table class="tbl"><thead><tr><th>Line</th><th class="lft">Girder type</th><th>Tributary width (in)</th></tr></thead><tbody>
-      ${LT.map((t, j) => `<tr><td>${lnName(j)}${M.isExtLine(P, j) ? ' (exterior)' : ''}</td><td class="lft"><select data-ltype="${j}" aria-label="girder type of line ${lnName(j)}">${t.length === 1 ? '' : `<option value="" selected>${t.length ? esc(t.map(tyName).join(' + ')) + ' (conflict)' : '— none —'}</option>`}${P.girders.map((q, gi) => `<option value="${gi}"${t.length === 1 && t[0] === gi ? ' selected' : ''}>${esc(tyName(gi))}</option>`).join('')}</select></td><td>${U.fmt(M.tribBeff(P.xs, j), 1)}</td></tr>`).join('')}
+      ${LT.map((t, j) => `<tr><td>${lnName(j)}${M.isExtLine(P, j) ? ' (exterior)' : ''}</td><td class="lft"><select data-ltype="${j}" aria-label="girder type of line ${lnName(j)}">${t.length === 1 ? '' : `<option value="" selected>${t.length ? esc(t.map(tyName).join(' + ')) + ' (conflict)' : '— none —'}</option>`}${P.girders.map((q, gi) => `<option value="${gi}"${t.length === 1 && t[0] === gi ? ' selected' : ''}>${esc(tyName(gi))}</option>`).join('')}</select></td><td>${t.length === 1 ? `<a href="#" data-beffgo="${t[0]}:${j}" title="The worked b_eff of ${lnName(j)} (Girders &amp; plates tab)">${U.fmt(M.tribBeff(P.xs, j), 1)}</a>${M.beffOvOf(P, P.girders[t[0]]) ? ` <span class="note">(type uses ${U.fmt(+P.girders[t[0]].beff, 1)}, override)</span>` : ''}` : U.fmt(M.tribBeff(P.xs, j), 1)}</td></tr>`).join('')}
       </tbody></table></div><p class="note">The plates of each type: <a href="#" data-itgo="gird">Girders &amp; plates tab</a>. A line moves to the type chosen here.</p>`);
   }
   /* SB-2: the Loads tab's per-girder cards (dead loads, construction live load, distribution factors: ui/analysis.js inputs) are those of the
@@ -629,6 +641,7 @@
     if (el.dataset.ltype != null) { if (el.value !== '') { M.assignLine(P, +el.dataset.ltype, +el.value); changed(true); } return; }   // SB-2: Cross-section tab, the type of a line
     if (el.dataset.gline != null) { if (el.checked) { M.assignLine(P, +el.dataset.gline, Math.min(ui.g, P.girders.length - 1)); changed(true); } return; }   // SB-2: a line checked on the selected type
     if (el.id === 'i_delTo') return;
+    if (el.dataset.beffov != null) { const g = P.girders[+el.dataset.beffov]; if (g) { g.beffOv = el.checked; if (el.checked && !(+g.beff > 0)) g.beff = M.beffOf(P, { ...g, beffOv: false }); changed(true); } return; }   // BEFF: Override b_eff (the stored value kept; a blank one takes the design line's width)
     if (el.dataset.kind === 'line') { const g = P.girders[ui.g]; if (el.value === '') delete g.line; else g.line = Number(el.value); changed(false); return; }   // SB2-A7
     if (window.SBDSplicesUI.onChange(el, P)) { changed(true); return; }
     if (window.SBDFramingUI.onChange(el, P)) { changed(true); return; }
@@ -641,6 +654,7 @@
   $('inPanes').addEventListener('click', e => {
     const og = e.target.closest('[data-gotab]'); if (og) { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${og.dataset.gotab}"]`); if (b) b.click(); return; }   // AIN: a link to an output tab
     const lr = e.target.closest('[data-lovreset]'); if (lr) { const gi = Math.min(ui.g, P.girders.length - 1), j = +lr.dataset.lovreset; if (confirm(`Reset line ${lnName(j)} to the girder type ${tyName(gi)}? Every value entered for this line only is removed.`)) { M.lineOvReset(P, gi, j); changed(true); } return; }   // SBLO
+    const bg = e.target.closest('[data-beffgo]'); if (bg) { e.preventDefault(); beffGo(bg.dataset.beffgo); return; }   // BEFF: the worked b_eff of a line
     const ig = e.target.closest('[data-itgo]'); if (ig) { e.preventDefault(); ui.itab = ig.dataset.itgo; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }   // TABR: a link to another input tab
     if (UL.onClick(e, P)) { changed(true); const od = UL.takeOwnerDefaults(); if (od) showOwnDef(od); return; }
     if (window.SBDShearUI.onClick(e, P, ui)) { changed(true); return; }
@@ -842,9 +856,10 @@
     const lf = OWN.loadFactors(P.ownerRules.owner, P.ownerRules.eta, P.xs.nb);   // owner rules: OWN8 haunch, OWN17 w_c for E_c
     const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
     const plates = { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT };
-    const deck = { composite: d.composite, ts: d.ts, haunch: OWN.haunchInProps(d.haunch, lf), beff: g.beff, rebar: d.rebar };
+    const bj = window.SBDAnalysis ? window.SBDAnalysis.lineOf(PV, PV.girders[ui.g]) : M.designLine(P, g), beff = M.beffOf(PV, PV.girders[ui.g], bj);   // BEFF (2026-11-25): the b_eff of the line shown
+    const deck = { composite: d.composite, ts: d.ts, haunch: OWN.haunchInProps(d.haunch, lf), beff, rebar: d.rebar };
     const mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
-    R = { g, s, nr, lf, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings, loads: UL.calc(PV, ui.g) };
+    R = { g, s, nr, lf, beff, bj, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings, loads: UL.calc(PV, ui.g) };
     stale = false; drawOut();
   }
   const secOpen = new Set();
@@ -956,7 +971,7 @@
       h += card('Section properties', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Section</th><th>A (in²)</th><th>ȳ from bottom (in)</th><th>I (in⁴)</th><th>S top of steel (in³)</th><th>S bottom (in³)</th><th></th></tr></thead><tbody>
         ${row('Steel', c.s, 'sec.s')}${row('Long-term 3n', c.c3, 'sec.c3')}${row('Short-term n', c.cn, 'sec.cn')}${c.comp ? row('Steel + rebar', c.cr, 'sec.cr') : ''}</tbody></table></div>
         ${c.comp ? '' : '<p class="note">Noncomposite girder: the steel section alone, no deck and no deck reinforcement in any property or in M<sub>p</sub> (6.10.1.1.1a), as on the Flexure tab.</p>'}
-        <div class="kv">${kv('n', U.fmt(R.nr.n, 3), 'n.n')}${kv('d (steel)', U.fmt(c.s.d, 3) + ' in', 'sec.s.d')}${kv(`M<sub>p</sub> (${c.region === 'pos' ? 'positive' : 'negative'})`, U.fmt(c.Mp, 1) + ' kip-ft', `pl.${c.region}.Mp`)}
+        <div class="kv">${kv('n', U.fmt(R.nr.n, 3), 'n.n')}${c.comp ? `<div><span>b<sub>eff</sub> (${lnName(R.bj)})</span><span>${U.fmt(R.beff, 2)} in <a class="wk" href="#" data-beffgo="${ui.g}:${R.bj}" title="Worked on the Girders &amp; plates tab (4.6.2.6.1)">§ b<sub>eff</sub></a></span></div>` : ''}${kv('d (steel)', U.fmt(c.s.d, 3) + ' in', 'sec.s.d')}${kv(`M<sub>p</sub> (${c.region === 'pos' ? 'positive' : 'negative'})`, U.fmt(c.Mp, 1) + ' kip-ft', `pl.${c.region}.Mp`)}
         ${kv('PNA y<sub>p</sub> from bottom', U.fmt(c.yp, 3) + ' in', `pl.${c.region}.yp`)}${kv('D6.1 case', esc(c.pl.cs), '')}${kv('D<sub>cp</sub>', U.fmt(c.Dcp, 3) + ' in', `pl.${c.region}.Dcp`)}
         ${c.region === 'pos' && c.Dp != null ? kv('D<sub>t</sub> / D<sub>p</sub>', `${U.fmt(c.Dt, 3)} / ${U.fmt(c.Dp, 3)} in`, 'pl.pos.Dp') : ''}${c.region === 'neg' && c.comp ? kv('D<sub>c</sub> (steel + rebar)', U.fmt(c.Dc, 3) + ' in', 'dc.steelrebar.bot.Dc') : ''}
         ${kv('D<sub>c</sub> steel, top / bottom in comp.', `${U.fmt(c.DcSteel.top, 3)} / ${U.fmt(c.DcSteel.bot, 3)} in`, 'dc.steel.top.Dc')}${kv('R<sub>h</sub>', U.fmt(c.Rh, 3), !c.comp ? 'rh.s.Rh' : c.region === 'pos' ? 'rh.cn.Rh' : 'rh.cr.Rh')}</div>
@@ -970,6 +985,7 @@
     if (window.SBDGfxA && $('gfx_sec') && R && !stale && !R.errors) window.SBDGfxA.section($('gfx_sec'), { P, R, seg: ui.seg + 1 });   // graphic (ui/gfxa.js)
   }
   $('out').addEventListener('click', e => { const ig = e.target.closest && e.target.closest('[data-icgo]'); if (ig) { e.preventDefault(); gotoErr(icErr[+ig.dataset.icgo]); return; }   // SBINV: a banner link
+    const bg = e.target.closest && e.target.closest('[data-beffgo]'); if (bg) { e.preventDefault(); beffGo(bg.dataset.beffgo); return; }   // BEFF: the worked b_eff of a line
     const gt = e.target.closest && e.target.closest('[data-goto]'); if (gt) { e.preventDefault(); ui.itab = gt.dataset.goto; saveUi(); drawInputs(); return; }   // a link to an input tab
     if (e.target.id === 'bCalc') { calc(); return; } const id = UL.onOutClick(e, ui); if (id) { saveUi(); drawOut(); const t = ST.reveal($('out'), id.replace(/^st-/, '')) || $(id); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } } });
   $('out').addEventListener('change', e => { if (e.target.id === 'o_region') { ui.region = e.target.value; saveUi(); calc(); } else if (UL.onOutChange(e, ui)) { saveUi(); drawOut(); } });

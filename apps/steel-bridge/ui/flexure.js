@@ -183,7 +183,8 @@
     const segAt = x => g.segments.find(s => x >= s.x0 && x < s.x1) || g.segments[g.segments.length - 1];
     const DX = window.SBDFraming.design(P, ctx.g, { fl: flIn });   // f_ℓ entered, else from the project's skews (SB2-W1); L_b, C_b as entered here
     const cont = P.spans.continuity === 'continuous' && P.spans.lengths.length > 1;
-    const locs = EX.filter(e => cont || e.region === 'pos').map(e => { const s = segAt(e.x); return { name: e.name, x: e.x, region: e.region, cont, plates: { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }, beff: g.beff, Lb: S.Lb, Cb: S.Cb, fl: DX.fl, ...DX.locFl(e.x), flT: nc ? S.flT : 0, M: e.M }; });
+    const bOf = (window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, g) : g.beff);   // BEFF (2026-11-25): this line's b_eff (calculated, or the type's override)
+    const locs = EX.filter(e => cont || e.region === 'pos').map(e => { const s = segAt(e.x); return { name: e.name, x: e.x, region: e.region, cont, plates: { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }, beff: bOf, Lb: S.Lb, Cb: S.Cb, fl: DX.fl, ...DX.locFl(e.x), flT: nc ? S.flT : 0, M: e.M }; });
     return { prj, locs, supports: null, fl: DX.fl, flS: DX.flS, frB: null, D: DX, what: `Example demands: GirderDetail's built-in Girder section moments, on ${esc(g.label || g.id)} (its plates at x = 44 and 109.99 ft). L<sub>b</sub> = ${fmt(S.Lb, 2)} ft, C<sub>b</sub> = ${fmt(S.Cb, 2)} as entered; ${flText(DX)}.`
       + (lf && lf.h0 && !nc ? ` Haunch taken as 0 in the section properties (${esc(lf.cite.h)}; owner rule OWN8), as on the Section properties tab.` : '')
       + (nc ? ' <b>Noncomposite girder:</b> every load on the steel section alone, no deck rebar; 6.10.8 or App. A6 (6.10.6.2.3) in both regions, top flange in compression in positive flexure; Service II Eq. 6.10.4.2.2-3.' : '') };
@@ -231,7 +232,7 @@
     else if (S.R && !stale) {
       const R = S.R, rows = R.rows, gv = R.gov;
       h += '<div id="gfx_fx"></div>';   // graphics (ui/gfxa.js)
-      h += `<section class="sec"><div class="secHead">Flexure results by location</div><div class="secBody"><p class="note">${R.what}</p>
+      h += `<section class="sec"><div class="secHead">Flexure results by location</div><div class="secBody"><p class="note">${R.what}</p>${window.SBDSub && window.SBDSub.beffNote ? window.SBDSub.beffNote(ctx.P, ctx.g || 0) : ''}
         ${gv ? `<p>Governing: <b>${esc(gv.name)}</b>${gv.x != null && !/x = /.test(gv.name) ? ` (x = ${fmt(gv.x, 2)} ft)` : ''}, ${esc(gv.gov.id)} ${tt(gv.gov.title)}: ratio <b>${rtx(gv.gov)}</b>.</p>` : ''}
         ${propHtml(rows)}
         ${R.oos ? '<div class="alert">A positive-flexure location has its plastic neutral axis below the web (outside Table D6.1-1): GS5 and GS6 are not reported for that span.</div>' : ''}
