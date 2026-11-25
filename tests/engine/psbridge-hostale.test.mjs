@@ -2,9 +2,10 @@
 //   The hand-offs stay click only; a banner names a channel whose data changed since this project last sent / loaded it. Here: the payload
 //   signature (stamp fields left out, key order free); the states (unknown without a record, current, stale, unchecked, gone, none); the
 //   record in P.handoffs and its Undo rules (a send is no step and stays sent; a load follows the project text); on real designs: a send's
-//   recorded sig = the check's sig on the same girder (psSection, lldfGeom, capacity, superReactions, and every line: superGeometry,
+//   recorded sig = the check's sig on the same girder (psSection, lldfGeom, superReactions, and every line: superGeometry,
 //   superReactions allGirders), an input change makes it stale; incoming lldf / dlLoads / projectMeta (re-published with the same values:
-//   current; other values: stale); the MCT demands (P.demands' own record); an old project (no record) has no state at all.
+//   current; other values: stale); an old project (no record) has no state at all. NOMCT (2026-11-25): the capacity channel and the MCT
+//   demands / geometry-change states are removed (tests/engine/psbridge-nomct.test.mjs checks they are gone).
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { loadShared, test, ROOT } from './harness.mjs';
@@ -62,7 +63,6 @@ test('girder hand-offs: the sig recorded at a send = the check on the same girde
   const sent = {
     psSection: S.sig(H.psSection(inp, R, '2026-11-21T10:00:00.000Z')),
     lldfGeom: S.sig(H.lldfGeom(inp, R, '2026-11-21T10:00:00.000Z').payload),
-    capacity: S.capSig(inp, H.capacity(inp, R, '2026-11-21T10:00:00.000Z').payload),
     superReactions: S.sig(H.srPayload(inp, R).payload)
   };
   const same = cellOf(P, c.k, c.g);
@@ -70,7 +70,7 @@ test('girder hand-offs: the sig recorded at a send = the check on the same girde
   // f'c of the type shown 8 -> 8.5 ksi: every girder hand-off of that girder changes
   const eff = BR.effBase(P, c.k); eff.mat = Object.assign({}, eff.mat, { fc: +eff.mat.fc + 0.5 }); BR.setOvr(P, c.k, eff);
   const ch = cellOf(P, c.k, c.g);
-  for (const id of ['psSection', 'lldfGeom', 'capacity']) assert.equal(S.outState({ sig: sent[id] }, S.cellSig(H, id, ch.inp, ch.R)), 'stale', id);
+  for (const id of ['psSection', 'lldfGeom']) assert.equal(S.outState({ sig: sent[id] }, S.cellSig(H, id, ch.inp, ch.R)), 'stale', id);
   // the project name is in the section / geometry payloads: a rename is a change of what was sent
   const P2 = M.newProject(), a = run(P2), s2 = S.sig(H.psSection(a.inp, a.R, 'T')); P2.project.name = 'Route 9 over Mill Brook'; const b = run(P2);
   assert.notEqual(S.cellSig(H, 'psSection', b.inp, b.R), s2);
@@ -119,29 +119,10 @@ test('incoming lldf / dlLoads / projectMeta: newer with other values = stale; re
   assert.equal(S.inState(prec, S.pmCur(H, P, pm('2026-11-21T13:00:00.000Z', 'Another name'))), 'stale');
 });
 
-test('MCT demands: P.demands\' own record (MCT hand-off <id>, the file as read); newer for the same member = stale; another member = not this type', () => {
-  const K = H.MCT_K, P = M.newProject(), T = BR.types(P), file = { _schema: 'psbeam-external-demands', producedAt: '2026-11-21T09:00:00.000Z', project: 'Route 9', member: { key: 'G2' }, stations: [] };
-  P.demands = { [T[0].id]: { src: 'midas', midas: { file: J(file), name: 'MCT hand-off H1', at: '2026-11-21T09:05:00.000Z' } } };
-  const st = map => { const s = { [K.latest]: map.latest, [K.map]: JSON.stringify(map.m) }; return S.mctState(P, T, k => s[k] == null ? null : s[k], K); };
-  deq(st({ latest: 'H1', m: { H1: file } }).map(q => q.state), ['current']);
-  deq(st({ latest: 'H1', m: { H1: Object.assign({}, file, { producedAt: '2026-11-21T10:00:00.000Z' }) } }).map(q => q.state), ['stale'], 're-sent');
-  deq(st({ latest: 'H2', m: { H1: file, H2: Object.assign({}, file, { producedAt: '2026-11-21T10:00:00.000Z' }) } }).map(q => q.state), ['stale'], 'a newer hand-off, same member');
-  deq(st({ latest: 'H2', m: { H2: Object.assign({}, file, { member: { key: 'G3' } }) } }).map(q => q.state), ['current'], 'another member');
-  deq(st({ latest: 'H2', m: { H2: Object.assign({}, file, { project: 'Other bridge' }) } }).map(q => q.state), ['current'], 'another project');
-  deq(st({ latest: null, m: {} }).map(q => q.state), ['none']);
-  const q = st({ latest: 'H1', m: { H1: file } });
-  deq(S.geoState(q, { producedAt: '2026-11-21T09:30:00.000Z', changes: [{ field: 'L' }] }), { state: 'stale', types: [T[0].label], n: 1 });
-  assert.equal(S.geoState(q, { producedAt: '2026-11-21T09:00:00.000Z', changes: [] }), null, 'recorded before the demands were loaded');
-  assert.equal(S.geoState(q, null), null);
-  // a type with a MIDAS file of its own (not an MCT hand-off): not watched
-  P.demands[T[0].id].midas.name = 'demands.json'; deq(st({ latest: 'H2', m: { H2: file } }), []);
-});
-
-test('a project saved before (no P.handoffs, no MCT demands): no record on any channel, so no banner', () => {
+test('a project saved before (no P.handoffs): no record on any channel, so no banner', () => {
   const P = M.importJSON(M.exportJSON(M.newProject())).project;
   for (const id of S.OUT_IDS) assert.equal(S.outState(S.sentOf(P, id), 'anything'), 'unknown', id);
   for (const id of S.IN_IDS) assert.equal(S.inState(S.loadedOf(P, S.CH[id].rec || id), { at: 'x', sig: 'y' }), 'unknown', id);
-  deq(S.mctState(P, BR.types(P), () => null, H.MCT_K), []);
   // the record survives Export / Import JSON (a project field)
   S.setSent(P, 'psSection', { sig: 'a', at: 'T' }); deq(M.importJSON(M.exportJSON(P)).project.handoffs, P.handoffs);
   deq(M.importJSON(M.exportJSON(P)).errors, []);
