@@ -210,7 +210,13 @@
           Pe / G.A - Pe * r.e / G.St + (r.Mg + r.Mdk) / G.St + (r.Msd + r.mrn + gl * (mLL * r.Mlln)) / cp.Stg, 'cont.svc.wT.s3TopN');
         const k = ckIx(R, 'Srv III top tens (pier, 5.12.3.3.5)'); if (k >= 0) ratio('pier.s3TopN', k);
         if (v.Ttop > 0) {
-          add({ id: 'pier.Ttop', label: 'Tension force in the girder top near the interior support (uncracked section)', sym: 'T', value: v.Ttop, unit: 'kip', d: 1, ref: A10 + 'Table 5.9.2.3.1b-1', note: 'The engine integrates the tensile stress block over the girder outline.' }, undefined, 'cont.svc.Ttop');
+          // EZNI (2026-11-25): T worked by parts, no integral (PSBWorkedEnd.tensionSteps); the bottom fibre of the same case (the engine's s3BotN) worked first
+          const Mb = r.Msd + r.mrn + gl * (mLL * r.Mlln);
+          add({ id: 'pier.s3BotN', label: `Bottom of the girder, Service III with the negative live load, x = ${n(r.x, 2)} ft (for the tension force)`, sym: 'f_{bot}', eq: '\\frac{P_{e}}{A_{g}} + \\frac{P_{e}e}{S_{b}} - \\frac{M_{g} + M_{dk}}{S_{b}} - \\frac{M_{sd} + M_{r,n} + \\gamma_{LL}\\,m\\,M_{LL-}}{S_{bc}}',
+            sub: `\\frac{${n(Pe, 1)}}{${n(G.A, 1)}} + \\frac{${n(Pe, 1)}(${n(r.e, 3)})}{${g(G.Sb, 0)}} - \\frac{${g(r.Mg, 0)} + ${g(r.Mdk, 0)}}{${g(G.Sb, 0)}} - \\frac{${g(r.Msd, 0)} + ${par(r.mrn, 0)} + ${n(gl, 2)}(${n(mLL, 2)})(${par(r.Mlln, 0)})}{${g(cp.Sbc, 0)}}`, value: r.s3BotN, unit: 'ksi', d: 3, note: pre(r) },
+            Pe / G.A + Pe * r.e / G.Sb - (r.Mg + r.Mdk) / G.Sb - Mb / cp.Sbc, 'cont.svc.wT.s3BotN');
+          window.PSBWorkedEnd.tensionSteps(add, { P: 'pier.Ttop', G, fTop: r.s3TopN, fBot: r.s3BotN, T: v.Ttop, sym: 'T', x: r.x, ref: A10 + 'Table 5.9.2.3.1b-1', path: 'cont.svc.Ttop',
+            what: 'Service III fibre stresses (negative live load)', src: 'this tab, §st.pier.s3TopN and §st.pier.s3BotN.', label: 'Tension force in the girder top near the interior support (uncracked section)' });
           add({ id: 'pier.AsTop', label: 'Bonded steel needed for the 0.24√f′c limit', sym: 'A_{s,req}', eq: '\\frac{T}{\\min(0.5\\,f_{y},\\,30)}', sub: `\\frac{${n(v.Ttop, 1)}}{${n(v.fsT, 1)}}`, value: v.AsTop, unit: 'in^{2}', d: 2 }, v.Ttop / v.fsT, 'cont.svc.AsTop');
         }
       }

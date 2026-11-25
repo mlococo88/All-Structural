@@ -26,6 +26,19 @@
   /* the engine's warnings of a topic (text as the engine wrote it) */
   const warnsOf = (R, re) => R.warns.filter(w => re.test(w));
   const HD_RE = /Hold-down|Harp slope|Harped CG/, DB_RE = /debond|5\.9\.4\.3\.3/i;
+  /* EZNI (2026-11-25): the concrete tensile force by parts (engine/worked-end.js tensionParts: the tension zone of the linear release stresses
+     cut at the outline's corners; F_i = A_i f_i at the part's centroid), one table per tension case, each row linked to its worked step. The
+     result T is the engine's (240 strips), shown under the sum. Display only. */
+  function partsTbl(R, k, rp) {
+    if (!rp) return '';
+    const rs = R.relSteel;
+    return [['top', 'Ttop', 'top tension', 'below the top'], ['bot', 'Tbot', 'bottom tension', 'above the soffit']].map(([key, id, lbl, w]) => { const tp = rp[key];
+      if (!tp || !tp.parts.length) return '';
+      return `<p class="note"><b>Tensile force by parts, ${lbl}</b>: tension zone c = ${k.fx(tp.c, 2)} in ${w} ${k.wk(`ez.rel.${id}.c`)}; depths ${w}.</p><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Part</th><th>Depth<br>in</th><th>A<sub>i</sub><br>in²</th><th>Centroid depth<br>in</th><th>f<sub>i</sub> at the centroid<br>ksi</th><th>F<sub>i</sub> = A<sub>i</sub> f<sub>i</sub><br>kip</th><th></th></tr></thead><tbody>
+        ${tp.parts.map((q, i) => `<tr><td class="lft">${i + 1}. ${k.esc(q.name)}</td><td>${k.fx(q.da, 2)} to ${k.fx(q.db, 2)}</td><td>${k.fx(q.A, 2)}</td><td>${k.fx(q.dbar, 3)}</td><td>${k.fx(q.f, 4)}</td><td>${k.fx(q.F, 2)}</td><td>${k.wk(`ez.rel.${id}.p${i + 1}`)}</td></tr>`).join('')}
+        <tr><td class="lft"><b>Sum ΣF<sub>i</sub></b></td><td></td><td></td><td></td><td></td><td><b>${k.fx(tp.T, 2)}</b></td><td></td></tr>
+        <tr><td class="lft">T used (the engine's, 240 strips)</td><td></td><td></td><td></td><td></td><td>${k.fx(rs[id], 2)}</td><td>${k.wk(`ez.rel.${id}`)}</td></tr></tbody></table></div>`; }).join('');
+  }
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, o = inp.opt, G = R.g, ss = R.ss, cf = R.conf, rs = R.relSteel;
     const qS = ckOf(R, 'Splitting steel (5.9.4.4)'), qC = ckOf(R, 'Confinement steel (5.9.4.4.2)'), qR = ckOf(R, 'Release tens. steel (5.9.2.3.1b)'), qH = ckOf(R, /^Hold-down force/), qD = ckOf(R, /^Debonded strands/);
@@ -45,6 +58,7 @@
       ? k.kv([['Stress in the bonded steel f<sub>s</sub> = min(0.5 f<sub>y</sub>, 30 ksi)', `${ev('relSteel.fs', 1, 'ksi')} ${wk('ez.rel.fs')}`], ['Tensile force, top tension', `${ev('relSteel.Ttop', 1, 'kip')} ${wk('ez.rel.Ttop')}`], ['Tensile force, bottom tension', `${ev('relSteel.Tbot', 1, 'kip')} ${wk('ez.rel.Tbot')}`],
         ['Governing', `${k.esc(rs.where)}, x = ${ev('relSteel.x', 2, 'ft')}`], ['A<sub>s,req</sub> = T / f<sub>s</sub>', `${ev('relSteel.AsReq', 2, 'in²')} ${wk('ez.rel.As')}`], ['A<sub>s,prov</sub>', `${ev('relSteel.AsProv', 2, 'in²')} <a href="#" data-goin="gird@base.opt.relAs">Girders &amp; strands</a>`],
         ['Ratio A<sub>s,req</sub> / A<sub>s,prov</sub>', `<b>${ev(`checks.${qR.i}.r`, 3)}</b> ${pf(qR.c.pass)} ${wk('ez.rel.dc')}`]])
+        + partsTbl(R, k, ctx.W && ctx.W.endzone && ctx.W.endzone.relParts)
         + '<p class="note">Claimed for the higher release tension limit 0.24√f′<sub>ci</sub> (Stresses tab): the bonded steel carries the concrete tensile force of the uncracked section at f<sub>s</sub>.</p>'
       : '<p class="note">The bonded-steel option is off: the release tension limit is min(0.0948√f′<sub>ci</sub>, 0.2 ksi) (5.9.2.3.1b) and no end-region tension steel is needed for it. Turn it on (<a href="#" data-goin="gird@base.opt.relBondedReinf">Girders &amp; strands tab</a>) to claim 0.24√f′<sub>ci</sub> and check the steel here.</p>', 'card-ezrel');
     // draped strands and the hold-down force
