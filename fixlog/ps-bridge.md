@@ -9769,3 +9769,58 @@ None.
 - **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
 - **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
 - **Other copies:** none.
+
+## 2026-11-25 — PR: claude/ps-ez-noint (PR link: below once open) (EZNI) — End zone & hold-down, bonded release-tension steel: the concrete tensile force worked by parts, no integral (display only; no value or verdict changed)
+### Request (engineer, 2026-11-25)
+"The end zone has integrals, this should be removed, there should be no need for calculus in this app output." Check 3 of the End zone & hold-down tab (AASHTO LRFD 10th Ed. 5.9.2.3.1b, Table 5.9.2.3.1b-1) showed `T_top = ∫_{f<0} (−f) b(y) dy = f_top = (−0.631), f_bot = 4.696 ksi = 107.7 kip` (and the same for T_bot), the substitution line garbled, with the note "… the tension area integrated over the section width at 240 strips (the engine's)".
+### Where (every integral found in the PS app's output; the frozen `engine/pbd-*.js` untouched)
+1. `apps/ps-bridge/engine/worked-end.js` `endzone()`, anchors `id: 'rel.Ttop'` and `id: 'rel.Tbot'` (End zone tab, check 3; the Report's End zone section prints the same steps).
+2. `apps/ps-bridge/engine/worked-stress.js` `stresses()`, anchor `id: 'pier.Ttop'` (Stresses tab, continuous spans: the tension force in the girder top near the interior support, Table 5.9.2.3.1b-1 via 5.12.3.3.5); it had no equation and the note "The engine integrates the tensile stress block over the girder outline."
+No other `\int`, derivative (`\frac{d…}`), `dy` / `dx` or "integrat…" in any step of the app (checked by `tests/engine/psbridge-ez-noint.test.mjs` on every step of every tab); the `\frac{d_{e}}…`, `\frac{d_{c}}…` hits are the distances d_e, d_c, and the `\sum` steps are finite sums.
+### Before
+```
+add({ id: 'rel.Ttop', label: `Concrete tensile force at release, top tension (x = ${n(rT.x, 2)} ft)`, sym: 'T_{top}', eq: '\\int_{f<0} (-f)\\,b(y)\\,dy', sub: `f_{top} = ${par(rT.relTop, 3)},\\ f_{bot} = ${par(rT.relBot, 3)}\\ \\text{ksi}`, value: rs.Ttop, unit: 'kip', d: 1, ref: A10 + 'Table 5.9.2.3.1b-1',
+  note: 'Fibre stresses linear over the girder depth (release, Stresses tab); the tension area integrated over the section width at 240 strips (the engine\'s).' }, undefined, 'relSteel.Ttop');
+add({ id: 'rel.Tbot', label: `Concrete tensile force at release, bottom tension (x = ${n(rB.x, 2)} ft)`, sym: 'T_{bot}', eq: '\\int_{f<0} (-f)\\,b(y)\\,dy', sub: `f_{top} = ${par(rB.relTop, 3)},\\ f_{bot} = ${par(rB.relBot, 3)}\\ \\text{ksi}`, value: rs.Tbot, unit: 'kip', d: 1 }, undefined, 'relSteel.Tbot');
+```
+and in worked-stress.js:
+```
+add({ id: 'pier.Ttop', label: 'Tension force in the girder top near the interior support (uncracked section)', sym: 'T', value: v.Ttop, unit: 'kip', d: 1, ref: A10 + 'Table 5.9.2.3.1b-1', note: 'The engine integrates the tensile stress block over the girder outline.' }, undefined, 'cont.svc.Ttop');
+```
+### After
+- worked-end.js: new `tensionParts(G, fTop, fBot)` and `tensionSteps(add, o)` (exported on `window.PSBWorkedEnd`). The two `add` calls above are replaced by
+```
+const src = 'the release stresses of the Stresses tab at this station (§st.rt and §st.rtb).', ref = A10 + 'Table 5.9.2.3.1b-1';
+relParts = {};
+relParts.top = tensionSteps(add, { P: 'rel.Ttop', G, fTop: rT.relTop, fBot: rT.relBot, T: rs.Ttop, sym: 'T_{top}', x: rT.x, src, ref, path: 'relSteel.Ttop', label: `Concrete tensile force at release, top tension (x = ${n(rT.x, 2)} ft)` });
+relParts.bot = tensionSteps(add, { P: 'rel.Tbot', G, fTop: rB.relTop, fBot: rB.relBot, T: rs.Tbot, sym: 'T_{bot}', x: rB.x, src, ref: '', path: 'relSteel.Tbot', label: `Concrete tensile force at release, bottom tension (x = ${n(rB.x, 2)} ft)` });
+```
+  and `endzone()` returns `relParts` with its steps. The steps per tension force (ids kept for the total, so the tab's § links, the Report's §x.y and the NG marking are unchanged):
+  - `<P>.c`: `c_top = h|f_top| / (|f_top| + |f_bot|)` with the values (`c = h` when both fibres are in tension); note: the fibre stresses and where they are worked (§st.rt / §st.rtb).
+  - `<P>.p1`, `.p2` …: one per part of the tension zone (the outline `halfPolygon`, the one the engine's `sectionWidthAt` reads, cut at its corners and at c; I-girder: top flange, top flange taper, web, bottom flange taper, bottom flange; NEXT: flange, stems; box / slab: the full width, voids ignored as the engine; consecutive pieces of a curved fillet merged): `F_i = A_i f_i` = `A(f)` = kip; the note works `A_i = (b_a + b_b)/2 × t`, the centroid `ȳ_i = d_a + t(b_a + 2b_b)/(3(b_a + b_b))` and `f_i = |f_t|(1 − ȳ_i/c)` with values.
+  - `<P>`: `T = F_1 + F_2 + …` = the part values = **the engine's value** (unchanged result, R path unchanged); note: "Sum of the parts X kip; the result used is the engine's value Y kip (the gross outline cut into 240 horizontal strips; voids ignored, which over-states T)."
+  - No tension at the station: `T = 0.0 kip` with the fibre stresses in the note.
+- worked-stress.js: `pier.Ttop` by the same `tensionSteps` (Service III fibre stresses near the interior support), preceded by a new display step `pier.s3BotN` (the bottom fibre of the same case: `P_e/A_g + P_e e/S_b − (M_g + M_dk)/S_b − (M_sd + M_r,n + γ_LL m M_LL−)/S_bc`, the engine's `s3BotN` of pbd-compute.js, R path `cont.svc.wT.s3BotN`; its pair test reproduces the engine to 1e-9).
+- ui/endzone.js: new `partsTbl(R, k, rp)`: in the "Bonded release-tension steel" card, one table per tension case (Part, depth range, A_i, centroid depth, f_i, F_i, § to the part's step), the sum ΣF_i and the engine's T used (§). The Report reads it with the card (report/fromtab.js).
+### Governing provision
+AASHTO LRFD 10th Ed. 5.9.2.3.1b and Table 5.9.2.3.1b-1 (bonded reinforcement for the tensile force in the concrete of an uncracked section, at 0.5 f_y ≤ 30 ksi). Unchanged: no formula, factor, unit or value changed; only how the force is written out.
+### Numbers (display only; no value or verdict changed)
+- The result T, A_s,req, D/C and every check are the engine's, unchanged. Proof: origin/main vs this branch in Node, 58 designs (the 19 tab designs and 10 girder variants, each with the bonded release steel off and on): hashes of the whole result R (checks, warnings included) identical, and 17,252 step values / ok flags of main identical on the branch (new step ids only: `ez.rel.Ttop.c`, `.pN`, `ez.rel.Tbot.c`, `.pN`, `st.pier.s3BotN`, `st.pier.Ttop.c`, `.pN`).
+- The by-parts sum is exact for a stress linear over the depth (checked against a 200,000-strip sum); the engine's 240-strip midpoint sum differs from it by at most 0.039 kip on the designs tried (relative 1e-5 to 1e-4 for forces above 10 kip; 2 % on a 0.6 kip force), which flips the displayed T (0.1 kip), A_s,req (0.01 in²) or D/C (0.001) in some designs. The step therefore shows both values; the engine's is the one used. See Open items.
+### Check case (by hand)
+MassDOT NEDBT 48 (h = 48 in, top flange 60 in wide, 8 in thick), the stresses of the reported screen: f_top = −0.631 ksi (tension), f_bot = 4.696 ksi.
+- c_top = 48(0.631)/(0.631 + 4.696) = 30.288/5.327 = 5.686 in (inside the 8 in flange: one part).
+- Part 1, top flange, 0 to 5.686 in: A_1 = 60 × 5.686 = 341.15 in²; ȳ_1 = 5.686/2 = 2.843 in; f_1 = 0.631(1 − 2.843/5.686) = 0.3155 ksi; F_1 = 341.15 × 0.3155 = 107.63 kip.
+- T_top = F_1 = 107.63 kip by parts; the engine's 240-strip value with these rounded stresses is 107.61 kip (the screen's 107.7 kip came from the unrounded stresses: dT/df_t ≈ 340 kip/ksi). A_s,req = 107.6/30 = 3.59 in² as on the screen.
+- Before: `T_top = ∫ … = 107.7 kip`; after: `c_top = 5.69 in`, `F_1 = 341.15(0.3155) = 107.63 kip`, `T_top = F_1 = 107.63 = <engine value> kip`.
+### How verified
+`tests/engine/psbridge-ez-noint.test.mjs` (no integral in any step of any tab; the parts sum to the sum shown; T = the engine; by parts within 0.05 kip + 0.1 % of the engine; exact against a fine strip sum; the hand check); `node tests/engine/run.mjs psbridge` and the full engine suite; `node tests/check-syntax.mjs`; `tests/smoke/ps-bridge-ez-noint.mjs` (End zone card table, topic 3 steps and NG marking, the Report; 0 console errors).
+### Saved data
+None.
+### Decisions (pending engineer review)
+- EZNI-a. The parts are horizontal layers of the engine's own outline (the flange, taper and web of the I-girder outline the Section properties drawing uses), with the force at each part's centroid; a curved fillet (MassDOT shapes) is one part whose area is the sum of its straight-sided pieces.
+- EZNI-b. The tension depth is named c (c_top, c_bot) since y_t is already the centroid-to-top distance on the Section properties tab.
+- EZNI-c. The final T shown is the engine's 240-strip value, with the exact by-parts sum in the note and in the card table, because they differ in the last displayed digit in some designs.
+### Open items (raised, not changed: CLAUDE.md §4)
+- EZNI-1. Switch the engine (`releaseTensionForce`, frozen pbd-section.js) to the exact by-parts sum? Differences seen ≤ 0.039 kip; would change displayed T / A_s,req / D/C in the last digit in some designs.
+- EZNI-2. The engine's width of a NEXT beam below the flange is twice the distance to the outer stem face (`sectionWidthAt` takes the outermost edge), so the gap between the stems is counted as concrete: for bottom tension in a NEXT 36F, 73 in instead of 2 × 13 = 26 in (T over-stated about 2.8 times; conservative). Box beams and voided slabs: voids ignored (documented in the engine, conservative).
