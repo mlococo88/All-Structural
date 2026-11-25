@@ -29,4 +29,3 @@ test('G7: the orientation figure slot only for a slab or a box; drawn in the eng
     assert.equal(JSON.stringify(d.R), R0, 'R unchanged');
   }
 });
-
