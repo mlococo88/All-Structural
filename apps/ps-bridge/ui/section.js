@@ -11,7 +11,7 @@
     { key: 'gross', title: 'Gross girder section', ref: 'shape library; 3.5.1', ids: /^sec\.g\./ },
     { key: 'ec', title: 'Moduli of elasticity and modular ratio', ref: 'AASHTO LRFD 10th Ed. 5.4.2.4', ids: /^sec\.(Ecg|Ecd|n)$/, res: /^sec\.n$/ },
     { key: 'comp', title: 'Composite section (transformed deck)', ref: 'AASHTO LRFD 10th Ed. 4.6.2.6', ids: /^sec\.(beff|Ad|yd|Ah|Ac|ybc|Ic|hc|Sbc|Stg|Std)$/, res: /^sec\.Ic$/ },
-    { key: 'wk', title: 'Weak axis and torsion (bare girder)', ref: 'the MCT section hand-off: I_zz, I_xx', ids: /^sec\.wk\./, res: /^sec\.wk\.J$/ },   // batch G1
+    { key: 'wk', title: 'Weak axis and torsion (bare girder)', ref: 'sent with the section properties to LL & DL', ids: /^sec\.wk\./, res: /^sec\.wk\.J$/ },   // batch G1
     { key: 'str', title: 'Prestressing strands', ref: 'AASHTO LRFD 10th Ed. 5.9.4.3.1', ids: /^sec\./, res: /^sec\.eMid$/ }];
   /* voidNote(G): 2026-11-14 (decision pending engineer review, PS28/void note): where the void of a box beam or a voided deck slab is, as the
      engine places it (sectionVoids, pbd-section.js) and every graphic draws it; '' for a shape without voids. The old app's section graphic
@@ -64,7 +64,7 @@
       ['Web width b<sub>w</sub>', ev('g.bw', 2, 'in')], ['Top / bottom flange width', `${ev('g.btf', 2)} / ${ev('g.bbf', 2, 'in')}`], ['Self-weight w<sub>g</sub>', `${ev('g.wsw', 4, 'klf')} ${wk('sec.g.wsw')}`],
       ...weakRows(G, k)])
       + `<p class="note">Gross properties of the shape library (${stdSrc(G) || `the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''}`})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`
-      + '<p class="note">I<sub>y</sub>, S<sub>y</sub> and J are the bare girder\'s (the deck spans between the girders and is not a full-width flange for one girder\'s lateral bending), the engine\'s approximations as in the old app. They are the values the section hand-off sends to the MCT generator as the MIDAS section\'s I<sub>zz</sub> (weak axis) and I<sub>xx</sub> (torsion); I<sub>c</sub> below goes to I<sub>yy</sub>. No check of this app uses J; I<sub>y</sub> of an I-girder is also the lateral stability I<sub>y</sub> of the <a href="#" data-gotab="hand">Handling tab</a>.</p>'
+      + '<p class="note">I<sub>y</sub>, S<sub>y</sub> and J are the bare girder\'s (the deck spans between the girders and is not a full-width flange for one girder\'s lateral bending), the engine\'s approximations as in the old app. They are sent with the section properties to LL &amp; DL Distribution (the section hand-off: Iweak and J, with I<sub>c</sub> below). No check of this app uses J; I<sub>y</sub> of an I-girder is also the lateral stability I<sub>y</sub> of the <a href="#" data-gotab="hand">Handling tab</a>.</p>'
       + (vn ? `<p class="note" id="sec-void-note">${vn}</p>` : ''), 'card-gross');
     h += k.card('Composite section', k.kv([
       ['E<sub>c</sub> girder', `${ev('cp.Ecg', 0, 'ksi')} ${wk('sec.Ecg')}`], ['E<sub>c</sub> deck', `${ev('cp.Ecd', 0, 'ksi')} ${wk('sec.Ecd')}`], ['Modular ratio n', `${ev('cp.n', 4)} ${wk('sec.n')}`],

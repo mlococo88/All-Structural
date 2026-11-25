@@ -149,7 +149,7 @@
       F('base.loads.dfm', 'DF moment, entered', 'lanes', 'Live load distribution factor for moment (lanes per girder, multiple presence included).', 'num', { when: b => !!b.loads.llAuto && !b.loads.dfAuto }),
       F('base.loads.dfv', 'DF shear, entered', 'lanes', 'Live load distribution factor for shear.', 'num', { when: b => !!b.loads.llAuto && !b.loads.dfAuto }),
       F('base.loads.fatM', 'Fatigue DF (single lane), entered', 'lanes', 'Single-lane fatigue distribution factor without multiple presence; 0 = from the design DF (÷ 1.2).', 'num', { v: 'nn' })],
-      note: () => 'Skew and the exterior / interior position come from the bridge (Bridge layout and Cross-section tabs); d<sub>e</sub> and N<sub>L</sub>: <a href="#" data-goin="xsec">Cross-section tab</a>. The demands of a girder type can come from a MIDAS file or a custom table instead (Demands card above).' },
+      note: () => 'Skew and the exterior / interior position come from the bridge (Bridge layout and Cross-section tabs); d<sub>e</sub> and N<sub>L</sub>: <a href="#" data-goin="xsec">Cross-section tab</a>. The demands of a girder type can come from a custom table instead (Demands card above).' },
     // batch D1 (2026-11-15): the old app's factors on imported (MIDAS) live load (O:6232-6243, its loads.extDFpos / extDFneg / extDFv / extLLmpf):
     // shown while a girder type takes its demands from a MIDAS file or a custom table (engine/demands.js); blank = 1.0, as the old app
     { tab: 'loads', id: 'extll', title: 'Imported live load: distribution factor and multiple presence per effect', ref: 'AASHTO LRFD 10th Ed. 4.6.2.2, 3.6.1.1.2', when: (b, P) => !!(window.PSBDemands && window.PSBDemands.anyExt(P)), fields: [
