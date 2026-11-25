@@ -50,7 +50,7 @@ test('sender: deck.haunch = t_h (as before), deck.haunchBrg = t_h + Δ_deck, dec
   const h = W.PSBHandoffs.haunchSent(cells); assert.equal(h.brg, hp[0].brg); assert.equal(h.th, 2);
 });
 
-test('round trip: the receiver takes deck.haunchBrg; an older payload (as the Steel Bridge app's, no haunchBrg) keeps deck.haunch; hand check of d_sup', () => {
+test('round trip: the receiver takes deck.haunchBrg; an older payload (as from the Steel Bridge app: no haunchBrg) keeps deck.haunch; hand check of d_sup', () => {
   const P = project(W), p = J(W.PSBHandoffs.sgPayload(P, cellsOf(W, P)).payload);
   const hi = RCV.haunchIn(p); assert.equal(hi.brg, true); assert.equal(hi.v, p.deck.haunchBrg); assert.equal(hi.min, 2); assert.equal(hi.mid, 2);
   // the receiver's superstructure depth at the supports, its own expression: (t_s + haunch + d)/12 = (8 + 5.3458 + 24)/12 = 3.1122 ft (before (8 + 2 + 24)/12 = 2.8333 ft)
