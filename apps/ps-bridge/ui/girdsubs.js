@@ -3,7 +3,8 @@
      Girder types   the girder types card (ui/types.js; with no girder types the Design girder card, ui/inputs.js) and "Shown on the output tabs"
      Section        Girder shape (the library, the custom section, the section-property overrides)
      Strands        Straight strand rows and Draped strands beside the strand pattern figure (two columns where the panel is wide enough),
-                    then "Edit strands on the section" (ui/strandedit.js)
+                    then "Edit strands on the section" (ui/strandedit.js; WIDE 2026-11-25: beside the draped strands where the panel is 1100 px
+                    or wider, e.g. with "Widen inputs")
      Reinforcement  Shear reinforcement, Longitudinal reinforcement (5.7.3.5 tie), Release tension steel, Splitting and confinement steel
    "Entered values for" (ui/types.js scopeBar) is shown above the Section, Strands and Reinforcement sub-tabs (not on Girder types: nothing
    there depends on it). Every sub-tab is drawn (the hidden ones with `hidden`), so the input checks mark every field and the page's
@@ -52,8 +53,8 @@
     return bar(cur) + (cur === 'types' ? '' : TY.scopeBar(P, ui, 'gird'))
       + part('types', TY.card(P, ui) + TY.shownCard(P) + IN.cards('gird', V, null, only(['design'])))
       + part('sec', IN.cards('gird', V, null, only(['shape'])))
-      + part('str', `<div class="gStr"><div class="gStrA">${IN.cards('gird', V, null, only(['rows']))}</div><div class="gStrF">${pat}</div><div class="gStrB">${IN.cards('gird', V, null, only(['draped']))}</div></div>`
-        + (SE ? SE.card(sk >= 0 ? P.types[sk].label : '') : ''))   // batch G5: strand editing by clicking the section (ui/strandedit.js)
+      + part('str', `<div class="gStr"><div class="gStrA">${IN.cards('gird', V, null, only(['rows']))}</div><div class="gStrF">${pat}</div><div class="gStrB">${IN.cards('gird', V, null, only(['draped']))}</div>`
+        + `<div class="gStrE">${SE ? SE.card(sk >= 0 ? P.types[sk].label : '') : ''}</div></div>`)   // batch G5: strand editing by clicking the section (ui/strandedit.js); WIDE: in the grid (beside the draped strands on a wide panel)
       + part('reinf', IN.cards('gird', V, null, only(['stirrups', 'tie', 'rel', 'split'])));
   }
   window.PSBGirdSubs = { SUBS, CARDS, norm, subOf, parse, pane, count };
