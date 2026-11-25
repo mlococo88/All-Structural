@@ -30,16 +30,16 @@ try {
   await p.evaluate(([r, s]) => { localStorage.setItem('bridgeSuite.v1.beamRoster', r); localStorage.setItem('bridgeSuite.v1.designBeam', s); }, [JSON.stringify(roster(nb)), JSON.stringify(sel(4, nb))]);
   await p.reload(); await ready(); await p.waitForSelector('#dbChip');
   const k0 = await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('bridgeSuite.')).sort());
-  assert.match(await p.textContent('#dbChip'), /Design beam.*B4 · INT/); assert.equal(await p.locator('#dbChip [data-mct="dbShow"]').innerText(), 'Show G4 (interior)');
+  assert.match(await p.textContent('#dbChip'), /Design beam.*B4 · INT/); assert.equal(await p.locator('#dbChip [data-hob="dbShow"]').innerText(), 'Show G4 (interior)');
   if (shots) await p.locator('#dbChip').screenshot({ path: path.join(shots, 'F3-chip.png') });
-  await p.click('#dbChip [data-mct="dbShow"]'); await p.waitForTimeout(500);
+  await p.click('#dbChip [data-hob="dbShow"]'); await p.waitForTimeout(500);
   const sh = await p.evaluate(() => { const P = PSBModel.load(localStorage).project; return { d: P.design, pos: PSBDesign.inputs(P).loads.pos }; });
   assert.equal(sh.d.g, 4); assert.equal(sh.pos, 'interior'); assert.match(await p.textContent('#dbChip'), /The output tabs show G4 \(interior\)/);
   assert.deepEqual(await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('bridgeSuite.')).sort()), k0, 'no shared key written');
   ok('B4 with the same girder count: "Show G4 (interior)" -> the output tabs show G4; no shared key written');
   await p.evaluate(r => { localStorage.setItem('bridgeSuite.v1.beamRoster', r); window.dispatchEvent(new StorageEvent('storage', { key: 'bridgeSuite.v1.beamRoster' })); }, JSON.stringify(roster(nb + 1)));
   await p.waitForTimeout(400);
-  assert.match(await p.textContent('#dbChip'), new RegExp(`⚠ ${nb}≠${nb + 1}`)); assert.equal(await p.locator('#dbChip [data-mct="dbShow"]').count(), 0);
+  assert.match(await p.textContent('#dbChip'), new RegExp(`⚠ ${nb}≠${nb + 1}`)); assert.equal(await p.locator('#dbChip [data-hob="dbShow"]').count(), 0);
   if (shots) await p.locator('#dbChip').screenshot({ path: path.join(shots, 'F3-chip-mismatch.png') });
   ok(`another girder count in the roster: ⚠ ${nb}≠${nb + 1}, no Show (redrawn on the storage event)`);
   // F4: lldf import
