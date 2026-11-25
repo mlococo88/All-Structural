@@ -396,7 +396,7 @@ await o.b.close();
   await p.setInputFiles('#fImport', f1); await p.waitForFunction(() => /Old_bridge_E\.json/.test((document.getElementById('lgSum') || {}).textContent || ''), null, { timeout: 60000 });
   check(/Results: the same as the old app/.test(await p.textContent('#lgSum')) && (await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')).spans.lengths.join())) === '77', 'old Export JSON imported by Import JSON');
   await p.setInputFiles('#fImport', f2); await p.waitForTimeout(300);
-  check(o.dialogs.some(d => /MIDAS demands file of the old app, not a design/.test(d)) && (await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')).spans.lengths.join())) === '77', 'MIDAS demands file refused, project unchanged');
+  check(o.dialogs.some(d => /demands file of the old app \(psbeam-external-demands\), not a design/.test(d)) && (await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')).spans.lengths.join())) === '77', 'MIDAS demands file refused, project unchanged');
   fs.rmSync(dir, { recursive: true, force: true });
   ls = await lsSnap(p);
   Object.entries(OLDLS).forEach(([k, v]) => check(ls[k] === v, 'old key untouched after import: ' + k));

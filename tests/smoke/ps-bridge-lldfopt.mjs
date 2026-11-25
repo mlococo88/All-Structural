@@ -79,7 +79,7 @@ try {
   const l4 = await p.evaluate(() => ({ note: document.querySelector('#impNote').textContent, bar: (document.querySelector('#dmSrcBar') || {}).textContent || '', ext: (document.querySelector('#plExt') || {}).textContent || '', step: !!document.getElementById('st-ld.imp') }));
   assert.match(l4.note, /NOT added by this app/); assert.match(l4.bar, /used as given/); assert.match(l4.ext, /must already include the pedestrian load/); assert.ok(l4.step);
   await shot('#impNote', 'ps-imp-note.png');
-  await otab('rpt'); await until(() => p.evaluate(() => /Imported demands \(a MIDAS file or a custom table\) are used as given/.test((document.querySelector('#rptHost') || {}).textContent || '')), 180000, 'the Report note');
+  await otab('rpt'); await until(() => p.evaluate(() => /Imported demands \(a custom table, or demands kept from an earlier version\) are used as given/.test((document.querySelector('#rptHost') || {}).textContent || '')), 180000, 'the Report note');
   ok('IMP-N: imported demands + pedestrian load: the note on the Cross-section tab, the output source line, the Loads & LLDF tab (card, step ld.imp) and in the Report');
   const keys = await p.evaluate(() => Object.keys(localStorage)); assert.ok(keys.every(k => k.startsWith('psb2.')), 'keys ' + keys.join(', '));
   assert.deepEqual(errs, [], 'console errors: ' + errs.join(' | '));

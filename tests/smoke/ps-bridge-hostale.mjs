@@ -5,7 +5,7 @@
 //   1. a project saved before (no record), with other projects' hand-offs in storage: no banner, the card says nothing was recorded;
 //   2. Send section properties: no banner, "up to date"; no Undo step;
 //   3. an input change (a girder spacing): the banner above the output tabs names "Girder section (psSection) … changed since last sent to
-//      MCT / LL & DL" with Send, on every tab (input and output); the card shows it too;
+//      LL & DL" with Send, on every tab (input and output); the card shows it too;
 //   4. the banner's Send: the section is sent (the same alert as the card's), the banner is gone, the shared key holds the new section;
 //   5. Pull distribution factors, then LL & DL re-publishes the same factors later: no banner; newer factors: "Distribution factors (lldf):
 //      the LLDF tool has newer data than this design uses" with Load; Load (confirm): applied to the type, the banner is gone;
@@ -56,11 +56,11 @@ try {
 
   // 3. an input change: the banner, on every tab
   await setList('xsec', 'xs.bays', '9.5, 9.5, 9.5, 9.5');
-  let t = await bar(); assert.match(t, /Hand-offs out of date/); assert.match(t, /Girder section \(psSection\) of .+ on G\d: changed since last sent to MCT \/ LL & DL/);
+  let t = await bar(); assert.match(t, /Hand-offs out of date/); assert.match(t, /Girder section \(psSection\) of .+ on G\d: changed since last sent to LL & DL/);
   assert.equal(await p.locator('#hoStaleBar [data-hos="psSection"]').innerText(), 'Send');
   await otab('flex'); await itab('loads'); await p.waitForTimeout(150); assert.match(await bar(), /psSection/, 'shown from another output and input tab');
   await otab('sum'); await itab('proj'); await p.waitForTimeout(150); assert.equal(await cardN(), 1); assert.match(await cardSt(), /out of date/);
-  ok('a girder spacing changed: "Girder section (psSection) … changed since last sent to MCT / LL & DL — Send" above the output tabs (every tab) and in the card');
+  ok('a girder spacing changed: "Girder section (psSection) … changed since last sent to LL & DL — Send" above the output tabs (every tab) and in the card');
 
   // 4. the banner's Send
   const s0 = await p.evaluate(() => localStorage.getItem('bridgeSuite.v1.psSection'));
