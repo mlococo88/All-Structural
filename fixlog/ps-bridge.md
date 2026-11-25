@@ -9915,7 +9915,7 @@ Engine test file lists: `'reltension'` added next to `'holddown'` in every test 
 - EZNI-2 (NEXT: the gap between the stems counted as concrete) is not touched here.
 - The frozen optimizer (pbd-optimize.js `optimizeStrands`, `sweepDesign`) still uses the strip sum; the app's Compare tab uses the app's engine call (engine/compare.js).
 
-## 2026-11-25 — PR: claude/ps-ez-next-stems (PR link: below once open) (EZN) — NEXT beams: the concrete tensile force of 5.9.2.3.1b counts the two stems only, not the gap between them (§4 calculation change; pending engineer confirmation)
+## 2026-11-25 — PR: claude/ps-ez-next-stems (PR #1721: https://github.com/mlococo88/All-Structural/pull/1721) (EZN) — NEXT beams: the concrete tensile force of 5.9.2.3.1b counts the two stems only, not the gap between them (§4 calculation change; pending engineer confirmation)
 ### Request (engineer, 2026-11-25: "Fix NEXT stems only")
 EZNI open item 2: for a NEXT beam below the flange the engine's width (`sectionWidthAt`, the outermost edge of the outline at y) counts the gap between the two stems as concrete (NEXT 36F: 73 in instead of 2 × 13 = 26 in), over-stating the tension force there. NEXT shapes only; box beams and voided slabs keep their voids-ignored (conservative) basis.
 ### Where
