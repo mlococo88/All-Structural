@@ -291,6 +291,7 @@
     { key: 'fres', title: 'Nominal fatigue resistance', ref: A + '6.6.1.2.5', ids: /^fa\d+\.res$/ },
     { key: 'fnet', title: 'Net-tension rule', ref: A + '6.6.1.2.1', ids: /^fa\d+\.net$/ },
     { key: 'fok', title: 'Check, load-induced fatigue', ref: A + '6.6.1.2.2', ids: /^fa\d+\.ok/ },
+    { key: 'fd4', title: 'FA4: distortion-induced fatigue detailing', ref: A + '6.6.1.3', ids: /^faD\./ },   // SBLK (2026-11-24)
     { key: 'fev', title: 'Remaining fatigue life (MBE 4th Ed. Section 7)', ref: 'AASHTO MBE 4th Ed. (2026) Arts. 7.2.2 to 7.2.5', ids: /^fa\d+\.(Rp|dfII|dfe|prone|dfmax|inf|RR|Nav|T0|N1|Nck|Yrem0|fut|Ylim|life)$/, res: /\.life$/ },
     { key: 'gT', title: 'GS17: top flange stress range', ref: A + '6.10.5.1, 6.6.1.2', ids: /^gs\d+\.(n|T\.)/ },
     { key: 'gB', title: 'GS17: bottom flange stress range', ref: A + '6.10.5.1, 6.6.1.2', ids: /^gs\d+\.B\./ },
@@ -327,7 +328,7 @@
       h += `<section class="sec"><div class="secHead">Fatigue details (FA1, FA2, FA3; 6.6.1.2, 6.10.5.3)</div><div class="secBody"><p class="note">ADTT<sub>SL</sub> = ${fmt(R.FR.ADTTSL, 0)} trucks/day. Each detail: Fatigue I where ADTT<sub>SL</sub> is at least its infinite-life equivalent, else Fatigue II. Exempt: net compression under the permanent loads (FA2).</p>
         <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Detail</th><th>Cat.</th><th>n</th><th>Limit state</th><th>γ(Δf) (ksi)</th><th>(ΔF)<sub>n</sub> (ksi)</th><th>FA1</th><th>FA3</th></tr></thead><tbody>
         ${R.FR.rows.map((r, i) => { const a = ck('FA1').items[i], v = ck('FA3').items.find(it => it.step === `fa${r.i}.okV`); return `<tr data-fa="fa:${i}" class="${S.sel && S.sel.k === 'fa' && S.sel.i === i ? 'sel' : ''}"><td class="lft">${esc(r.name)}${r.exempt ? ' (exempt)' : ''}</td><td>${ct(r.cat)}</td><td>${r.nn}</td><td>Fatigue ${r.lim}</td><td>${fmt(r.dem, 2)}</td><td>${fmt(r.res, 2)}</td><td class="${r.exempt ? 'fx-ok' : cls(a.r)}">${r.exempt ? 'exempt' : fmt(a.r, 3)}</td>${v ? `<td class="${cls(v.r)}">${fmt(v.r, 3)}</td>` : '<td class="fx-na">n/a</td>'}</tr>`; }).join('')}
-        </tbody></table></div><p class="note">${C.filter(c => !['FA1', 'FA2', 'FA3'].includes(c.id)).map(c => `${esc(c.id)} ${window.SBDSub.html(c.title)}: ${c.items.length ? c.items.map(it => `${window.SBDSub.html(it.loc)} — ${{ pass: 'OK', fail: 'fails', warn: 'warning', na: 'n/a' }[it.st]}`).join('; ') : esc(c.naWhy)}`).join('. ')}.</p></div></section>`; }
+        </tbody></table></div><p class="note">${C.filter(c => !['FA1', 'FA2', 'FA3'].includes(c.id)).map(c => `${esc(c.id)} ${window.SBDSub.html(c.title)}: ${c.items.length ? c.items.map(it => `${window.SBDSub.html(it.loc)} — ${{ pass: 'OK', fail: 'fails', warn: 'warning', na: 'n/a' }[it.st]}${/^faD\./.test(it.step || '') ? ` ${go('fd', 0, it.step)}` : ''}`).join('; ') : esc(c.naWhy)}`).join('. ')}.</p></div></section>`; }
     // remaining fatigue life (MBE 4th Ed. Section 7; 2026-11-10)
     if (!R.FR.errors.length && R.FR.ev.on) { const V = R.FR.ev, C = R.FC, ck = id => C.find(c => c.id === id) || { items: [] }, LN = { min: 'minimum', E1: 'Evaluation 1', E2: 'Evaluation 2', mean: 'mean' }[V.level];
       h += `<section class="sec" id="fa-ev"><div class="secHead">Remaining fatigue life (FA5, FA6; MBE 4th Ed. Section 7)</div><div class="secBody"><p class="note">${esc(window.SBDFatigue.EV_BASIS)}</p>
@@ -361,11 +362,12 @@
     const sel = S.sel || { k: 'sc', i: 0 }; let title = '', list = [];
     if (sel.k === 'fa' && R.FR.rows && R.FR.rows[sel.i]) { const r = R.FR.rows[sel.i]; title = r.name; list = stepsOf(R, 'fa', r); }
     else if (sel.k === 'gs' && R.gs17 && R.gs17[sel.i]) { const q = R.gs17[sel.i]; title = `${q.r.name} (GS17)`; list = stepsOf(R, 'gs', q); }
+    else if (sel.k === 'fd' && !R.FR.errors.length) { title = 'FA4 distortion-induced fatigue detailing'; list = stepsOf(R, 'fd'); }   // SBLK (2026-11-24): the § of FA4's items
     else if (!R.SR.errors.length) { title = 'shear connectors'; list = stepsOf(R, 'sc'); }
     /* SBNG (2026-11-24): the steps that a failing / warning check item links to (it.step), red "NG" / amber "Warning" (ui/sub.js mark; display
        only): fatigue details FA1–FA6 (FC), GS17 of the selected station (its own items: the GS17 step ids repeat from station to station),
        shear connectors SC1–SC7 (SCC) */
-    const SB_ = window.SBDSub, ST = SB_.stepSt(sel.k === 'fa' ? SB_.items(R.FC) : sel.k === 'gs' ? SB_.items(R.gs17 && R.gs17[sel.i] ? [R.gs17[sel.i].o] : []) : SB_.items(R.SCC));
+    const SB_ = window.SBDSub, ST = SB_.stepSt(sel.k === 'fa' || sel.k === 'fd' ? SB_.items(R.FC) : sel.k === 'gs' ? SB_.items(R.gs17 && R.gs17[sel.i] ? [R.gs17[sel.i].o] : []) : SB_.items(R.SCC));
     if (list.length) h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above to show its work. AASHTO LRFD 10th Ed. (2024).</p>${title === 'shear connectors' ? `<p class="note" id="sc-edition-steps">${SC_ED}</p>` : ''}${stepsHtml(list, undefined, ST)}</div></section>`;
     return h;
   }
@@ -377,6 +379,7 @@
   /* stepsOf(R, kind, o): the worked steps of a fatigue detail ('fa', o = its row), GS17 location ('gs', o = { r, o }) or the shear connectors
      ('sc'); with custom demands the step that names them first (custom demands PR) */
   function stepsOf(R, kind, o) {
+    if (kind === 'fd') return window.SBDFatigue.detSteps(R.FR);   // SBLK (2026-11-24): FA4 detailing (inputs, no demand)
     const list = kind === 'fa' ? window.SBDFatigue.steps(R.FR, o) : kind === 'gs' ? o.o.steps : window.SBDStuds.steps(R.SR);
     return R.custom ? [window.SBDCustomDemands.step('fat', R.custom, kind === 'sc' ? NaN : kind === 'gs' ? o.r.x : +o.x)].concat(list) : list;
   }

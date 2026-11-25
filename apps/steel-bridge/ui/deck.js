@@ -62,7 +62,20 @@
   }
 
   /* ---------- worked steps ---------- */
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${sb(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${sb(s.note)}</div>` : ''}</li>`;
+  /* SBNG-DK (2026-11-24; engineer, approved follow-up of #1709 SBNG): the step a failing deck check links to is red with "NG" (ui/sub.js mark;
+     the deck has no warning items). marks(R) -> SBDSub.stepSt of: each check row R.checks (DK1 to DK6) that is NG, at its step (the "§" of
+     the checks table); an overhang side that is NG (its row of the Overhangs table, dk.oh<L|R>.cap.r); a DK5 bar set or a DK6 section that is
+     NG (its row of the DK5 / DK6 table): its test steps whose ok is false (area or spacing; bar stress or spacing). A "Not checked" row (no
+     bars entered) and a step whose ok only states a case have no status: not marked (grey "no" as before). Display only. */
+  const marks = R => { const S = window.SBDSub, e = [], f = step => e.push({ step, st: 'fail' }), bad = pre => (R.steps || []).filter(s => s.id.indexOf(pre) === 0 && s.ok === false).forEach(s => f(s.id));
+    if (!S || !R) return null;
+    (R.checks || []).forEach(c => { if (!c.ok) f(c.step); });
+    ['L', 'R'].forEach(sd => { const q = R.oh && R.oh[sd]; if (q && q.cap && q.cap.ok === false) f(`dk.oh${sd}.cap.r`); });
+    ((R.ts && R.ts.sets) || []).forEach(q => { if (q.on && !q.ok) bad(`dk.ts.${q.k}.`); });
+    ((R.crack && R.crack.cases) || []).forEach(q => { if (q.app && !q.ok) bad(`dk.${q.key}.`); });
+    return S.stepSt(e); };
+  const stepLi = (s, ST) => { const k = window.SBDSub ? window.SBDSub.mark(s, ST) : { cls: s.ok === false ? 'no' : '', tag: '' };
+    return `<li id="st-${esc(s.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${sb(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${sb(s.note)}</div>` : ''}</li>` };
   const groups = (kind, list) => window.SharedSteps.group(list, DK().topics(DK().metaOf(list)), { strip: /^dk\./ });
   const see = id => `<a href="#st-${esc(id)}" title="Worked step">§</a>`;
 
@@ -202,7 +215,7 @@
       ${ro('Effective span length (9.7.2.3)', R.dist.E && R.dist.E.ok ? `S<sub>eff</sub> = ${fmt(R.dist.Seff, 3)} ft` : 'not available: 67 % used', R.dist.E && R.dist.E.ok ? `${see('dk.distSe')} S − b<sub>f</sub>/12 + (b<sub>f</sub> − t<sub>w</sub>)/24, S = ${fmt(R.dist.S, 2)} ft, b<sub>f</sub> = ${fmt(R.dist.bf, 2)} in, t<sub>w</sub> = ${fmt(R.dist.tw, 4)} in (${esc(R.dist.at)})` : '')}
       <p class="note">The distance between the flange tips plus one flange overhang (flange tip to the face of the web, fillets disregarded), with the smallest girder spacing and the girder segment of the largest b<sub>f</sub> + t<sub>w</sub>: the shortest effective span, the largest percentage.</p></div></section>`;
     h += tsSec(R) + crSec(R);
-    h += `<section class="sec" id="dk-steps"><div class="secHead">Worked steps: deck</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024). Inputs: ${lnk('Cross-section tab', 'xsec')} (Deck design).</p>${window.SharedSteps.groupsHTML(groups('x', R.steps), { open: OPEN, item: stepLi })}</div></section>`;
+    h += `<section class="sec" id="dk-steps"><div class="secHead">Worked steps: deck</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024). Inputs: ${lnk('Cross-section tab', 'xsec')} (Deck design).</p>${window.SharedSteps.groupsHTML(groups('x', R.steps), { open: OPEN, item: (ST => s => stepLi(s, ST))(marks(R)) })}</div></section>`;
     return h;
   }
 
@@ -253,5 +266,5 @@
       const c = el.dataset.goin === 'xsec' ? document.getElementById('dkIn') : null; if (c && c.scrollIntoView) c.scrollIntoView({ block: 'center' }); }));
   }
 
-  window.SBDDeckUI = { inputs, onChange, render, build, groups, figure, stepLi, summaryCard };
+  window.SBDDeckUI = { inputs, onChange, render, build, groups, figure, stepLi, marks, summaryCard };
 })();
