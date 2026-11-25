@@ -22,6 +22,19 @@
      their area centroid, k the number of pieces). Moved unchanged from engine/worked-end.js (PR #1714), where the steps show these parts. */
 (function () {
   'use strict';
+  /* EZN (2026-11-25, engineer "Fix NEXT stems only"; §4): the concrete width at a height y. NEXT beams (G.isNext: the NEXT F and D shapes,
+     the library's and MassDOT's): the length of the horizontal line at y inside the outline (the two stems only below the flange; the gap
+     between them is not concrete), from the same outline halfPolygon(G), × 2 for the mirrored half. Every other shape: the engine's
+     sectionWidthAt (the widest point of the outline at y; box and voided slab voids ignored, conservative), unchanged. Used only for the
+     tension force here; the engine's section properties, drawings and every other check do not read it. */
+  function chordWidth(G, y) {
+    const P = halfPolygon(G), xs = [];
+    for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length];
+      if ((a[1] <= y) !== (b[1] <= y)) xs.push(a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1])); }   // the closed outline (its last point back to the first, along the ℄)
+    xs.sort((p, q) => p - q); let w = 0; for (let i = 0; i + 1 < xs.length; i += 2) w += xs[i + 1] - xs[i];
+    return 2 * w;
+  }
+  const widthAt = (G, y) => (G.isNext ? chordWidth(G, y) : sectionWidthAt(G, y));
   function parts(G, fTop, fBot) {
     const h = G.h, top = fTop <= fBot, ft = top ? fTop : fBot, fo = top ? fBot : fTop;   // ft: the tension fibre (most negative); fo: the other
     if (!(ft < 0)) return { from: null, ft, fo, c: 0, full: false, parts: [], T: 0 };
@@ -29,11 +42,11 @@
     const yOf = u => top ? h - u : u, fAt = u => -ft - (fo - ft) * u / h;   // f(u): tension magnitude at depth u below the tension fibre
     const ys = [...new Set(halfPolygon(G).map(p => +p[1]).filter(y => y > 1e-9 && y < h - 1e-9))];
     const us = [0, ...ys.map(y => top ? h - y : y).filter(u => u < c - 1e-9), c].sort((a, b) => a - b);
-    const wAt = (ua, ub) => { const e = 1e-6 * (ub - ua), w1 = sectionWidthAt(G, yOf(ua + e)), w2 = sectionWidthAt(G, yOf(ub - e)), s = (w2 - w1) / (ub - ua - 2 * e);
+    const wAt = (ua, ub) => { const e = 1e-6 * (ub - ua), w1 = widthAt(G, yOf(ua + e)), w2 = widthAt(G, yOf(ub - e)), s = (w2 - w1) / (ub - ua - 2 * e);
       return [w1 - s * e, w2 + s * e]; };   // the layer's widths at its two edges (read just inside it, where the outline is straight)
     const [ttf, ttf2, tbf, tbf2] = G.d || [0, 0, 0, 0], isI = !G.isNext && !G.isBox && !G.isDeck;
     const nameOf = (y0, y1) => { const m = (y0 + y1) / 2;
-      if (G.isNext && G.next) return m > h - G.next.ft ? 'flange' : 'stems (outline to the outer stem faces, as the engine)';
+      if (G.isNext && G.next) return m > h - G.next.ft ? 'flange' : 'stems (the two stems; the gap between them not counted)';
       if (!isI) return 'full width (voids ignored, as the engine)';
       return m > h - ttf ? 'top flange' : m > h - ttf - ttf2 ? 'top flange taper' : m < tbf ? 'bottom flange' : m < tbf + tbf2 ? 'bottom flange taper' : 'web'; };
     const parts = [];
@@ -76,5 +89,5 @@
     R.relT = { strip, exact };
     return R;
   }
-  window.PSBRelTension = { parts, apply, REL, PIER };
+  window.PSBRelTension = { parts, apply, widthAt, chordWidth, REL, PIER };
 })();
