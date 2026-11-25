@@ -313,11 +313,15 @@
      (absent: a project saved before 2026-11-25) BEFF_TOL's rule, beffAuto: calculated only when g.beff is within 0.5 in of the tributary
      width of every line of the type (typeLines), else the entered value. beffStep(P, g, j): the worked step of line j (SharedSteps form,
      id 'beff.G<j+1>'). migrateBeff(P): the load-time migration (§5), writes beffOv of every type without one by beffAuto; never
-     changes or deletes g.beff; returns a one-line notice listing the types that keep their entered b_eff as an override, else null. */
+     changes or deletes g.beff; returns a one-line notice listing the types that keep their entered b_eff as an override, else null; a
+     project whose cross-section is not valid (xsOk) is left as it is (nothing written, no notice) until a later load. */
   const BEFF_TOL = 0.5;
   const giOf = (P, g) => { const G = (P && P.girders) || []; for (let k = 0; k < G.length; k++) if (G[k] === g) return k; return g && g.id != null ? Array.from(G).findIndex(q => q && q.id === g.id) : -1; };
+  /* xsOk(xs): a cross-section the tributary widths can be judged on (N_b ≥ 2, N_b − 1 bays all > 0, overhangs ≥ 0); otherwise beffAuto
+     keeps the entered value and migrateBeff waits (writes nothing) until a load with a valid cross-section */
+  const xsOk = xs => { const n = Math.round(+((xs || {}).nb)), B = (xs || {}).bays; return n >= 2 && Array.isArray(B) && B.length === n - 1 && B.every(v => isNum(+v) && +v > 0) && isNum(+xs.ohL) && +xs.ohL >= 0 && isNum(+xs.ohR) && +xs.ohR >= 0; };
   function beffAuto(P, gi) {
-    const g = P.girders[gi], b = +g.beff, L = typeLines(P, gi); if (!L.length || !isNum(b) || !P.xs) return true;
+    const g = P.girders[gi], b = +g.beff, L = typeLines(P, gi); if (!L.length || !isNum(b) || !xsOk(P.xs)) return true;
     return !L.every(j => { const t = tribBeff(P.xs, j); return isNum(t) && Math.abs(t - b) <= BEFF_TOL + 1e-9; });
   }
   function beffOvOf(P, g) { if (!g) return true; if (typeof g.beffOv === 'boolean') return g.beffOv; const gi = giOf(P, g); return gi < 0 ? true : beffAuto(P, gi); }
@@ -344,6 +348,7 @@
       note: `${L || R ? `Exterior line: one-half the spacing to the adjacent girder plus the full overhang (girder centreline to deck edge, ${L ? 'left' : 'right'})` : 'Interior line: one-half the spacing to the adjacent girder on each side'}; spacings and overhang in ft, b_eff in in.` };
   }
   function migrateBeff(P) {
+    if (!P || !xsOk(P.xs)) return null;   // an invalid cross-section: decided on a later load (until then beffOvOf keeps the entered value)
     const keep = []; ((P && P.girders) || []).forEach((g, gi) => { if (!g || typeof g !== 'object' || typeof g.beffOv === 'boolean') return;
       g.beffOv = beffAuto(P, gi); if (!g.beffOv) return;
       const L = typeLines(P, gi), w = L.map(j => `${'G' + (j + 1)} ${isNum(tribBeff(P.xs || {}, j)) ? (+tribBeff(P.xs, j)).toFixed(1) : '—'}`);

@@ -103,7 +103,10 @@ test('migration, stored b_eff off the tributary width: override on, the notice, 
   assert.ok(r.notes.some(t => /Interior 120\.0 in \(calculated: G2 114\.0, G3 114\.0, G4 114\.0 in\)/.test(t)));
   // an in-memory old project (no beffOv) reads the same rule as the migration
   const P = JSON.parse(oldFile(120, 96)); assert.equal(M.beffOvOf(P, P.girders[0]), true); assert.equal(M.beffOvOf(P, P.girders[1]), true);
-  const D = M.defaultProject(); assert.equal(M.beffOvOf(D, D.girders[0]), false, 'defaultProject: 114 in = the tributary width of G2'); assert.equal(M.beffOf(D, D.girders[0]), 114);
+  const D = M.defaultProject(); assert.equal(M.beffOvOf(D, D.girders[0]), false, 'defaultProject: 114 in = the tributary width of G2'); assert.equal(M.beffOf(D, D.girders[0]), 114);  // an invalid cross-section (a negative bay): nothing written, no notice; the entered value is used until a load with a valid cross-section
+  const B = JSON.parse(oldFile(114, 96)); B.xs.bays[1] = -3; const rb = M.importJSON(JSON.stringify(B));
+  assert.ok(!rb.notes.some(t => /b_eff is now calculated/.test(t))); assert.ok(rb.project.girders.every(g => !('beffOv' in g)));
+  assert.equal(M.beffOf(rb.project, rb.project.girders[0], 2), 114, 'the entered value');
 });
 
 test('round trip: the exported file stays version 1 with girders[i].beff, and the previous version of the model reads it', () => {
