@@ -16,7 +16,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const ENG = ['sections', 'model', 'rigid', 'lldf-fg', 'lldf-opt', 'ut', 'pl', 'applicability', 'holddown', 'pierblock', 'rating-along', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'];
+const ENG = ['sections', 'model', 'rigid', 'lldf-fg', 'lldf-opt', 'ut', 'pl', 'applicability', 'reltension', 'holddown', 'pierblock', 'rating-along', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'];
 const load = list => loadShared('steps.js', ...PBDF, ...list.map(n => path.join(APP, `engine/${n}.js`)));
 const W = load(ENG), W0 = load(ENG.filter(n => n !== 'lldf-opt'));
 const M = W.PSBModel, D = W.PSBDesign, LO = W.PSBLldfOpt, DM = W.PSBDemands;

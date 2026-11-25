@@ -58,6 +58,10 @@
   const compute5 = inp => { const R = compute4(inp); return window.PSBDemands && window.PSBDemands.assumed ? window.PSBDemands.assumed(inp, R) : R; };
   // DD (2026-11-24, engineer request "Please fix the deck distribution steel"; §4): the deck's distribution reinforcement on the effective span
   // length of AASHTO LRFD 10th Ed. Art. 9.7.2.3 (engine/deckdist.js, with shared/deck.js distEff); a girder without the deck design: R as before
-  const compute = inp => { const R = compute5(inp); return window.PSBDeckDist && R && R.deck ? window.PSBDeckDist.apply(inp, R) : R; };
+  const compute6 = inp => { const R = compute5(inp); return window.PSBDeckDist && R && R.deck ? window.PSBDeckDist.apply(inp, R) : R; };
+  // EZX (2026-11-25, engineer "Merge, then exact"; §4): the concrete tensile force of 5.9.2.3.1b (release, top and bottom) and near an
+  // interior support (5.12.3.3.5) summed exactly by parts instead of the engine's 240 strips (engine/reltension.js): R.relSteel, R.cont.svc
+  // and their two checks; the engine's strip values kept in R.relT.strip
+  const compute = inp => { const R = compute6(inp); return window.PSBRelTension ? window.PSBRelTension.apply(inp, R) : R; };
   window.PSBHoldDown = { NAME, FRAC, apply, compute, fracOf };
 })();

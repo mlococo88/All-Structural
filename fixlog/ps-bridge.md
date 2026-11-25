@@ -9885,3 +9885,32 @@ None.
 ### Open items (raised, not changed: CLAUDE.md §4)
 - EZNI-1. Switch the engine (`releaseTensionForce`, frozen pbd-section.js) to the exact by-parts sum? Differences seen ≤ 0.039 kip; would change displayed T / A_s,req / D/C in the last digit in some designs.
 - EZNI-2. The engine's width of a NEXT beam below the flange is twice the distance to the outer stem face (`sectionWidthAt` takes the outermost edge), so the gap between the stems is counted as concrete: for bottom tension in a NEXT 36F, 73 in instead of 2 × 13 = 26 in (T over-stated about 2.8 times; conservative). Box beams and voided slabs: voids ignored (documented in the engine, conservative).
+
+## 2026-11-25 — PR: claude/ps-ez-exact (PR link: below once open) (EZX) — the concrete tensile force of 5.9.2.3.1b summed exactly by parts instead of 240 strips (§4 calculation change; pending engineer confirmation)
+### Request (engineer, 2026-11-25: "Merge, then exact")
+After PR #1714 (EZNI) showed the by-parts sum beside the engine's 240-strip value, make the exact by-parts sum the value the engine uses: the tension force at release, top and bottom (bonded release-tension steel), and the tension force in the girder top near an interior support.
+### Where
+- New `apps/ps-bridge/engine/reltension.js` (`window.PSBRelTension`): `parts(G, fTop, fBot)` (moved unchanged from `engine/worked-end.js` `tensionParts`, PR #1714) and `apply(inp, R)`.
+- `apps/ps-bridge/engine/holddown.js`, anchor `const compute = inp =>`: the chain's last stage is now `PSBRelTension.apply` (the former last stage renamed `compute6`).
+- `apps/ps-bridge/index.html`: `'engine/reltension.js'` loaded before `'engine/holddown.js'`.
+- The frozen `engine/pbd-section.js` `releaseTensionForce` and `engine/pbd-compute.js` (`relSteel`, `cont.svc`) are unchanged byte for byte; the exact value replaces the strip value in R after `computeAll`, in the app's engine call (`PSBHoldDown.compute`). The frozen optimizer `pbd-optimize.js` (it calls `computeAll` directly) still uses the strip sum.
+- `engine/worked-end.js`: `tensionParts` now calls `PSBRelTension.parts`; the T step's note "Sum of the parts X kip; the result used is the engine's value Y kip (… 240 horizontal strips …)" is replaced by "The sum of the parts is the engine's value (EZX …). Gross outline: voids ignored, which over-states T.", and the step's shown value is the parts' sum (pair-tested = the engine to 1e-9). `ui/endzone.js` `partsTbl`: the rows "Sum ΣF_i" and "T used (the engine's, 240 strips)" replaced by one row "T = ΣF_i" (the engine's value, §).
+### Before / After (expressions)
+- Before (`pbd-section.js` `releaseTensionForce`, unchanged and still in R as `R.relT.strip`): `T = Σ_{i=1..240} max(0, −f(y_i)) · b(y_i) · h/240`, y_i = (i − ½)h/240, f(y) = f_bot + (f_top − f_bot) y/h, b(y) = `sectionWidthAt`.
+- After (`reltension.js` `parts`): `c = h|f_t| / (|f_t| + |f_c|)` (c = h when both fibres are in tension); the outline cut at its corners and at c into trapezoids; per part `A = (b_a + b_b)/2 · t`, `ȳ = d_a + t(b_a + 2b_b)/(3(b_a + b_b))`, `f = |f_t|(1 − ȳ/c)` (full depth: `|f_t| + (|f_o| − |f_t|) ȳ/h`), `F = A f`; `T = ΣF`. Then, as the engine: `T = T_top if T_top ≥ T_bot else T_bot`, `A_s,req = T / f_s`, `D/C = A_s,req / A_s,prov` (99 with none), PASS at D/C ≤ 1.0001; near an interior support `A_s,req = T / f_s` and its check where the engine has it.
+### Governing provision
+AASHTO LRFD 10th Ed. Art. 5.9.2.3.1b, Table 5.9.2.3.1b-1 (bonded reinforcement for the tensile force in the concrete of an uncracked section, at f_s = 0.5 f_y ≤ 30 ksi); near an interior support Art. 5.12.3.3.5 with the same table. Unchanged; only the summation of that force changes.
+### Check case (by hand)
+MassDOT NEDBT 48 (h = 48 in, top flange 60 × 8 in), f_top = −0.631 ksi, f_bot = 4.696 ksi: c = 48(0.631)/5.327 = 5.686 in; A = 60 × 5.686 = 341.15 in²; ȳ = 2.843 in; f = 0.631(1 − 2.843/5.686) = 0.3155 ksi; T = 341.15 × 0.3155 = 107.63 kip. Before (240 strips): 107.61 kip; after: 107.63 kip. A_s,req = T/30: 3.587 → 3.588 in².
+Reproducible project (the smoke test): MassDOT NEDBT 48, 12 draped strands at y_end = 12 in, third row 12 strands, A_s,prov 0.62 in²: f_top = −0.626, f_bot = 4.732 ksi at x = 3.00 ft; T_top 105.38 kip both (to 0.01), D/C 5.665 both.
+### Changes at displayed precision (T 0.1 kip, A_s,req 0.01 in², D/C 0.001; before → after)
+See the PR description (58 designs + the library sweep of 92 girder types). No verdict changes; no check added or removed; the pier T values change by ≤ 0.005 kip (none at 0.1 kip).
+### How verified
+Node, the branch before vs after on 58 designs (19 tab designs, 10 girder variants, each with the bonded steel off and on) and 184 library designs: every field of R other than `relSteel`, `cont.svc.Ttop / AsTop`, the two checks and the new `R.relT` identical. `tests/engine/psbridge-ez-noint.test.mjs` (T = the parts to 1e-9; the strip value kept in R.relT.strip within 0.05 kip + 0.1 %; the 200,000-strip check; the hand check; R.relSteel and the check carry the exact value); `tests/engine/psbridge-tabs.test.mjs` (the PS-10 test compares with computeAll + PSBRelTension.apply); the psbridge tests, check-syntax, the full engine suite, `tests/smoke/ps-bridge-ez-noint.mjs`.
+### Saved data
+None (no key, no format; R.relT is a computed result only).
+### Other copies
+Engine test file lists: `'reltension'` added next to `'holddown'` in every test that loads it (61 files), so the tests run the app's chain.
+### Open items
+- EZNI-2 (NEXT: the gap between the stems counted as concrete) is not touched here.
+- The frozen optimizer (pbd-optimize.js `optimizeStrands`, `sweepDesign`) still uses the strip sum; the app's Compare tab uses the app's engine call (engine/compare.js).
