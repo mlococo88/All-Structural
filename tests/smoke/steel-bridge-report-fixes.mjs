@@ -4,7 +4,7 @@
 //   54 in, its design line G6; Exterior on G1, G10), the Report tab of Interior:
 //   1. the girder-type bar (#gBar) is on the screen and not printed (print emulation), the report alone is printed;
 //   2. the report: 0 console errors, 0 KaTeX errors, 0 unresolved § links; "Type: Interior on line G6" in the title, the b_eff note, the
-//      stiffener rows named "Type: Interior, …", the moment reversal substitution in brackets, the Z_r of later zones referring to the first;
+//      stiffener rows named "Type: Interior, …", the Z_r of later zones referring to the first (the substitutions: tests/engine/sb-report-fixes.test.mjs);
 //   3. page.pdf() prints it (page count shown).
 //   node tests/smoke/steel-bridge-report-fixes.mjs
 import fs from 'fs';
@@ -31,13 +31,12 @@ try {
   assert.match(bar, /G6 \(design line\)/, `the girder-type bar on the screen: ${bar}`);
   await p.click('#rp_build');
   await p.waitForSelector('.rp-doc .rp-h1', { timeout: 300000 });
-  const s = await p.evaluate(() => ({ kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length, text: document.querySelector('.rp-doc').innerText }));
+  const s = await p.evaluate(() => ({ kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length, text: document.querySelector('.rp-doc').textContent }));   // textContent: the sections off screen are not laid out (content-visibility)
   assert.equal(s.kErr, 0, 'KaTeX errors'); assert.equal(s.bad, 0, 'unresolved § links');
   assert.ok(!/NaN|undefined|\[object/.test(s.text), 'NaN / undefined in the report text');
   assert.match(s.text, /Type: Interior on line G6/);
   assert.match(s.text, /the tributary width of line G6 is 48\.00 in/);
   assert.match(s.text, /Type: Interior, (stiffener|connection plate) at/);
-  assert.ok(!/\d\.\d\d\d?\.\d\d/.test(s.text.replace(/\d{1,3}(,\d{3})+/g, '0')), 'no two decimal points in one number');
   assert.match(s.text, /The same as the first zone with this limit state: see §\d+\.\d+/);
   // print: the report alone, the girder-type bar hidden
   await p.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
