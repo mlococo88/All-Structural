@@ -5,6 +5,7 @@
 // Headless Chromium (tests/lib.mjs openPage), apps/steel-bridge/index.html, made-up bridges only:
 //   thin:    the built-in project with every flange 40 % thinner and 4 in narrower (≥ 12 in) and the webs 1/8 in thinner (≥ 7/16 in)
 //   shallow: the built-in project with every web 40 % shallower (≥ 30 in)
+// Deck tab (SBNG-DK, 2026-11-24): deck design on with a made-up failing deck (#4 bars at 18 in, #3 longitudinal bars at 18 / 24 in).
 // For each tab: the step ids marked ng / wn, the grey steps; a marked step must exist; 0 console errors, 0 KaTeX errors.
 //   node tests/smoke/steel-bridge-red-ng.mjs [--tabs flex,fat] [--file <index.html>] [--shots <dir>] [--dump <json>]   (--dump: every step's text, for a main-vs-branch diff)
 import path from 'path';
@@ -15,7 +16,7 @@ import { openPage, REPO } from '../lib.mjs';
 const arg = k => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : null; };
 const SHOTS = arg('shots'), DUMP = arg('dump'), FILE = arg('file') || path.join(REPO, 'apps/steel-bridge/index.html'), t0 = Date.now(), allErrs = [], dump = {};
 if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
-const TABS = arg('tabs') ? arg('tabs').split(',') : ['flex', 'shear', 'fat', 'cn', 'rt', 'wt', 'spl', 'defl', 'an', 'cf'];   // --tabs: some of them
+const TABS = arg('tabs') ? arg('tabs').split(',') : ['flex', 'shear', 'fat', 'cn', 'rt', 'wt', 'spl', 'defl', 'an', 'cf', 'dk'];   // --tabs: some of them
 const BTN = { flex: '#fx_calc', shear: '#sh_calc', an: '#anCalc', defl: '#df_calc', fat: '#fa_calc', cn: '#cn_calc', spl: '#sp_calc', rt: '#rt_calc', wt: '#wt_calc' };
 const variant = { thin: P => { P.girders.forEach(g => g.segments.forEach(s => { s.tw = Math.max(0.4375, s.tw - 0.125); s.botT = Math.max(0.75, s.botT * 0.6); s.topT = Math.max(0.625, s.topT * 0.6); s.botB = Math.max(12, s.botB - 4); s.topB = Math.max(12, s.topB - 4); })); },
   shallow: P => { P.girders.forEach(g => g.segments.forEach(s => { s.D = Math.max(30, s.D * 0.6); })); } };
@@ -24,6 +25,7 @@ for (const vn of Object.keys(variant)) for (const tab of TABS) {
   const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1400, dsf: SHOTS ? 2 : undefined, timeout: 90000 });
   try {
     await p.evaluate(([src, tab]) => { const M = window.SBDModel, P = M.defaultProject(); (new Function('P', src))(P); P.project.name = 'Made-up bridge';
+      if (tab === 'dk') P.deckDesign = { on: true, sBot: 18, sTop: 18, barTop: 0.2, barBot: 0.2, barLongBot: 0.11, sLongBot: 18, barLongTop: 0.11, sLongTop: 24 };   // SBNG-DK: a made-up failing deck (DK1 to DK6 NG)
       M.save(localStorage, P); localStorage.setItem(M.KEYS.ui, JSON.stringify({ otab: tab, itab: 'proj' })); }, [`(${variant[vn].toString()})(P)`, tab]);
     await p.reload(); await p.waitForTimeout(1500);
     if (BTN[tab]) { for (let k = 0; k < 120; k++) { const st = await p.evaluate(s => { const b = document.querySelector('#out ' + s); return b && b.offsetParent ? 'btn' : document.querySelector('#out .steps li') ? 'done' : 'wait'; }, BTN[tab]);
@@ -51,5 +53,5 @@ for (const vn of Object.keys(variant)) for (const tab of TABS) {
 if (DUMP) fs.writeFileSync(DUMP, JSON.stringify(dump));
 assert.deepEqual(allErrs, [], 'console errors');
 // the thin bridge fails flexure (GS7), the stiffeners and the splices: each of these tabs marks a failing step red
-for (const k of ['thin/flex', 'thin/shear', 'thin/spl'].filter(k => seen[k] || !arg('tabs'))) assert.ok(seen[k] && seen[k].ng.length, `${k}: a red NG step`);
+for (const k of ['thin/flex', 'thin/shear', 'thin/spl', 'thin/dk'].filter(k => seen[k] || !arg('tabs'))) assert.ok(seen[k] && seen[k].ng.length, `${k}: a red NG step`);
 console.log(`steel-bridge-red-ng: all checks passed (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
