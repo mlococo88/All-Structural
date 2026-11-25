@@ -1,5 +1,7 @@
-/* apps/ps-bridge/engine/demands.js — the demand source of each girder type (window.PSBDemands): this app's analysis, a custom demand table,
-   or a MIDAS demands file (schema psbeam-external-demands, the old app's import). Classic script, no DOM.
+/* apps/ps-bridge/engine/demands.js — the demand source of each girder type (window.PSBDemands): this app's analysis or a custom demand
+   table; a project saved with an imported demands file (schema psbeam-external-demands, the old app's MIDAS import, removed 2026-11-25:
+   PS no-MCT, fixlog/ps-bridge.md NOMCT) is converted to the custom table when that is proven exact, else kept read only (migrate below).
+   Classic script, no DOM.
    Created 2026-11-15 (batch D1, the old app's MIDAS import "Prestressed Bridge Design.html" O:5862-5895, 6252-6264, 9539-9548; the Steel
    Bridge app's demand-source choice, apps/steel-bridge/ui/demands.js). No formula here: the imported or entered demands are given to the
    moved engine the way the old app gave them, as inputs.external (an object of schema psbeam-external-demands with the span chosen,
@@ -21,9 +23,15 @@
    below (DF / m per effect, Loads tab). It is put in the file's form: shears negated (MIDAS's sign, which buildExternal negates back) and the
    LL shear branches exchanged (buildExternal takes the app's + branch from the file's −), on the bridge's own spans (supports at the span
    ends), so the engine reads the entered values exactly.
-   API: SCHEMA, SRC, COLS; isFile(o); parse(text, fileName); spans(file); entry(P, id); srcOf(P, id); pickOf(P, T); external(P, T);
-   setSrc(P, id, src); setFile(P, id, file, name, at); setSpan(P, id, i); tableRows(P, id); setTable(P, id, rows); anyExt(P); checks(P);
-   describe(P, T) (the source line of the output tabs). */
+   API: SCHEMA, SRC, COLS; isFile(o); spans(file); entry(P, id); srcOf(P, id); choices(P, id); pickOf(P, T); external(P, T);
+   setSrc(P, id, src); tableRows(P, id); setTable(P, id, rows); anyExt(P); checks(P); describe(P, T) (the source line of the output tabs);
+   convert(P, T), migrate(P, now) (NOMCT, 2026-11-25).
+   NOMCT (2026-11-25, engineer's request "no MCT input or output"; decisions of 2026-11-25): the import of a file (parse, setFile, the span
+   picker setSpan) is removed; 'midas' stays a source of the saved data only: a type saved so is converted at load to the custom table
+   holding the same values when the engine then reads exactly the same demands (convert: proven, the conditions are checked on the two
+   inputs), else it keeps computing from the stored file, read only (labelled "Imported demands (from an earlier version)"), until the
+   engineer re-enters the demands or switches to this app's analysis; once switched away it is no longer offered. P.demands[id].midas is
+   never deleted. */
 (function () {
   'use strict';
   const SCHEMA = 'psbeam-external-demands';
@@ -38,31 +46,13 @@
   const isFile = o => !!(isObj(o) && o._schema === SCHEMA && Array.isArray(o.stations) && o.stations.length);
   /* spans(file): the spans of the imported member (the old app's own rule, PBD.extSpans = externalSpans) */
   const spans = f => (isFile(f) && window.PBD && window.PBD.extSpans ? window.PBD.extSpans(f) : []);
-  /* parse(text, fileName): { ok, file, spans, notes } or { ok: false, error }. The old app's import (O:9539-9548) took any object of the
-     schema; added here (2026-11-15, decision pending engineer review): the stations must be readable (each x a number) and the file must
-     say it is unfactored (factored: true is refused; the engine applies the load factors), each read as the old app reads it. */
-  function parse(text, fileName) {
-    let o; try { o = JSON.parse(text); } catch (e) { return { ok: false, error: `Not a JSON file: ${e.message}` }; }
-    const f = fileName ? `"${fileName}"` : 'The file';
-    if (!isObj(o) || o._schema !== SCHEMA) {
-      if (isObj(o) && o.schema === 'psb2.project') return { ok: false, error: `${f} is a project of this app, not a MIDAS demands file: open it with Import JSON (Project tab).` };
-      if (isObj(o) && isFile(o.external)) return { ok: false, error: `${f} is an old-app design with MIDAS demands: import it with "From the old app" (Project tab); its demands come with it.` };
-      return { ok: false, error: `${f} is not a MIDAS demands file (schema ${SCHEMA}, made by the MCT Generator's "Organize for PS-Beam tool").` };
-    }
-    if (!Array.isArray(o.stations) || o.stations.length < 2) return { ok: false, error: `${f} has ${Array.isArray(o.stations) ? o.stations.length : 'no'} station${Array.isArray(o.stations) && o.stations.length === 1 ? '' : 's'}: at least 2 are needed.` };
-    const bad = o.stations.findIndex(s => !isObj(s) || !isNum(+s.x) || s.x === '' || s.x == null);
-    if (bad >= 0) return { ok: false, error: `${f}: station ${bad + 1} has no station x (a number, ft).` };
-    if (o.factored === true) return { ok: false, error: `${f} holds factored demands (factored: true). Export the components unfactored (factored: false): this app applies the LRFD load factors.` };
-    const sp = spans(o), notes = [];
-    if (!sp.length) return { ok: false, error: `${f}: no span could be read (member.supports, member.spans or the station range).` };
-    const u = isObj(o.units) ? o.units : null;
-    if (u && ((u.force && !/^kips?$/i.test(String(u.force))) || (u.length && !/^(ft|feet)$/i.test(String(u.length))))) notes.push(`The file declares units ${JSON.stringify(u)}: this app reads kip, ft and kip-ft (check the export).`);
-    if (o.selfWeightExcluded === false) notes.push('The file says the girder self-weight is not excluded: this app computes the self-weight and DC1 itself and does not read them from the file (M_DC1 / V_DC1 are not used).');
-    return { ok: true, file: o, spans: sp, notes };
-  }
+  /* NOMCT (2026-11-25): parse(text, fileName), the reader of an imported demands file, is removed (no file import in this app). */
   const store = P => (P && isObj(P.demands) ? P.demands : null);
   function entry(P, id) { const s = store(P); return s && isObj(s[id]) ? s[id] : null; }
   function srcOf(P, id) { const e = entry(P, id); return e && SRC.includes(e.src) ? e.src : 'app'; }
+  /* choices(P, id): the sources offered for type id: this app's analysis and the custom table; the kept read-only imported demands only
+     while the type uses them (NOMCT: never chosen for a type, so once switched away it is not offered again) */
+  function choices(P, id) { return srcOf(P, id) === 'midas' ? ['app', 'table', 'midas'] : ['app', 'table']; }
   /* pickOf(P, T): the MIDAS span used for type T: the one chosen, else the type's own span */
   function pickOf(P, T) { const e = T ? entry(P, T.id) : null; return e && Number.isInteger(e.span) && e.span >= 1 ? e.span : (T ? T.span : 1); }
   const spanLens = P => ((P && P.spans && P.spans.lengths) || []).map(Number);
@@ -96,12 +86,10 @@
     return null;
   }
   function ensure(P, id) { if (!isObj(P.demands)) P.demands = {}; if (!isObj(P.demands[id])) P.demands[id] = { src: 'app' }; return P.demands[id]; }
-  function setSrc(P, id, src) { if (!SRC.includes(src)) return; if (src === 'app' && !entry(P, id)) return; ensure(P, id).src = src; }
-  function setFile(P, id, file, name, at) { const e = ensure(P, id); e.midas = { file: clone(file), name: String(name || ''), at: at || new Date().toISOString() }; e.src = 'midas'; delete e.span; }
-  function setSpan(P, id, i) { const e = ensure(P, id); if (Number.isInteger(i) && i >= 1) e.span = i; else delete e.span; }
+  function setSrc(P, id, src) { if (!SRC.includes(src) || src === 'midas') return; if (src === 'app' && !entry(P, id)) return; ensure(P, id).src = src; }   // NOMCT: 'midas' is never set
   function tableRows(P, id) { const e = entry(P, id); return e && isObj(e.table) && Array.isArray(e.table.rows) ? e.table.rows : []; }
   function setTable(P, id, rows) { const e = ensure(P, id); e.table = { rows: clone(rows) }; }
-  /* anyExt(P): a girder type uses a MIDAS file or a custom table (the Loads tab then shows the DF / m per effect) */
+  /* anyExt(P): a girder type uses a custom table or kept imported demands (the Loads tab then shows the DF / m per effect) */
   function anyExt(P) {
     const B = window.PSBBridge; if (!B || !store(P)) return false;
     return B.types(P).some(T => srcOf(P, T.id) !== 'app');
@@ -118,18 +106,19 @@
       const E = (f, msg) => errors.push({ path: `demands.${T.id}.${f}`, msg: `Girder type ${T.label}: ${msg}`, src: 'demands', scope: T.id });
       const Wn = (f, msg) => warnings.push({ path: `demands.${T.id}.${f}`, msg: `Girder type ${T.label}: ${msg}`, src: 'demands', scope: T.id });
       const L = Ls[T.span - 1], e = entry(P, T.id);
-      if (src === 'midas') {
-        const f = e.midas && e.midas.file;
-        if (!isFile(f)) { E('src', 'the demands come from a MIDAS file, but no readable file is loaded: choose the file (Loads tab, Demands card) or choose This app\'s analysis.'); return; }
+      if (src === 'midas') {   // NOMCT: the kept read-only imported demands (the same checks as before, reworded; nothing can be chosen)
+        const f = e.midas && e.midas.file, RE = 're-enter the demands as a custom table or choose this app\'s analysis (Loads tab, Demands card)';
+        if (!isFile(f)) { E('src', `the demands are imported demands from an earlier version, but no readable values are stored: ${RE}.`); return; }
         const sp = spans(f), i = pickOf(P, T), q = sp[i - 1];
-        if (e.span === 0) { Wn('span', 'no span of the MIDAS member is chosen (an old-app design saved so): the engine reads the whole member from x = 0 with L of the bridge span, as the old app did. Choose the span (Loads tab, Demands card).'); return; }
-        if (!q) { E('span', `the MIDAS member has ${sp.length} span${sp.length > 1 ? 's' : ''}: choose the span of the file used for span ${T.span} of the bridge.`); return; }
+        if (e.span === 0) { Wn('span', `the imported demands (from an earlier version) have no span chosen (an old-app design saved so): the engine reads the whole imported member from x = 0 with L of the bridge span, as the old app did; ${RE}.`); return; }
+        if (!q) { E('span', `the imported demands (from an earlier version) have ${sp.length} span${sp.length > 1 ? 's' : ''} and no span ${i}: ${RE}.`); return; }
         const sel = isObj(f._selSpan) && +f._selSpan.idx === i ? f._selSpan : q;
         const n = f.stations.filter(s => +s.x >= +sel.x0 - 1e-6 && +s.x <= +sel.x1 + 1e-6).length;
-        if (n < 2) { E('span', `MIDAS span ${i} has ${n} station${n === 1 ? '' : 's'} in the file: at least 2 are needed.`); return; }
-        if (isNum(L) && !near(+sel.len, L)) Wn('span', `MIDAS span ${i} is ${(+sel.len).toFixed(2)} ft long but span ${T.span} of the bridge is ${L.toFixed(2)} ft: the design uses L = ${L.toFixed(2)} ft with the file's demands of span ${i} re-zeroed to its left bearing (held at the end values past its length). Check the span lengths (Bridge layout tab).`);
-        if (sp.length >= 2 && !cont) Wn('span', `the MIDAS member is continuous (${sp.length} spans) but the bridge has simple spans: the pier negative-moment check is made only for a bridge made continuous (Bridge layout tab).`);
-        if (sp.length === 1 && cont) Wn('span', 'the MIDAS member has one span but the bridge is made continuous: the pier negative moments are the file\'s moments at the ends of that span.');
+        if (n < 2) { E('span', `span ${i} of the imported demands has ${n} station${n === 1 ? '' : 's'}: at least 2 are needed; ${RE}.`); return; }
+        Wn('src', `the demands are imported demands kept from an earlier version (read only; they could not be converted to a custom table with exactly the same values): ${RE}.`);
+        if (isNum(L) && !near(+sel.len, L)) Wn('span', `span ${i} of the imported demands is ${(+sel.len).toFixed(2)} ft long but span ${T.span} of the bridge is ${L.toFixed(2)} ft: the design uses L = ${L.toFixed(2)} ft with the imported demands of span ${i} re-zeroed to its left bearing (held at the end values past its length). Check the span lengths (Bridge layout tab).`);
+        if (sp.length >= 2 && !cont) Wn('span', `the imported member is continuous (${sp.length} spans) but the bridge has simple spans: the pier negative-moment check is made only for a bridge made continuous (Bridge layout tab).`);
+        if (sp.length === 1 && cont) Wn('span', 'the imported member has one span but the bridge is made continuous: the pier negative moments are the imported moments at the ends of that span.');
       } else if (src === 'table') {
         const rows = tableRows(P, T.id);
         if (rows.length < 2) { E('table', 'the custom demand table needs at least 2 rows (stations), e.g. both bearings.'); return; }
@@ -153,8 +142,8 @@
     if (src === 'app') return { src, what: 'This app\'s analysis', detail: 'DC2, DW and LL+IM computed by this app (built-in HL-93; continuous unit when made continuous)' };
     const e = entry(P, T.id);
     if (src === 'table') return { src, what: 'Custom table (entered)', detail: `${tableRows(P, T.id).length} rows of span ${T.span} for ${T.label}, Loads tab` };
-    const f = e.midas && e.midas.file, x = external(P, T), q = x && x._selSpan;
-    return { src, what: `MIDAS file${e.midas && e.midas.name ? ' ' + e.midas.name : ''}`, detail: f ? `${f.source || 'midas'} · ${f.generatedBy || 'export'} · project ${f.project || '—'} · ${(f.stations || []).length} stations${q ? ` · span ${q.idx}: ${fx(q.x0, 0)}–${fx(q.x1, 0)} ft (${fx(q.len, 1)} ft)` : ''} · LL type ${f.liveLoadType || '—'}` : 'no file loaded' };
+    const f = e.midas && e.midas.file, x = external(P, T), q = x && x._selSpan;   // NOMCT: no file name, source or producer shown
+    return { src, what: 'Imported demands (from an earlier version, read only)', detail: f ? `${(f.stations || []).length} stations${q ? ` · span ${q.idx}: ${fx(q.x0, 0)}–${fx(q.x1, 0)} ft (${fx(q.len, 1)} ft)` : ''}; re-enter them as a custom table or choose this app's analysis` : 'no readable values stored' };
   }
   /* slice(ext, L) (display only, for the worked steps and the imported-values table): the stations of the span the engine reads, re-zeroed
      to its left bearing, by buildExternal's own rule (engine/pbd-external.js: the stations within [x0, x1] of _selSpan, else of the whole
@@ -198,7 +187,7 @@
   const A316 = 'AASHTO LRFD 10th Ed. 3.6.1.6';
   function noteText(a) {
     const k = v => (isNum(v) ? ` (${v.toFixed(4)} klf on this girder line)` : ''), t = [];
-    t.push('Imported demands (a MIDAS file or a custom table) are used as given: DC2, DW and LL+IM are the imported values.');
+    t.push('Imported demands (a custom table, or demands kept from an earlier version) are used as given: DC2, DW and LL+IM are the imported values.');
     if (a.pl) t.push(`A pedestrian live load is entered on the Cross-section tab${k(a.pl)}: the imported live load must already include it; it is NOT added by this app (${A316}).`);
     if (a.utc) t.push(`A utility on the composite section is entered on the Cross-section tab${k(a.utc)}: the imported DW must already include it; it is NOT added by this app (its klf is used for the superimposed dead-load deflection only).`);
     if (a.wUT || a.wUF) t.push('The utilities on the noncomposite section and the future utility allowance of the Cross-section tab ARE applied by this app: they act on the precast girder alone, which this app always computes itself (not imported).');
@@ -219,5 +208,83 @@
     if (!a.pl && !a.utc) return null;
     a.text = noteText(a); return a;
   }
-  window.PSBDemands = { noteText, assumed, assumedOf, slice, fac, SCHEMA, SRC, COLS, isFile, parse, spans, entry, srcOf, pickOf, external, tableFile, setSrc, setFile, setSpan, tableRows, setTable, anyExt, checks, describe };
+  /* ---- NOMCT (2026-11-25): the saved imported demands (src 'midas') at load ----
+     convert(P, T): { ok, rows } when the custom table of girder type T holding rows makes the engine read exactly the same demands as the
+       stored file, else { ok: false, why }. Proven on the two engine inputs themselves (no tolerance): the file's input external(P, T) and the
+       table's (the rows saved and read back as JSON, the bridge's spans), each through the engine's own buildExternal and externalSpans
+       (engine/pbd-external.js, unchanged): the span read (_selSpan: idx, x0, x1, len, as a whole), its length, every station of the slice
+       (x from the left bearing and the eight values the engine reads: M_DC2, V_DC2, M_DW, V_DW, M_LLpos, M_LLneg, V_LLpos, V_LLneg, as
+       +v || 0) and the spans of the member (the continuous unit and the interior-pier warning of the engine). Not converted: no span chosen
+       (span 0, the whole member), a span of the file other than the type's own, a station outside the bridge span, fewer than 2 stations, or
+       a custom table already stored for the type with other values (it is kept). The rows: x = the station − x0 of the span, the moments as
+       read, the shears in this app's sign (negated, the LL branches exchanged: tableFile's rule reversed). The file's M_DC1 / V_DC1 and its
+       description (liveLoadType, member key, DF / IM flags) are not held; the engine does not use them (shown only: R.ext, Loads tab "LL type").
+     migrate(P, now): every type with src 'midas': converted (src 'table', table.rows, converted: { from: 'imported file', at }; midas and
+       span kept as they were) or kept (unchanged). -> the load notes (NOTE_CONVERTED, NOTE_KEPT of the type labels). */
+  const DKEYS = ['M_DC2', 'V_DC2', 'M_DW', 'V_DW', 'M_LLpos', 'M_LLneg', 'V_LLpos', 'V_LLneg'];
+  const NOTE_CONVERTED = l => `Demands of ${l} were imported from a file; they are now a custom table with the same values (Loads tab, Demands card).`;
+  const NOTE_KEPT = l => `Demands of ${l} are imported demands kept from an earlier version (read only: they cannot be converted to a custom table with exactly the same values). Re-enter them as a custom table or choose this app's analysis (Loads tab, Demands card).`;
+  function convert(P, T) {
+    const no = why => ({ ok: false, why }), W = window;
+    const e = T ? entry(P, T.id) : null; if (!e || srcOf(P, T.id) !== 'midas') return no('not imported demands');
+    const f = e.midas && e.midas.file; if (!isFile(f)) return no('no readable stored values');
+    if (e.span === 0) return no('no span of the imported member chosen (the whole member)');
+    if (pickOf(P, T) !== T.span) return no(`span ${pickOf(P, T)} of the imported member is used for span ${T.span} of the bridge`);
+    const BE = W.buildExternal, ES = W.externalSpans; if (typeof BE !== 'function' || typeof ES !== 'function') return no('the engine is not loaded');
+    const L = spanLens(P)[T.span - 1], x = external(P, T); if (!isNum(L) || !(L > 0) || !x) return no('the span or the imported demands cannot be read');
+    const a = BE(x, L, { pos: 1, neg: 1, v: 1 }); if (!a) return no('fewer than 2 stations in the span');
+    const g = (s, k) => +s[k] || 0;
+    const rows = a.slice.map(s => ({ x: s.xr, M_DC2: g(s, 'M_DC2'), M_DW: g(s, 'M_DW'), M_LLpos: g(s, 'M_LLpos'), M_LLneg: g(s, 'M_LLneg'),
+      V_DC2: -g(s, 'V_DC2') || 0, V_DW: -g(s, 'V_DW') || 0, V_LLpos: -g(s, 'V_LLneg') || 0, V_LLneg: -g(s, 'V_LLpos') || 0 }));
+    if (rows.some(r => r.x < -1e-9 || r.x > L + 1e-9)) return no(`a station is outside span ${T.span} of the bridge (0 to ${L.toFixed(2)} ft)`);
+    const R2 = JSON.parse(JSON.stringify(rows)), old = tableRows(P, T.id);
+    if (old.length && JSON.stringify(old) !== JSON.stringify(R2)) return no('a custom table with other values is already stored for this type');
+    const Q = Object.assign({}, P, { demands: Object.assign({}, P.demands, { [T.id]: { src: 'table', table: { rows: R2 } } }) }), y = external(Q, T);
+    const b = y ? BE(y, L, { pos: 1, neg: 1, v: 1 }) : null; if (!b) return no('the table cannot be read');
+    const same = JSON.stringify(a.sel) === JSON.stringify(b.sel) && Object.is(a.spanLen, b.spanLen) && a.slice.length === b.slice.length
+      && a.slice.every((s, i) => Object.is(s.xr, b.slice[i].xr) && DKEYS.every(k => Object.is(g(s, k), g(b.slice[i], k))))
+      && JSON.stringify(ES(x)) === JSON.stringify(ES(y));
+    return same ? { ok: true, rows: R2 } : no('the span, its stations or the member spans differ from the bridge\'s');
+  }
+  function migrate(P, now) {
+    const B = window.PSBBridge, notes = []; if (!B || !store(P)) return notes;
+    let types = []; try { types = B.types(P); } catch (er) { return notes; }
+    const conv = [], kept = [];
+    types.forEach(T => {
+      if (srcOf(P, T.id) !== 'midas') return;
+      const r = convert(P, T);
+      if (!r.ok) { kept.push(T.label); return; }
+      const e = P.demands[T.id]; e.table = { rows: r.rows }; e.src = 'table'; e.converted = { from: 'imported file', at: now || new Date().toISOString() };
+      conv.push(T.label);
+    });
+    if (conv.length) notes.push(NOTE_CONVERTED(conv.join(', ')));
+    if (kept.length) notes.push(NOTE_KEPT(kept.join(', ')));
+    return notes;
+  }
+  /* NOMCT (2026-11-25, engineer's decision "reword where shown"): the moved engine (engine/pbd-*.js, frozen byte for byte) names the old
+     app's MIDAS import in a few texts it writes for imported demands (a custom table goes the same path). The app rewords them where they
+     leave the engine; no number is changed:
+       R.warns        "MIDAS span n: the … end … is an interior pier … (MIDAS element end, opposite sign) …" (computeAll, interior pier)
+       R.cont.llSrc   "MIDAS pier moment" (the label of the worked step of the pier live-load moment)
+       superReactions girderLine.source "PS-Beam DC1 + MIDAS DC2/DW", the note "MIDAS import active (span n): …" and the error "the
+                      imported MIDAS demands could not be read" (bxSuperRxPayload; reworded in engine/handoffs.js srPayload: only these
+                      human-readable strings, no key or value; Bridge Substructure Loading does not match on them).
+     neutralText(t): t with those phrases reworded; neutral(R): R with R.warns and R.cont.llSrc reworded (imported demands only; any other
+     R is returned unchanged). Called by engine/holddown.js compute. */
+  const NEUTRAL = [
+    [/^MIDAS span ([^:]*): /, 'Entered demands, span $1: '],
+    [/\(MIDAS element end, opposite sign\)/g, '(an element end of the analysis model, opposite sign)'],
+    [/^MIDAS pier moment$/, 'entered pier moment'],
+    [/MIDAS import active \(span /g, 'Entered demands active (span '],
+    [/PS-Beam DC1 \+ MIDAS DC2\/DW/g, 'PS-Beam DC1 + entered DC2/DW'],
+    [/the imported MIDAS demands could not be read/g, 'the imported or entered demands could not be read']
+  ];
+  const neutralText = t => (typeof t === 'string' ? NEUTRAL.reduce((s, q) => s.replace(q[0], q[1]), t) : t);
+  function neutral(R) {
+    if (!R || !R.useExt) return R;
+    if (Array.isArray(R.warns)) R.warns = R.warns.map(neutralText);
+    if (R.cont && typeof R.cont.llSrc === 'string') R.cont.llSrc = neutralText(R.cont.llSrc);
+    return R;
+  }
+  window.PSBDemands = { noteText, assumed, assumedOf, slice, fac, SCHEMA, SRC, COLS, isFile, spans, entry, srcOf, choices, pickOf, external, tableFile, setSrc, tableRows, setTable, anyExt, checks, describe, convert, migrate, NOTE_CONVERTED, NOTE_KEPT, neutral, neutralText };
 })();

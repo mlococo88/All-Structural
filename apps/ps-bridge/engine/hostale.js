@@ -9,12 +9,12 @@
                                                                   2026-11-24: every girder line), projectMeta
                     loaded: { <id>: { sig, at, cell?, via? } } } id: lldf, dlLoads, projectMeta
      sig  = sig(payload): a short hash of the payload's JSON with its stamp fields left out (producedAt, updatedAt, device), so a re-send of
-            the same values has the same sig; capacity with MIDAS / MCT demands: the hash of the girder's engine inputs (rebuilding that
-            payload runs the engine once per span, so it is not rebuilt on every redraw);
+            the same values has the same sig;
      at   = the payload's producedAt (the existing envelope field, HANDOFF.md §3), as sent / as loaded;
      cell = { id, g, label }: the girder type (its id) and line the girder hand-offs were sent for / loaded into.
-   The MCT demands need no new field: P.demands[<type id>].midas (engine/demands.js setFile) already holds the hand-off loaded
-   ('MCT hand-off <id>', its file = the payload as read, with its producedAt, member and project) and the time it was loaded (at).
+   NOMCT (2026-11-25, engineer's request "no MCT input or output"): the capacity send, the MCT demands received and the MCT geometry changes
+   are removed (their channels, the capacity sig, mctState, geoState). A record P.handoffs.sent.capacity saved before is kept in the
+   project as it is, and no longer shown.
    A project without the record (every project saved before) is "unknown" on that channel: no banner (the card says nothing was sent /
    loaded from this project yet, or before the record was kept). */
 (function () {
@@ -28,9 +28,8 @@
 
   /* the channels: id -> { ch (the bridgeSuite.v1 channel), dir, label, to / from (the banner text), cell (per girder type and line) } */
   const CH = {
-    psSection: { ch: 'psSection', dir: 'out', label: 'Girder section', to: 'MCT / LL & DL', cell: true },
+    psSection: { ch: 'psSection', dir: 'out', label: 'Girder section', to: 'LL & DL', cell: true },
     lldfGeom: { ch: 'lldfGeom', dir: 'out', label: 'Girder geometry', to: 'LL & DL', cell: true },
-    capacity: { ch: 'capacity', dir: 'out', label: 'Capacity', to: 'the MCT rating', cell: true },
     superReactions: { ch: 'superReactions', dir: 'out', label: 'Reactions of the girder line', to: 'Substructure Loading', cell: true },
     superReactionsAll: { ch: 'superReactions', dir: 'out', label: 'Reactions of every girder line', to: 'Substructure Loading' },
     superGeometry: { ch: 'superGeometry', dir: 'out', label: 'Bridge geometry', to: 'Substructure Loading' },
@@ -38,11 +37,9 @@
     projectMeta: { ch: 'projectMeta', dir: 'out', label: 'Project info', to: 'the other tools' },
     lldf: { ch: 'lldf', dir: 'in', label: 'Distribution factors', from: 'the LLDF tool' },
     dlLoads: { ch: 'dlLoads', dir: 'in', label: 'Dead loads DC2 / DW', from: 'the LLDF tool' },
-    projectMetaIn: { ch: 'projectMeta', dir: 'in', label: 'Shared project info', from: 'another tool', rec: 'projectMeta' },
-    mct: { ch: 'handoffs', dir: 'in', label: 'MCT demands', from: 'the MCT Generator' },
-    geometryChanges: { ch: 'geometryChanges', dir: 'in', label: 'MCT geometry changes', from: 'the MCT Generator' }
+    projectMetaIn: { ch: 'projectMeta', dir: 'in', label: 'Shared project info', from: 'another tool', rec: 'projectMeta' }
   };
-  const OUT_IDS = ['psSection', 'lldfGeom', 'capacity', 'superReactions', 'superReactionsAll', 'superGeometry', 'bearingLoads', 'projectMeta'];
+  const OUT_IDS = ['psSection', 'lldfGeom', 'superReactions', 'superReactionsAll', 'superGeometry', 'bearingLoads', 'projectMeta'];
   const IN_IDS = ['lldf', 'dlLoads', 'projectMetaIn'];
 
   const { sentOf, loadedOf, setSent, setLoaded, carrySent, outState, inState } = W.SharedHandoffStale;
@@ -69,13 +66,10 @@
       if (!inp || !R || R.error) return null;
       if (id === 'psSection') return sig(H.psSection(inp, R, ''));
       if (id === 'lldfGeom') { const b = H.lldfGeom(inp, R, ''); return b.error ? null : sig(b.payload); }
-      if (id === 'capacity') { if (extOn(inp)) return 'inp:' + hash(canon(inp)); const b = H.capacity(inp, R, ''); return b.error ? null : sig(b.payload); }
       if (id === 'superReactions') { const b = H.srPayload(inp, R); return !b || b.error || !b.payload ? null : sig(b.payload); }
     } catch (e) { return null; }
     return null;
   }
-  /* capSig(inp, R, payload): the sig recorded for a capacity send (the same basis as cellSig) */
-  const capSig = (inp, payload) => extOn(inp) ? 'inp:' + hash(canon(inp)) : sig(payload);
   /* allSig(H, id, P, cells): the bridge-wide sends (every girder line); cells = PSBBridge.results(...).cells */
   function allSig(H, id, P, cells) {
     try {
@@ -112,35 +106,6 @@
     return { at: p.producedAt || '', sig: H.pmPlan(P, p).lines.length ? 'differs' : 'same' };
   }
 
-  /* mctState(P, types, get, K): per girder type whose demands came from an MCT hand-off (P.demands[id].midas.name 'MCT hand-off <id>'):
-     stale when the MCT Generator has published since for the same member (and project): the same hand-off id with another producedAt,
-     or a newer hand-off (latestId) whose member key and project are the loaded one's. K = PSBHandoffs.MCT_K; get(key) the stored text.
-     -> [{ id (type id), label, hid (the hand-off loaded), latest, member, state }] */
-  const MCT_RE = /^MCT hand-off (.+)$/;
-  function mctState(P, types, get, K) {
-    const out = [], D = P && isObj(P.demands) ? P.demands : null; if (!D) return out;
-    let map = null, latest = null;
-    (types || []).forEach(T => {
-      const e = D[T.id], m = e && e.src === 'midas' && isObj(e.midas) ? MCT_RE.exec(String(e.midas.name || '')) : null; if (!m) return;
-      if (map === null) { latest = get(K.latest) || ''; try { map = JSON.parse(get(K.map) || '{}') || {}; } catch (er) { map = {}; } }
-      const f = isObj(e.midas.file) ? e.midas.file : {}, hid = m[1], mem = p => (p && p.member && p.member.key) || '', prj = p => (p && typeof p.project === 'string' ? p.project : '');
-      const cur = isObj(map[latest]) ? map[latest] : null;
-      let state = 'current';
-      if (!cur) state = 'none';
-      else if (latest === hid) state = (cur.producedAt || '') !== (f.producedAt || '') ? 'stale' : 'current';
-      else if (mem(cur) === mem(f) && (!prj(cur) || !prj(f) || prj(cur) === prj(f))) state = 'stale';
-      out.push({ id: T.id, label: T.label, hid, latest, member: mem(f), state, at: e.midas.at || '' });
-    });
-    return out;
-  }
-  /* geoState(mct, g): the MCT geometry-change record (PSBHandoffs.geomPending: not yet dismissed here) newer than the MCT demands loaded
-     into a girder type: 'stale' with the types; else null */
-  function geoState(mct, g) {
-    if (!g || !g.producedAt || !mct || !mct.length) return null;
-    const ts = mct.filter(q => q.at && q.at < g.producedAt);
-    return ts.length ? { state: 'stale', types: ts.map(q => q.label), n: (g.changes || []).length } : null;
-  }
-
   W.PSBHoStale = { CH, OUT_IDS, IN_IDS, canon, hash, sig, sentOf, loadedOf, setSent, setLoaded, carrySent, noStep, designText, outState, inState,
-    extOn, cellSig, capSig, allSig, pmSig, lldfBeam, lldfCur, dlCur, pmCur, mctState, geoState };
+    extOn, cellSig, allSig, pmSig, lldfBeam, lldfCur, dlCur, pmCur };
 })();

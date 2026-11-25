@@ -10,13 +10,14 @@
 
      srPayload(inp, R)        superReactions (HANDOFF.md §4.4, bridge-super-reactions): the moved engine's own bxSuperRxPayload (engine/
                               pbd-external.js, verbatim) → { payload } | { error }. The page stamps it with the old app's producer
-                              'PS-Beam' and the copy key superReactions.by.psbeam, as the old app's BXSuperRx.send.
-     psSection(inp, R, now)   psSection (AUDIT.md §1.3, bridge-ps-section; read by the MCT generator and LL & DL): port of the old app's
+                              'PS-Beam' and the copy key superReactions.by.psbeam, as the old app's BXSuperRx.send. NOMCT (2026-11-25):
+                              the engine's MIDAS wording in its human-readable note, girderLine.source and error reworded (engine/demands.js
+                              neutralText); no key, field or value changed.
+     psSection(inp, R, now)   psSection (AUDIT.md §1.3, bridge-ps-section; read by LL & DL, and by other tools): port of the old app's
                               standing publisher (anchor `const cp=R.cp, g=R.g;`), the same core fields, order and rounding. null when
                               the design has an error (the old app published nothing then).
-     capacity(inp, R, now, ce) capacity (AUDIT.md §1.3, bridge-design-capacity; read by the MCT rating): port of the old app's
-                              publishCapacity (anchor `const publishCapacity=(silent)=>{`) → { payload, warns, spans } | { error }.
-                              ce: the engine's computeAll (used only for an imported MIDAS member, as the old app).
+     (capacity, the bridge-design-capacity send, and the MCT demands / geometry-change receivers: removed 2026-11-25, NOMCT, engineer's
+                              request "no MCT input or output"; this app no longer reads or writes those keys.)
      lldfGeom(inp, R, now)    lldfGeom (HANDOFF.md §4.2, bridge-lldf-geometry; read by LL & DL): port of the old app's sendLLDF (anchor
                               `const sendLLDF=(silent)=>{`) → { payload } | { error }.
      lldfResolve(inp, raw, db) the lldf channel (HANDOFF.md §4.3) as the old app reads it: port of lldfResolveFor (anchor
@@ -44,6 +45,7 @@
   function srPayload(inp, R) {
     if (typeof W.bxSuperRxPayload !== 'function') return { error: 'the engine is not loaded' };
     const b = W.bxSuperRxPayload(inp, R);
+    neutralRx(b);   // NOMCT: the engine's MIDAS wording (text only)
     // SRP (2026-11-23): the pedestrian and utility reactions of the line as separate OPTIONAL items (srParts below); a girder with none
     // (every project saved before PL-A / UT-N): the old app's payload, byte for byte
     const q = b && b.payload ? srParts(inp, R) : null;
@@ -54,6 +56,16 @@
     return b;
   }
 
+  /* neutralRx(b): the human-readable strings of the engine's superReactions result reworded (engine/demands.js neutralText): b.error,
+     payload.girderLine.source and payload.notes; nothing else is touched (NOMCT, 2026-11-25) */
+  function neutralRx(b) {
+    const N = W.PSBDemands && W.PSBDemands.neutralText; if (!N || !b) return b;
+    if (typeof b.error === 'string') b.error = N(b.error);
+    const p = b.payload; if (!p) return b;
+    if (p.girderLine && typeof p.girderLine.source === 'string') p.girderLine.source = N(p.girderLine.source);
+    if (Array.isArray(p.notes)) p.notes = p.notes.map(N);
+    return b;
+  }
   /* ---- SRP (2026-11-23, engineer-approved): the pedestrian reaction and the utility reactions sent as SEPARATE OPTIONAL items of
      superReactions (HANDOFF.md §4.4 "Separate items"), so that the receiver can factor each by its own load type ----
      WHAT THE EXISTING FIELDS HOLD (unchanged, CLAUDE.md §5): DC1 = everything on the non-composite girder, which since UT-N includes the
@@ -143,51 +155,6 @@
       note: 'Composite section transformed to girder concrete; Ecg pairs with Ic. Strong-axis (Ix)=Ic. J & weak-axis I not computed (line-girder model).' }, core);
   }
 
-  /* ---- capacity: the old app's publishCapacity, the payload part (no storage, no message) ---- */
-  function capacity(inp, R, now, ce) {
-    try {
-      if (R.error) return { error: 'Fix the inputs first — the compute engine reported: ' + R.error };
-      const computeAll = ce || W.computeAll, externalSpans = W.externalSpans;
-      const ext = inp.external;
-      const extOk = !!(ext && Array.isArray(ext.stations) && ext.stations.length);
-      const spansAll = extOk ? externalSpans(ext) : [{ idx: 1, x0: 0, x1: +inp.L, len: +inp.L }];
-      const stationsOut = [], warns = [];
-      spansAll.forEach(sp => {
-        const R2 = extOk ? computeAll(Object.assign({}, inp, { external: Object.assign({}, ext, { _selSpan: sp }), L: sp.len })) : R;
-        if (R2.error) { warns.push('Span ' + sp.idx + ' could not be evaluated: ' + R2.error); return; }
-        const phiMnNeg = (R2.cont && R2.cont.phiMnN) ? -R2.cont.phiMnN / 12 : 0;
-        if (!phiMnNeg && spansAll.length > 1) warns.push('Span ' + sp.idx + ': continuity is off — −φMn published as 0. Turn on continuity (Inputs) for the pier capacity.');
-        const vAt = (x) => { const d = R2.shearDiag || []; if (!d.length) return 0;
-          if (x <= d[0].x) return d[0].phiVn; if (x >= d[d.length - 1].x) return d[d.length - 1].phiVn;
-          for (let i = 0; i < d.length - 1; i++) { if (x >= d[i].x && x <= d[i + 1].x) { const t = (x - d[i].x) / Math.max(d[i + 1].x - d[i].x, 1e-9);
-            return d[i].phiVn + (d[i + 1].phiVn - d[i].phiVn) * t; } } return d[d.length - 1].phiVn; };
-        (R2.flexFull || []).forEach(fr => {
-          stationsOut.push({ x: +(sp.x0 + fr.x).toFixed(3), span: sp.idx,
-            phiMn_pos: +(fr.phiMn / 12).toFixed(1), phiMn_neg: +phiMnNeg.toFixed(1),
-            phiVn: +vAt(fr.x).toFixed(1),
-            Sx_pos: 0, Sx_neg: 0,
-            phi: +fr.phi.toFixed(3), basis: 'approx-fps' });
-        });
-      });
-      if (!stationsOut.length) return { error: 'No capacity stations could be computed.' };
-      const supports = extOk && ext.member ? ext.member.supports : [0, +inp.L];
-      const payload = { _schema: 'bridge-design-capacity', schemaVersion: 1,
-        producer: 'PS-Beam', producedAt: now,
-        project: inp.proj.name || '', memberKey: inp.proj.girderId || '',
-        units: { force: 'kip', length: 'ft', moment: 'ft-kip' },
-        phiIncluded: true, phiFlex: 'per-station: 0.75–1.0 from the net tensile strain εt (Art. 5.5.4.2), with c from the approximate fps method (Art. 5.6.3.1.1)', phiShear: 0.9,
-        member: { supports, spans: spansAll.map(s => s.len), totalLength: supports[supports.length - 1] },
-        designSpanIdx: (R.useExt && R.ext && R.ext.sel) ? R.ext.sel.idx : 1,
-        basis: CAP_BASIS,
-        psService: { Sb_comp: (R.cp && R.cp.Sbc) ? +R.cp.Sbc.toFixed(0) : null, fpe: R.fpe ? +R.fpe.toFixed(1) : null, fc: +inp.mat.fc,
-          note: 'For a future PS Service III stress rating in MCT — not used by the strength rating.' },
-        stationCount: stationsOut.length, stations: stationsOut, warnings: warns };
-      return { payload, warns, spans: spansAll.length };
-    } catch (e) { return { error: 'Capacity publish failed: ' + (e && e.message || e) }; }
-  }
-  // the old app's basis text, verbatim (publishCapacity, the payload's basis field)
-  const CAP_BASIS = 'AASHTO LRFD 10th Ed. — φMn per 5.6.3.2 with fps by the approximate Eq. 5.6.3.1.1-1 (c by Eq. 5.6.3.1.1-3 flanged / 5.6.3.1.1-4 rectangular; not a strain-compatibility analysis), strand force limited by development along the transfer/development length (5.9.4.3.2); φ per 5.5.4.2 from the net tensile strain; φVn per 5.7.3 MCFT general procedure with trial stirrups; −φMn = deck-reinforced continuity section at the pier (constant).';
-
   /* ---- lldfGeom: the old app's sendLLDF, the payload part (no storage, no navigation) ---- */
   function lldfGeom(inp, R, now) {
     try {
@@ -257,7 +224,7 @@
 
   /* ---- dlLoads (receive): the old app's dlResolveFor / dlTheirsFor ---- */
   function dlResolve(raw) {
-    if (!raw) return { why: 'No dead-load distribution found.\n\nOpen the LL & DL Distribution app, run the dead-load distribution, and click "Send DL to MCT Loads" — then pull here.' };
+    if (!raw) return { why: 'No dead-load distribution found.\n\nOpen the LL & DL Distribution app, run the dead-load distribution and send its dead loads (DC2 / DW) — then pull here.' };
     let d; try { d = JSON.parse(raw); } catch (e) { return { why: 'Could not read dead-load data: ' + (e && e.message || e) }; }
     if ((d.schemaVersion || 1) > 1) return { why: 'LL & DL dead-load data is v' + d.schemaVersion + '; this app supports v1. Update PS-Beam.' };
     const by = {}; (d.cases || []).forEach(function (c) { by[c.key] = +c.udl || 0; });
@@ -296,57 +263,6 @@
     Object.keys(PM).forEach(k => { if (!PM[k]) return; const v = str(f[k]); if (!v.trim()) return; const c = str(pr[PM[k]]); if (v === c) return;
       upd[PM[k]] = v; lines.push('  ' + PM_LABELS[k] + ': "' + (c || '(blank)') + '" → "' + v + '"'); });
     return { upd, lines };
-  }
-
-  /* ---- MCT demands (batch D3, 2026-11-15): the old app's receiver of the MCT Generator's hand-off (its checkHandoff / adoptHandoff,
-     "Prestressed Bridge Design.html" O:9211-9290, and BridgeHandoff, O:592-660), read here from the stored texts the page passes in.
-     Keys (the old app's, unchanged; HANDOFF.md, AUDIT.md §1.3): bridgeSuite.v1.handoffs (map id → payload, schema psbeam-external-demands),
-     bridgeSuite.v1.latestId, bridgeSuite.v1.updatedAt; this app's adoption marker bridgeSuite.v1.adopted.psbridge (the old app's own,
-     .adopted.psbeam, is not read or written: the old app keeps its own banner). Load is by click only: the old app's lock (auto-adopt,
-     BridgeLocks 'demands') is not here (engineer decision HO-D2 pending). ---- */
-  const MCT_VERSION = 1;   // the old app's HANDOFF_SUPPORTED_VERSION
-  const MCT_K = { map: 'bridgeSuite.v1.handoffs', latest: 'bridgeSuite.v1.latestId', updated: 'bridgeSuite.v1.updatedAt', adopted: 'bridgeSuite.v1.adopted.' + RX,
-    geom: 'bridgeSuite.v1.geometryChanges', geomAt: 'bridgeSuite.v1.geometryChanges.updatedAt', geomAdopted: 'bridgeSuite.v1.geometryChanges.adopted.' + RX };
-  const verOf = p => (p && p.schemaVersion != null) ? p.schemaVersion : ((p && p._version != null) ? p._version : 1);   // BridgeHandoff verOf
-  const tokenOf = p => p ? ((p.handoffId || '') + '@' + (p.producedAt || '')) : '';                                    // BridgeHandoff tokenOf
-  /* mctPending(get): the hand-off waiting for this app, or null (none, unreadable, or already adopted / dismissed here): the old app's
-     checkHandoff with BridgeHandoff.readOne(latestId()). get(key) returns the stored text. → { id, version, token, payload, supported } */
-  function mctPending(get) {
-    const id = get(MCT_K.latest); if (!id) return null;
-    let map; try { map = JSON.parse(get(MCT_K.map) || '{}') || {}; } catch (e) { return null; }
-    const p = map[id]; if (!p || typeof p !== 'object') return null;
-    const r = { id, version: verOf(p), token: tokenOf(p), payload: p };
-    if (get(MCT_K.adopted) === r.token) return null;
-    r.supported = r.version <= MCT_VERSION;
-    return r;
-  }
-  /* mctDescribe(p): the banner's text parts (the old app's: producer, project, member key, stations, LL type) */
-  function mctDescribe(p) {
-    return { producer: (p && p.producer) || 'MCT Generator', project: (p && p.project) || '', member: (p && p.member && p.member.key) || '',
-      n: (p && Array.isArray(p.stations)) ? p.stations.length : 0, ll: (p && p.liveLoadType) || 'HL-93' };
-  }
-  /* mctPlan(P, T, payload): what Load changes for girder type T (the old app's adoptHandoff for one design): the demands of T = the payload
-     (engine/demands.js setFile; a payload the file reader refuses is refused here too), the span of the member used = T's span when the
-     member has it (the old app took span 1 of a new member; here each type keeps its own span), and the bridge questions the page asks:
-     spans (the member's lengths when the count is the bridge's and they differ: the old app set L to the span) and continuity (a continuous
-     member on a bridge of simple spans: the old app turned its continuity on). → { ok, error | file, spans, setSpans, makeCont, lines } */
-  function mctPlan(P, T, payload) {
-    const DM = W.PSBDemands; if (!DM) return { ok: false, error: 'the demand module is not loaded' };
-    const r = DM.parse(JSON.stringify(payload), 'the MCT hand-off'); if (!r.ok) return { ok: false, error: r.error };
-    const own = ((P.spans && P.spans.lengths) || []).map(Number), fl = r.spans.map(q => +q.len), m = payload.member || {};
-    const continuous = (Array.isArray(m.spans) && m.spans.length > 1) || (Array.isArray(m.supports) && m.supports.length > 2) || r.spans.length > 1;   // the old app's rule
-    const setSpans = fl.length === own.length && fl.some((v, j) => Math.abs(v - own[j]) > 0.005) ? fl : null;
-    const makeCont = continuous && own.length >= 2 && P.spans.continuity !== 'composite';
-    const lines = [`${T.label}: demands from the MCT hand-off (${r.file.stations.length} stations, ${fl.length} span${fl.length > 1 ? 's' : ''} ${fl.map(v => v.toFixed(2)).join(', ')} ft)${T.span <= fl.length ? `, span ${T.span} of the member` : ''}.`].concat(r.notes);
-    return { ok: true, file: r.file, spans: r.spans, setSpans, makeCont, continuous, lines };
-  }
-  /* geomPending(get): the MCT geometry-change record waiting for this app, or null (the old app's checkGeometryChanges, O:9291-9318:
-     BridgeGeometryChanges.readGeometryChanges against .adopted.<app>) → { producedAt, producer, changes: [{ field, detail, oldVal, newVal }] } */
-  function geomPending(get) {
-    let g; try { g = JSON.parse(get(MCT_K.geom) || 'null'); } catch (e) { return null; }
-    if (!g || typeof g !== 'object' || !Array.isArray(g.changes)) return null;
-    if (get(MCT_K.geomAdopted) === g.producedAt) return null;
-    return g;
   }
 
   /* ---- batch F (2026-11-15): Bridge Substructure Loading, every girder line and the bridge geometry, in the Steel Bridge app's
@@ -400,7 +316,7 @@
       `Whole bridge: every girder line (G1 to G${nb}) of every span from this app (PS Bridge, apps/ps-bridge): each span of a line is the girder type on that line, its own engine run; its two end reactions are the ones the Analysis tab shows for that type and line ("Reactions (unfactored, kip)"; the old app's bxSuperRxPayload). Each girder is labelled by its line number, left to right.`,
       'Unfactored, kip, + up. DC1 = girder self-weight + deck / haunch and other non-composite DC + diaphragm point loads, on the simple non-composite span (R = wL/2 for each uniform load, the diaphragms by statics). DC2 = barrier / SIDL. DW = wearing surface.',
       cont ? `Continuity for composite loads on (spans ${spans.map(f2).join(', ')} ft): DC2 and DW are each span's end shears on the continuous unit, as reactions (+ up); DC1 is on the simple span.` : `Simple spans (${spans.map(f2).join(', ')} ft): R = wL/2 for each uniform load at each end of each span.`,
-      ...Object.keys(basis).filter(k => /MIDAS/.test(k)).map(k => `${basis[k].join(', ')}: DC2 and DW are the imported MIDAS shears at the two ends of the span used (the girder type's demands file), sign-corrected to reactions (+ up).`),
+      ...Object.keys(basis).filter(k => /\+ entered DC2\/DW/.test(k)).map(k => `${basis[k].join(', ')}: DC2 and DW are the entered shears at the two ends of the span used (the girder type's custom demand table, or its imported demands kept from an earlier version), sign-corrected to reactions (+ up).`),   // NOMCT: the source as reworded by srPayload
       ...(piers.length ? [`At a pier the reaction is the sum of the end reactions of the two spans on it (one support point per pier, as the Steel Bridge app sends).${cont ? '' : ' Simple spans: split it between the back and ahead bearing rows by hand where needed, with the shares below.'}`].concat(piers.map(shareTxt)) : []),
       'Live load is not sent (liveLoad null): Substructure Loading computes its own.'];
     const anySep = Object.keys(sepHas).length > 0;
@@ -513,7 +429,7 @@
     return o;
   }
 
-  W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, srParts, sepInfo, SEPK, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
-    PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending,
+  W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, srParts, sepInfo, SEPK, psSection, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
+    PM, PM_LABELS, pmFields, pmPlan,
     GEO_ID, srAll, secDims, sgPayload, DB_K, dbState };   // batch F (2026-11-15)
 })();

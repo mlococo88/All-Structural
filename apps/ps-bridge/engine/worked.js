@@ -113,7 +113,7 @@
 
   /* weakSteps(add, G) (batch G1, 2026-11-15): the bare girder's weak-axis (lateral) I_y, S_y and St-Venant torsion J as the old app's
      Section tab worked them (O:6593-6621), here with the engine's own expressions: the values are weakAxisAndJ(G) of engine/pbd-section.js
-     (the psSection hand-off's Iweak / J, sent to the MCT generator as I_zz / I_xx since the old app); rectTorsionJ the rectangle's J with
+     (the psSection hand-off's Iweak / J, sent with the section properties to LL & DL); rectTorsionJ the rectangle's J with
      the 0.21 thickness term. Display only: nothing new is calculated (CLAUDE.md §4: no value of the app changes). */
   function weakAxis(G) { return typeof weakAxisAndJ === 'function' ? weakAxisAndJ(G) : null; }
   function weakSteps(add, G) {
@@ -123,13 +123,13 @@
     const rjSub = (a, b) => { const A = Math.max(a, b), B = Math.min(a, b); return `${n(A, 2)}(${n(B, 2)})^{3}\\left[\\frac{1}{3} - 0.21\\,\\frac{${n(B, 2)}}{${n(A, 2)}}\\left(1 - \\frac{(${n(B, 2)})^{4}}{12(${n(A, 2)})^{4}}\\right)\\right]`; };
     const bare = 'The bare girder about its vertical centroidal axis: the deck spans between the girders and is not a full-width flange for one girder\'s lateral bending.';
     const rjNote = 'J of a rectangle a × b (a the longer side, b the shorter): a b³ [1/3 − 0.21 (b/a)(1 − b⁴/(12 a⁴))].';
-    const JN = 'Not used by any check of this app: it is the J the section hand-off sends to the MCT generator (I_xx). For comparison, AASHTO LRFD 10th Ed. C4.6.2.2.1 gives Σ b t³ / 3 for thin-walled open beams (Eq. C4.6.2.2.1-1) and A⁴ / (40 I_p) for stocky open sections (Eq. C4.6.2.2.1-2).';
+    const JN = 'Not used by any check of this app; it is sent with the section properties (psSection) to LL & DL. For comparison, AASHTO LRFD 10th Ed. C4.6.2.2.1 gives Σ b t³ / 3 for thin-walled open beams (Eq. C4.6.2.2.1-1) and A⁴ / (40 I_p) for stocky open sections (Eq. C4.6.2.2.1-2).';
     if (G.isBox || G.isDeck) {
       const w = +G.w || +G.btf || +G.bw, h = +G.h;
       add({ id: 'wk.Iy', label: 'Weak-axis moment of inertia (the solid w × h rectangle)', sym: 'I_{y}', eq: '\\frac{h\\,w^{3}}{12}', sub: `\\frac{${n(h, 2)}(${n(w, 2)})^{3}}{12}`, value: wj.Iweak, unit: 'in^{4}', d: 0,
         note: bare + ' The engine takes the outer rectangle (no void deducted), as the old app.' }, h * Math.pow(w, 3) / 12);
       add({ id: 'wk.J', label: 'St-Venant torsion constant (the solid w × h rectangle)', sym: 'J', eq: rjEq('a', 'b'), sub: rjSub(w, h), value: wj.J, unit: 'in^{4}', d: 0,
-        note: rjNote + ' The engine takes the outer rectangle (no void deducted), as the old app. Not used by any check of this app: it is the J the section hand-off sends to the MCT generator (I_xx); the distribution factors of types (f) / (g) use their own J of the outline (Loads & LLDF tab, §ld.J).' }, rJ(w, h));
+        note: rjNote + ' The engine takes the outer rectangle (no void deducted), as the old app. Not used by any check of this app; it is sent with the section properties (psSection) to LL & DL; the distribution factors of types (f) / (g) use their own J of the outline (Loads & LLDF tab, §ld.J).' }, rJ(w, h));
     } else if (G.isNext) {
       const B = (G.next && +G.next.B) || 10, cc = (G.next && +G.next.stemCC) || 60, w = +G.btf || +G.w, h = +G.h, hs = Math.max(1, h - 8);
       add({ id: 'wk.hs', label: 'Weak axis: stem depth (the flange taken 8 in)', sym: 'h_{s}', eq: 'h - 8', sub: `${n(h, 2)} - 8`, value: hs, unit: 'in', d: 2 }, Math.max(1, h - 8));
