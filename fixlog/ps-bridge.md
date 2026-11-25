@@ -9930,7 +9930,7 @@ Before (main, src midas) and after (converted table): every engine result, worke
 - NOMCT-d. Kept entries keep the stored values' input warnings (span length, continuity) reworded, plus a warning to re-enter.
 ### Other tools with MCT / MIDAS links (not changed, one tool per PR)
 lldf.html ("Send DL to MCT Loads" and its MCT links), apps/steel-bridge ("Import MIDAS (.lga)" / "Export to MIDAS (.lga)", demand-file notes), apps/midas-model-inspector, tools.html, the old "Prestressed Bridge Design.html" (frozen), the root index.html (the MCT Generator).
-## 2026-11-25 — PR: claude/ps-next-lldf (NX-1) — NEXT F beams: live-load distribution per stem as type (k), exterior beams with the lever rule, e and the rigid section (CALCULATION CHANGE, §4; engineer-approved)
+## 2026-11-25 — PR: claude/ps-next-lldf (PR #1726: https://github.com/mlococo88/All-Structural/pull/1726) (NX-1) — NEXT F beams: live-load distribution per stem as type (k), exterior beams with the lever rule, e and the rigid section (CALCULATION CHANGE, §4; engineer-approved)
 ### Request (engineer, 2026-11-25; §4 change approved)
 The app treated each NEXT F beam as one beam (AASHTO LRFD Table 4.6.2.2.1-1 types (i)/(j) on the beam width) and gave the exterior beams the interior factor; on a real 2-NEXT-24F-per-side, 40 ft wide bridge it gave 0.809 on every line. Type (i) is for integral decks; a NEXT F carries a cast-in-place deck on its flange. Distribute per stem as type (k) at the stem spacing, add the two stems' factors per beam, give the exterior beams the lever rule, the e factors and the rigid-section check with the multiple presence handled per Art. 3.6.1.1.2, the skew corrections, the ranges of applicability, every candidate worked.
 ### Problem
