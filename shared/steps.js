@@ -255,13 +255,55 @@
   const HASREL = /\\(?:le|ge|lt|gt|ne|leq|geq|neq)(?![A-Za-z])|[<>≤≥≠]/;
   const isRel = s => !!(s && s.sym && s.eq && REL.test(String(s.eq)));
   const shows = (src, v) => new RegExp('(^|[^0-9.])' + v.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&') + '(?![0-9])').test(src);   // the value's digits in the comparison
+  /* NGREL (2026-11-24; Steel Bridge Design, engineer-approved; display only, OFF unless a page turns it on: opt.ngRel = true).
+     A failing test step (ok === false) whose substituted line sub holds exactly one top-level \le / \ge (or ≤ / ≥) between two plain numbers
+     that violate it prints the relation that holds: "33.75 \le 17.75" -> "33.75 \gt 17.75", "0.80 \ge 1.00" -> "0.80 \lt 1.00". The symbolic
+     eq (the requirement, "\le \phi_{f}F_{nc}") is never changed. The two numbers: the last "= …" part before the relation and the last after
+     it, each a number alone (thousands "{,}" or ",", optional sign, an optional unit in \text{…} or ksi / kip / in / ft / …); anything else
+     (an expression, a second relation, a relation inside braces or brackets, numbers that satisfy it as shown) leaves the sub as it is.
+     Value, ok flag, verdict and every other string unchanged; the step object is not modified (a new string for display only). */
+  const opt = { ngRel: false };
+  const NGR = /\\(?:leq|geq|neq|le|ge|lt|gt|ne)(?![A-Za-z])|[<>≤≥≠]/g;
+  const FLIPR = { '\\le': '\\gt', '\\leq': '\\gt', '≤': '>', '\\ge': '\\lt', '\\geq': '\\lt', '≥': '<' };
+  const UNITW = '(?:ksi|psi|ksf|psf|kip|kips|lb|lbs|in|ft|kip-ft|kip-in|in\\^\\{[234]\\}|ft\\^\\{[234]\\}|in\\.|ft\\.|klf|plf|kip/ft|kip/in|cycles|years?)';
+  const NUMX = new RegExp('^(-|\\\\minus\\s*|−)?(\\d{1,3}(?:(?:\\{,\\}|,)\\d{3})+|\\d+)(\\.\\d+)?(?:\\s*' + UNITW + ')?$');
+  const numOf = seg => {   // a number alone, or NaN
+    const t = String(seg).replace(/\\text\{\s*([^{}]*?)\s*\}/g, ' $1').replace(/\\[,;:! ]|~|\\quad|\\qquad/g, ' ').replace(/\s+/g, ' ').trim(), m = NUMX.exec(t);
+    return m ? (m[1] ? -1 : 1) * parseFloat(m[2].replace(/\{,\}|,/g, '') + (m[3] || '')) : NaN;
+  };
+  const topLevel = t => {   // [{ i, tok }] of the relations and '=' at depth 0 (outside { } ( ) [ ])
+    const out = []; let dp = 0;
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i];
+      if (c === '\\' && (t[i + 1] === '{' || t[i + 1] === '}')) { i++; continue; }
+      if (c === '{' || c === '(' || c === '[') { dp++; continue; }
+      if (c === '}' || c === ')' || c === ']') { dp--; continue; }
+      if (dp !== 0) continue;
+      if (c === '=') { out.push({ i, tok: '=' }); continue; }
+      NGR.lastIndex = i; const m = NGR.exec(t);
+      if (m && m.index === i) { out.push({ i, tok: m[0] }); i += m[0].length - 1; }
+    }
+    return out;
+  };
+  function ngRel(sub) {
+    const t = String(sub), T = topLevel(t), rel = T.filter(q => q.tok !== '=');
+    if (rel.length !== 1 || !FLIPR[rel[0].tok]) return t;
+    const r = rel[0], eqL = T.filter(q => q.tok === '=' && q.i < r.i).pop(), eqR = T.filter(q => q.tok === '=' && q.i > r.i).pop();
+    const a = numOf(t.slice(eqL ? eqL.i + 1 : 0, r.i)), b = numOf(t.slice(eqR ? eqR.i + 1 : r.i + r.tok.length));
+    if (!isFinite(a) || !isFinite(b)) return t;
+    const le = r.tok === '\\le' || r.tok === '\\leq' || r.tok === '≤';
+    if (le ? !(a > b) : !(a < b)) return t;   // the numbers as shown satisfy it: unchanged
+    const rep = FLIPR[r.tok], after = t.slice(r.i + r.tok.length);
+    return t.slice(0, r.i) + rep + (rep[0] === '\\' && /^[A-Za-z]/.test(after) ? ' ' : '') + after;
+  }
+  const subOf = s => (opt.ngRel && s.ok === false && s.sub ? ngRel(s.sub) : s.sub);
   function line(s, html, o) {   // o: toText's options (plain text only)
     const K = html ? kx() : null, D = t => K.renderToString('\\displaystyle ' + t, KATEX_OPT);
     const R = K ? D : html ? toHTML : t => toText(t, o), parts = [];
     let last = '';   // the source of the last part shown (CMPL)
     if (isRel(s)) { last = s.sym + ' ' + String(s.eq).trim(); parts.push(R(last)); }   // CMPL (1): 'sym eq', one comparison
     else { if (s.sym) { parts.push(R(s.sym)); last = s.sym; } if (s.eq) { parts.push(R(s.eq)); last = s.eq; } }
-    if (s.sub && s.sub !== s.eq) { parts.push(R(s.sub)); last = s.sub; }
+    if (s.sub && s.sub !== s.eq) { const sb = subOf(s); parts.push(R(sb)); last = sb; }   // NGREL: the relation that holds (opt.ngRel only)
     const v = typeof s.value === 'number' ? fmt(s.value, s.d) : s.value == null ? '' : String(s.value);
     const cmp = parts.length > 0 && HASREL.test(String(last)), num = typeof s.value === 'number';
     if (v === '' || (cmp && num && shows(String(last), v))) return parts.join(' = ');   // CMPL (2): the comparison shows the value
@@ -360,5 +402,5 @@
     window.addEventListener('afterprint', () => { opened.forEach(d => { d.open = false; }); opened = []; });
   }
 
-  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, isRel, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, reveal, groupCss, noteParts, noteSep, noteText };
+  window.SharedSteps = { opt, ngRel, step, work, n, g, fmt, toHTML, toText, line, isRel, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, reveal, groupCss, noteParts, noteSep, noteText };
 })();
