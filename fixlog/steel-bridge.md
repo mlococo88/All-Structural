@@ -12054,7 +12054,7 @@ None.
 - **Check case:** built-in project, G1: CF10 Item cell "Intermediate bracing. Recommended: K (bottom)-frame (S/h = 2.19). In use: X-frame. [[cf.type]]".
 - **How verified:** `node tests/engine/run.mjs xf-cf10-depth.test.mjs xf-cf10-notes.test.mjs`: 7 / 7 pass (3 failed on main before).
 
-## 2026-11-25 — PR: claude/sb-beff-calc (BEFF) — b_eff calculated on each girder line (AASHTO LRFD 10th Ed. Art. 4.6.2.6.1), optional override per girder type   [§4 change, approved by the engineer: "Calculated, optional override"]
+## 2026-11-25 — PR: claude/sb-beff-calc (PR #1731: https://github.com/mlococo88/All-Structural/pull/1731) (BEFF) — b_eff calculated on each girder line (AASHTO LRFD 10th Ed. Art. 4.6.2.6.1), optional override per girder type   [§4 change, approved by the engineer: "Calculated, optional override"]
 - **Request (engineer):** each girder type had one entered `girders[i].beff` used on every line of the type; `SBDModel.tribBeff(xs, j)` was used only when a project was created, by the legacy / LGA import, by Auto design on an N_b change and in a note. Now b_eff = tribBeff(xs, j) of the line being checked, unless the new per-type check box "Override b_eff" is ticked (then the entered value on every line, as before).
 - **§4 callout — before / after:**
   - Before: `b_eff(type, line j) = girders[i].beff` (the entered value, the same on every line j of the type).
