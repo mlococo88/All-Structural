@@ -258,7 +258,7 @@
     const fix = n => { if (n.id) { n.dataset.sbsId = n.id; n.id = 'sbs-' + n.id; } if (n.htmlFor) n.htmlFor = 'sbs-' + n.htmlFor; if (n.name) n.name = 'sbs-' + n.name; };
     fix(c); c.querySelectorAll('[id],label[for],[name]').forEach(fix);
     const oF = [...row.querySelectorAll('input,select,textarea')], cF = [...c.querySelectorAll('input,select,textarea')];
-    oF.forEach((o, i) => { const q = cF[i]; if (!q) return; if (o.type === 'checkbox' || o.type === 'radio') q.checked = o.checked; else q.value = o.value; MAP.set(q, o); });
+    oF.forEach((o, i) => { const q = cF[i]; if (!q) return; if (o.type === 'checkbox' || o.type === 'radio') q.checked = o.checked; else q.value = o.value; MAP.set(q, o); q.__orig = o; q.addEventListener('change', onChange); });
     const pf = (x.pre ? x.pre(m) : '') + (x.pfx || '');
     if (pf) { const lb = c.querySelector('label'); if (lb) lb.insertAdjacentText('afterbegin', pf); }
     frag.appendChild(c);
@@ -379,10 +379,13 @@
     mk = null; api.redraw();
     const g = document.getElementById('sbGear'); if (g) g.focus();
   }
-  /* the copies: a change is handed to the original input (the app's own handler makes the edit) */
+  /* the copies: a change is handed to the original input (the app's own handler makes the edit). The listener is on the copy itself, so a
+     change made just as the window redraws (the copy already replaced) still arrives; the original is found again by its id when the tabs
+     were drawn again meanwhile. */
   function onChange(e) {
-    const q = e.target, o = MAP.get(q); if (!o) return;
+    const q = e.target; let o = MAP.get(q) || q.__orig; if (!o) return;
     e.stopPropagation();
+    if (!o.isConnected && o.id) o = document.getElementById(o.id) || o;
     if (!o.isConnected) { render(); return; }
     if (o.type === 'checkbox' || o.type === 'radio') o.checked = q.checked; else o.value = q.value;
     o.dispatchEvent(new Event('change', { bubbles: true }));
@@ -415,7 +418,7 @@
     const veil = document.createElement('div'); veil.id = 'sbSetVeil'; veil.hidden = true; document.body.appendChild(veil);
     root = document.createElement('div'); root.id = 'sbSet'; root.hidden = true; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'sbSetTitle');
     document.body.appendChild(root); build();
-    root.addEventListener('change', onChange); root.addEventListener('click', onClick); root.addEventListener('keydown', onKey);
+    root.addEventListener('click', onClick); root.addEventListener('keydown', onKey);
     veil.addEventListener('click', () => close(false));
     const hb = document.getElementById('hdrBtns');
     if (hb) { const b = document.createElement('button'); b.type = 'button'; b.id = 'sbGear'; b.setAttribute('aria-label', 'Settings'); b.title = 'Settings';
