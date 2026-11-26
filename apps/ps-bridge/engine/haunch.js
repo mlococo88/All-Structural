@@ -8,7 +8,7 @@
    i.e. t_h at the bearings and t_h + Δ_deck at midspan. For a deck soffit on a straight grade the haunch is thinnest where the girder top is
    highest: with Δ_deck > 0 (camber up at deck placement) that is midspan. With t_h the minimum haunch at midspan the profile is
        t_h(x) = max(t_h + Δ_deck (1 − ψ(x)), 0.5)          (Δ_deck ≥ 0): t_h at midspan, t_h + Δ_deck at the bearings.
-   Decision (pending engineer review), Δ_deck < 0 (the girder sags at deck placement): the girder top is then lowest at midspan and the
+   Decision (for the engineer's review; fixlog/ps-bridge.md HP), Δ_deck < 0 (the girder sags at deck placement): the girder top is then lowest at midspan and the
    thinnest haunch is at the bearings. Conservative choice: the entered minimum t_h is kept at the thinnest point (the bearings), so the haunch
    is never thinner than t_h anywhere:
        t_h(x) = max(t_h − Δ_deck ψ(x), 0.5)                (Δ_deck < 0): t_h at the bearings, t_h + |Δ_deck| at midspan.

@@ -58,7 +58,7 @@ test('Δ_deck < 0 (decision pending engineer review): t_h kept at the bearings, 
   H.forEach(r => assert.ok(r.buildup >= 2 - 1e-12, 'never thinner than t_h'));
   assert.deepEqual(diff(R, R0).filter(p => !isHP(p)), []);
   const st = W.PSBWorkedEnd.camber(W.PSBDesign.inputs(P), R).steps;
-  assert.ok(/pending engineer review/.test(st.find(s => s.id === 'cb.haunch').note));
+  assert.ok(/the conservative choice/.test(st.find(s => s.id === 'cb.haunch').note));
 });
 
 test('RIDOT BDM 9.4.6: one warning when the haunch is thicker than 4 in (RIDOT only, not at 4 in or less, not for box beams)', () => {

@@ -199,12 +199,12 @@
     const hM = R.haunch[5];
     if (R.hp && window.PSBHaunch) {
       // HP (2026-11-25, §4; engine/haunch.js): t_h is the minimum haunch at midspan; the haunch grows toward the bearings by the camber at deck
-      // placement, t_h(x) = max(t_h + Δ_deck(1 − ψ), 0.5). Δ_deck < 0 (decision pending engineer review): the minimum t_h at the bearings.
+      // placement, t_h(x) = max(t_h + Δ_deck(1 − ψ), 0.5). Δ_deck < 0 (the conservative choice, fixlog HP): the minimum t_h at the bearings.
       const HP = window.PSBHaunch, h0 = R.haunch[0], neg = c.afterDeck < 0, dA = Math.abs(c.afterDeck);
       const eqOf = psi => neg ? `\\max(t_{h} + |\\Delta_{deck}|\\,\\psi,\\ 0.5),\\ \\psi = ${psi}` : `\\max(t_{h} + \\Delta_{deck}(1 - \\psi),\\ 0.5),\\ \\psi = ${psi}`;
       const subOf = (psi, k) => neg ? `\\max(${n(+inp.th, 2)} + ${n(dA, 3)}(${k}),\\ 0.5)` : `\\max(${n(+inp.th, 2)} + ${n(c.afterDeck, 3)}(1 - ${k}),\\ 0.5)`;
       const nt = 'The entered t_h is the minimum haunch, at midspan at the girder centreline (straight grade; no vertical curve or cross slope); Δ_deck: §cb.deck. Along the girder: the tenth-point table.'
-        + (neg ? ' Δ_deck < 0 (the girder sags at deck placement): the thinnest haunch is at the bearings, where t_h is kept (decision pending engineer review).' : '');
+        + (neg ? ' Δ_deck < 0 (the girder sags at deck placement): the thinnest haunch is at the bearings, where t_h is kept (the conservative choice).' : '');
       add({ id: 'haunch', label: 'Haunch at midspan', sym: 't_{h,mid}', eq: eqOf(1), sub: subOf(1, 1), value: hM.buildup, unit: 'in', d: 2, note: nt }, HP.profile(+inp.th, c.afterDeck, hM.par), 'haunch.5.buildup');
       add({ id: 'haunchBrg', label: 'Haunch at the bearings', sym: 't_{h,brg}', eq: eqOf(0), sub: subOf(0, 0), value: h0.buildup, unit: 'in', d: 2,
         note: R.hp.warn ? 'Thicker than 4 in: RIDOT BDM 9.4.6 (reinforce the haunch where it is thicker than 4 in).' : '' }, HP.profile(+inp.th, c.afterDeck, h0.par), 'haunch.0.buildup');
