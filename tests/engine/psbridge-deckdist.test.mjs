@@ -13,7 +13,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', 'deck.js', ...PBD, ...['sections', 'model', 'lldf-fg', 'deckdist', 'holddown', 'pierblock', 'design', 'fields', 'inputcheck', 'worked', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared('steps.js', 'deck.js', ...PBD, ...['sections', 'model', 'lldf-fg', 'deckdist', 'reltension', 'holddown', 'pierblock', 'design', 'fields', 'inputcheck', 'worked', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)));
 const near = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m || ''}: ${a} vs hand ${b}`);
 const design = (f) => { const P = W.PSBModel.defaultProject(); P.base.deck.on = true; if (f) f(P); assert.deepEqual([...W.PSBInputCheck.collect(P).errors.map(e => e.msg)], []); return P; };
 /* the page's result with the correction and without it (PSBDeckDist removed for the call) */

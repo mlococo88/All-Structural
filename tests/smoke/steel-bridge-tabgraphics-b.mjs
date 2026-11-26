@@ -98,8 +98,8 @@ try {
   await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('#out .rp-fig svg', { timeout: 240000 });
   // the summary figure by its caption: since PR #1645 the Report's first figure is the verdict banner of the executive summary (2 texts), and since PR #1668
   // (RPX) every tab graphic is a figure too, so "the first .rp-fig" is no longer the summary figure
-  const SUMFIG = '#out .rp-fig:has(figcaption:text("Governing check of each group along girder"))';
-  assert.equal(await p.locator(SUMFIG).count(), 1, 'the Report has one summary figure (caption "Governing check of each group along girder …")');
+  const SUMFIG = '#out .rp-fig:has(figcaption:text("Governing check of each group along Type: "))';
+  assert.equal(await p.locator(SUMFIG).count(), 1, 'the Report has one summary figure (caption "Governing check of each group along Type: … (SBRF-6)")');
   const fig = await p.$eval(SUMFIG + ' svg', s => ({ texts: s.querySelectorAll('text').length, w: s.getBoundingClientRect().width })); assert.ok(fig.texts > 10 && fig.w > 300, JSON.stringify(fig)); done.push('rpt/summary figure');
   await shot('report-summary', SUMFIG);
   // phone width: the graphics fit without a horizontal page scroll

@@ -11,7 +11,9 @@
    half span next to an interior support), shear from the critical section, Service III; the governing location of each group (its worked
    steps, rt.al.*), the RF along the girder (chart, #gfx_rtal) and a table of every location (a click on a row works that location below the
    table: steps rt.sel.*, screen only). The cards of the engine's own rating at its governing sections follow, unchanged.
-     output(ctx) -> HTML; after(el, ctx). ctx = { P, inp, R, W, ui, redraw } */
+   RG (2026-11-25, the engineer's request; display only): in the Report (ctx.ui.rtGov, report/builders.js) the table of every location is
+   replaced by the rows of its governing stations and critical sections (govRows, govCard); on the tab nothing changes.
+     output(ctx) -> HTML; after(el, ctx); govRows(R). ctx = { P, inp, R, W, ui, redraw } */
 (function () {
   'use strict';
   const K = () => window.PSBOutKit, VA = () => window.PSBVizAlong, VK = () => window.PSBVizKit;
@@ -50,11 +52,49 @@
       + `<p class="note">Negative moment: ${A.gov.flexN ? 'the stations of the half span next to an interior support with a negative live-load moment, C from the pier section of the continuity check (deck bars A<sub>s</sub> in tension; the same section and bars over the region, no cut-off point being an input); a dead load that relieves the negative moment takes the LRFD minimum load factor (DC 0.90, DW 0.65, AASHTO LRFD 10th Ed. Table 3.4.1-2).' : esc2(A.negNote || 'no negative live-load moment (simple span): not rated.')} Positive moment: each dead-load part (girder + DC1, DC2, DW) takes 1.25 / 1.50 where it adds to the positive moment and 0.90 / 0.65 where it relieves it (near an interior support of a continuous unit, DC2 and DW are negative; engineer decision E1-D5, 2026-11-21). Shear: from the critical section (the engine's first shear station past the bearing) to its mirror, with the engine's φV<sub>n</sub> and C = φ<sub>c</sub>φV<sub>n</sub>: φ<sub>s</sub> = 1.0 for shear (MBE 4th Ed. Art. 6A.4.2.4; engineer decision E1-D4, 2026-11-21, as the Steel Bridge app), the lower limit 0.85 kept on φ<sub>c</sub> × 1.0. The entered legal / permit vehicles have one moment and one shear each, with no station: they are rated where the engine rates them (card below).</p>`, 'card-rtal');
     h += k.gcard('Load rating: RF along the girder', 'gfx_rtal');
     const rows = A.rows, sel = SEL.key === selKey(ctx) && rows[SEL.i] ? SEL.i : (A.inv ? A.inv.i : 0);
+    if (inRpt && ctx.ui && ctx.ui.rtGov) return h + govCard(ctx.R, A);   // RG (2026-11-25): the Report's condensed table (report/builders.js)
     h += k.card(`Rating factors at every location (${rows.length})`, every ? `<p class="note">C: φ<sub>c</sub>φ<sub>s</sub>φM<sub>n</sub> (flexure), φ<sub>c</sub>φ<sub>s</sub>φV<sub>n</sub> (shear) or f<sub>R</sub> (Service III); DC, DW and LL+IM unfactored, in the unit of the check (negative flexure: the hogging sense, DC the sum of the noncomposite part and DC2, each with its own load factor in the work).${inRpt ? '' : ' Click a row: its work is shown below the table.'}</p>
       <div class="tscroll" style="max-height:340px;overflow:auto"><table class="tbl rt-al"><thead><tr><th class="lft">Location</th><th class="lft">Check</th><th>C</th><th>DC</th><th>DW</th><th>LL+IM</th><th>Unit</th><th>RF inv.</th><th>RF opr.</th></tr></thead><tbody>
       ${rows.map(q => `<tr data-rti="${q.i}" class="${[q.i === sel && !inRpt ? 'sel' : '', fin(q.inv) && q.inv < 1 ? 'ng' : ''].filter(Boolean).join(' ')}"${inRpt ? '' : ' style="cursor:pointer"'}><td class="lft">${k.esc(q.name)}</td><td class="lft">${KN[q.kind][0]}</td><td>${k.fx(q.C, dOf(q))}</td><td>${k.fx(q.DC, dOf(q))}</td><td>${k.fx(q.DW, dOf(q))}</td><td>${k.fx(q.LL, dOf(q))}</td><td>${q.unit}</td>${rfTd(q.inv)}${q.kind === 's3' ? '<td>—</td>' : rfTd(q.opr)}</tr>`).join('')}</tbody></table></div>${inRpt ? '' : '<div id="rt_selwork"></div>'}`
       : `<p class="note">The ${rows.length} rating factors of every location are tabulated on the Rating tab and in this report with Detail "every station"; the governing location of each group is worked in this section's worked steps.</p>`, 'card-rtall');
     return h;
+  }
+  /* RG (2026-11-25, display only; the engineer's request "governing stations only" for the Report): govRows(R) -> { rows: [{ q, why }],
+     n (ratings evaluated), ns (stations evaluated) } or null: the rows of the table of every location (PSBRatingAlong.of(R), nothing is
+     computed here) that the Report shows by default: for each group (limit state and load effect) the row with the lowest inventory RF
+     (A.gov) and, flexure and shear, the row with the lowest operating RF; and the rows at the critical sections: the bearings (x = 0 and
+     L), the shear critical sections (the engine's first and last shear station past the bearings, R.shear), the tenth points, the
+     transfer points (x = ℓ_t / 12 and L − ℓ_t / 12, as the engine's grid), the debond points of each debonded group and the end of
+     their transfer length, and midspan, each at the rated station nearest to it (every row there); a station listed once, in x order,
+     with every reason it is shown (why). Decisions pending engineer review: the operating RF counted as a second "vehicle" of the
+     HL-93 rating (the legal / permit vehicles have no station); the nearest rated station for a critical section that is not one. */
+  function govRows(R) {
+    const A = AL() ? AL().of(R) : null; if (!A || !A.rows.length) return null;
+    const rows = A.rows, L = R.L, why = new Map(), k = K();
+    const add = (q, t) => { if (!q) return; const w = why.get(q.i) || []; if (!w.includes(t)) w.push(t); why.set(q.i, w); };
+    AL().GROUPS.forEach(([kd]) => { const list = rows.filter(r => r.kind === kd); if (!list.length) return;
+      add(A.gov[kd], kd === 's3' ? 'lowest RF' : 'lowest inventory RF');
+      if (kd !== 's3') add(list.filter(r => fin(r.opr)).reduce((b, r) => (!b || r.opr < b.opr ? r : b), null), 'lowest operating RF'); });
+    const crit = [], at = (x, t) => { if (fin(x) && x > -1e-9 && x < L + 1e-9) crit.push([x, t]); };
+    at(0, 'bearing'); at(L, 'bearing');
+    const shN = (R.shear || []).filter(q => !q.isBearing);
+    if (shN.length) { const a = Math.min(...shN.map(q => q.x)), b = Math.max(...shN.map(q => q.x)); at(a, 'shear critical section'); if (b - a > 1e-6) at(b, 'shear critical section'); }
+    for (let j = 1; j <= 9; j++) at(j * L / 10, j === 5 ? 'midspan' : `tenth point ${j / 10}L`);
+    const lt = R.ss && R.ss.lt > 0 ? R.ss.lt / 12 : 0;
+    if (lt) { at(lt, 'transfer point'); at(L - lt, 'transfer point'); }
+    [...new Set(((R.ss && R.ss.groups) || []).filter(g => g.dbnd > 0).map(g => g.dbnd))].forEach(d => { at(d, 'debond point'); at(L - d, 'debond point');
+      if (lt) { at(d + lt, 'debond transfer point'); at(L - d - lt, 'debond transfer point'); } });
+    const xs = [...new Set(rows.map(r => r.x))];
+    crit.forEach(([x, t]) => { const xn = xs.reduce((b, v) => (Math.abs(v - x) < Math.abs(b - x) ? v : b), xs[0]);
+      const lab = Math.abs(xn - x) < 1e-3 ? t : `${t} (x = ${k.fx(x, 2)} ft; nearest rated station)`;
+      rows.filter(r => r.x === xn).forEach(r => add(r, lab)); });
+    return { rows: rows.filter(r => why.has(r.i)).map(q => ({ q, why: why.get(q.i) })), n: rows.length, ns: xs.length };
+  }
+  function govCard(R, A) {
+    const k = K(), G = govRows(R); if (!G) return '';
+    return k.card(`Rating factors at the governing stations (${G.rows.length} of ${G.n})`, `<p class="note">${G.n} ratings were evaluated at ${G.ns} stations (every station of the engine's analysis grid, the table of every location on the Rating tab). Shown here: for each group the station with the lowest inventory RF and, flexure and shear, the lowest operating RF (HL-93), and the ratings at the critical sections: the bearings, the shear critical sections, the tenth points, the transfer and debond points and midspan, each at the nearest rated station; a station is listed once, with every reason it is shown. The governing RF of each group is the lowest of every station (card above), so this table holds it.</p>
+      <div class="tscroll"><table class="tbl rt-al rt-gov"><thead><tr><th class="lft">Location</th><th class="lft">Check</th><th>C</th><th>DC</th><th>DW</th><th>LL+IM</th><th>Unit</th><th>RF inv.</th><th>RF opr.</th><th class="lft">Shown for</th></tr></thead><tbody>
+      ${G.rows.map(({ q, why }) => `<tr${fin(q.inv) && q.inv < 1 ? ' class="ng"' : ''}><td class="lft">${k.esc(q.name)}</td><td class="lft">${KN[q.kind][0]}</td><td>${k.fx(q.C, dOf(q))}</td><td>${k.fx(q.DC, dOf(q))}</td><td>${k.fx(q.DW, dOf(q))}</td><td>${k.fx(q.LL, dOf(q))}</td><td>${q.unit}</td>${rfTd(q.inv)}${q.kind === 's3' ? '<td>—</td>' : rfTd(q.opr)}<td class="lft">${k.esc(why.join('; '))}</td></tr>`).join('')}</tbody></table></div>`, 'card-rtgov');
   }
   const esc2 = s => K().esc(s);
   const selKey = ctx => (ctx.ui && ctx.ui.otab ? 'tab' : 'x') + '|' + (ctx.R && ctx.R.L) + '|' + ((AL() && AL().of(ctx.R) || { rows: [] }).rows.length);
@@ -165,5 +205,5 @@
       draw: W => ({ html: xFig(R, W), nar: W < 560 }), hint: 'Point at (or tap) a section line for its rating.',
       cap: '<p class="vk-cap">Where each HL-93 rating is taken: the flexure station with the lowest inventory RF, the governing shear section, the governing Service III bottom-tension section. Display only.</p>' });
   }
-  window.PSBUiRating = { output, after, TOPICS };
+  window.PSBUiRating = { output, after, TOPICS, govRows };
 })();
