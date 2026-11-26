@@ -10,7 +10,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)),
+const W = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)),
   ...['vizkit', 'dash', 'summary', 'sumelev'].map(n => path.join(APP, `ui/${n}.js`)));
 const M = W.PSBModel, B = W.PSBBridge, J = v => JSON.parse(JSON.stringify(v));
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) <= 1e-12 * Math.max(1, Math.abs(b)), `${msg}: ${a} vs ${b}`);

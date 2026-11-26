@@ -12,29 +12,30 @@ import path from 'path';
 import assert from 'assert/strict';
 import { openPage, REPO } from '../lib.mjs';
 
-const SHOT = process.env.SHOT;
+const SHOT = process.env.SHOT, NEXT = !!process.env.NEXT;   // NEXT=1 (EZN): a NEXT 36F, bottom tension at midspan in the two stems
 const FILE = path.join(REPO, 'apps/ps-bridge/index.html');
 let n = 0; const ok = m => { n++; console.log('  ok  ', m); };
 const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 1000, dsf: 1 });
 const tab = async t => { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(800); };
 try {
   await p.waitForSelector('#tabBar [data-otab]');
-  await p.evaluate(() => { localStorage.clear(); const P = PSBModel.newProject(); P.base.girder = 'MassDOT NEDBT 48'; P.base.harp.n = 12; P.base.harp.yEnd = 12; P.base.rows[2].n = 12;
-    P.base.opt.relBondedReinf = true; P.base.opt.relAs = 0.62; localStorage.setItem('psb2.project.current', PSBModel.exportJSON(P)); });
+  await p.evaluate(nx => { localStorage.clear(); const P = PSBModel.newProject(); if (nx) { P.base.girder = 'NEXT 36F'; P.base.harp.n = 0; P.base.rows = [{ n: 10, y: 2, nd: 0, dbnd: 0 }]; } else { P.base.girder = 'MassDOT NEDBT 48'; P.base.harp.n = 12; P.base.harp.yEnd = 12; P.base.rows[2].n = 12; }
+    P.base.opt.relBondedReinf = true; P.base.opt.relAs = 0.62; localStorage.setItem('psb2.project.current', PSBModel.exportJSON(P)); }, NEXT);
   await p.reload(); await p.waitForSelector('#tabBar [data-otab]', { timeout: 90000 }).catch(async e => { console.log('errs', errs, (await p.evaluate(() => document.body.innerText)).slice(0, 600)); throw e; });
   await tab('end');
   await p.waitForSelector('#card-ezrel');
   let r = await p.evaluate(() => { const c = document.querySelector('#card-ezrel'), rows = [...c.querySelectorAll('table.tbl tbody tr')].map(tr => tr.innerText.replace(/\s+/g, ' ').trim());
     return { rows, txt: c.innerText }; });
-  assert.ok(r.rows.some(t => /^1\. top flange 0\.00 to \d+\.\d\d \d/.test(t)), JSON.stringify(r.rows));
-  assert.ok(r.rows.some(t => /^Sum ΣFi/.test(t)) && r.rows.some(t => /^T used \(the engine's, 240 strips\)/.test(t)), JSON.stringify(r.rows));
-  ok('card: the parts table (top flange), the sum and the engine\'s T');
+  if (!NEXT) assert.ok(r.rows.some(t => /^1\. top flange 0\.00 to \d+\.\d\d \d/.test(t)), JSON.stringify(r.rows));
+  if (NEXT) assert.ok(r.rows.some(t => /^1\. stems \(the two stems; the gap between them not counted\) 0\.00 to 19\.47 506\.32/.test(t)), JSON.stringify(r.rows));
+  assert.ok(r.rows.some(t => /^T = ΣFi \d/.test(t)) && !/240 strips/.test(r.txt), JSON.stringify(r.rows));
+  ok('card: the parts table (top flange) and T = ΣF_i (EZX: the engine\'s value)');
   const det = await p.$('details.sg-t[data-sgk="rel"]'); assert.ok(det, 'topic rel');
   await p.evaluate(() => { const d = document.querySelector('details.sg-t[data-sgk="rel"]'); d.open = true; d.dispatchEvent(new Event('toggle')); });
   await p.waitForTimeout(400);
   r = await p.evaluate(() => { const d = document.querySelector('details.sg-t[data-sgk="rel"]'), li = [...d.querySelectorAll('li[id^="st-ez.rel."]')];
     return { ids: li.map(x => x.id), txt: d.innerText, ng: !!d.querySelector('li#st-ez\\.rel\\.dc') && /NG|FAIL/.test(d.innerText), cls: d.className }; });
-  ['st-ez.rel.Ttop.c', 'st-ez.rel.Ttop.p1', 'st-ez.rel.Ttop', 'st-ez.rel.Tbot', 'st-ez.rel.As', 'st-ez.rel.dc'].forEach(id => assert.ok(r.ids.includes(id), id + ' in ' + r.ids));
+  [NEXT ? 'st-ez.rel.Tbot.p1' : 'st-ez.rel.Ttop.c', 'st-ez.rel.Ttop.p1', 'st-ez.rel.Ttop', 'st-ez.rel.Tbot', 'st-ez.rel.As', 'st-ez.rel.dc'].forEach(id => assert.ok(r.ids.includes(id), id + ' in ' + r.ids));
   assert.ok(!/∫|\\int|dy\b/.test(r.txt), 'no integral: ' + r.txt.slice(0, 400));
   assert.match(r.cls, /sg-ng/, 'topic NG (red) as before');
   ok(`topic 3 expanded: ${r.ids.length} steps, no integral, NG marking kept`);
@@ -43,7 +44,7 @@ try {
     await (await p.$('#card-ezrel')).screenshot({ path: SHOT.replace(/\.png$/, '-card.png') });
     ok('screenshots ' + SHOT); }
   await tab('rpt'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 180000 }); await p.waitForTimeout(600);
-  r = await p.evaluate(() => { const t = (document.querySelector('.rp-doc') || document.body).textContent.replace(/\s+/g, ' '); return { steps: /Tension zone, part 1: top flange/.test(t), tbl: /Sum ΣF/.test(t), int: /∫|\\int/.test(t), t: t.slice(t.indexOf('Bonded release'), t.indexOf('Bonded release') + 1500) }; });
+  r = await p.evaluate(() => { const t = (document.querySelector('.rp-doc') || document.body).textContent.replace(/\s+/g, ' '); return { steps: /Tension zone, part 1: (top flange|flange)/.test(t), tbl: /T = ΣF/.test(t), int: /∫|\\int/.test(t), t: t.slice(t.indexOf('Bonded release'), t.indexOf('Bonded release') + 1500) }; });
   assert.ok(r.steps && r.tbl, 'report has the by-parts steps and table: ' + JSON.stringify(r)); assert.ok(!r.int, 'report: no integral');
   ok('Report: the by-parts steps, no integral');
   assert.deepEqual(errs, [], 'console errors'); ok('0 console errors');
