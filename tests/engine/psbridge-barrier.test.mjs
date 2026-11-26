@@ -15,7 +15,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const ENG = ['sections', 'model', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`));
+const ENG = ['sections', 'model', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`));
 const W = loadShared('steps.js', 'barrier.js', ...PBDF, ...ENG, path.join(APP, 'ui/bridgedl.js'));
 const W0 = loadShared('steps.js', ...PBDF, ...ENG);   // without shared/barrier.js
 const S = loadShared('steps.js', 'barrier.js', path.join(ROOT, 'apps/steel-bridge/engine/loads.js'));

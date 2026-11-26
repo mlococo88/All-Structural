@@ -12,7 +12,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared(...PBDF, ...['sections', 'model', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'library'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared(...PBDF, ...['sections', 'model', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'library'].map(n => path.join(APP, `engine/${n}.js`)));
 const M = W.PSBModel, LIB = W.PSBLibrary;
 // stand-in storage with key() / length, an optional character quota (like the browser's) and an optional refuse-all switch
 function store(init, quota) {
