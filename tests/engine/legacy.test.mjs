@@ -1,7 +1,6 @@
 // engine/legacy.js (import of old Steel Bridge Design projects, CLAUDE.md §5) and engine/model.js importLegacy / importJSON.
 //
-// 1. The 20 recorded projects (tests/projects/gd seeds xsA, curb, util and the built-in project, builtin28 = every skew 28°; owners AASHTO,
-//    RIDOT, MassDOT, CTDOT; the same steps as tests/engine/record-*.mjs): Preliminary sizing's project (pl-source.mjs DEFAULT or the seed's
+// 1. One recorded project (the built-in project, owner AASHTO; the same steps as tests/engine/record-*.mjs): Preliminary sizing's project (pl-source.mjs DEFAULT or the seed's
 //    plateline_autosave_v1, owner set in it) + GirderDetail's (the seed's girderdetail_autosave_v1, or GirderDetail's built-in module
 //    inputs), as one Steel Bridge Design project file. Imported, then computed with this app's analysis and flexure for G1–G5, against
 //    GirderDetail's own results for the same girder (tests/projects/st/gd_<project>_<owner>_G<n>.json, recorded from GirderDetail):
@@ -9,6 +8,10 @@
 //      - the analysis envelopes (largest and smallest M, V of each load over the girder);
 //      - the governing negative flexure per span (girderDetail.checks.negFlex: GS7/GS9 compression flange, GS8 tension flange).
 //    A table of the largest difference per quantity is printed with its cause; the bounds asserted are the documented differences.
+//    Until 2026-11-26 this ran all 20 recorded projects (tests/projects/gd seeds xsA, curb, util, the built-in project and builtin28 = every
+//    skew 28°, × owners AASHTO, RIDOT, MassDOT, CTDOT; about 6 min). The engineer no longer opens projects from the old apps (Preliminary
+//    sizing / PlateLine, GirderDetail, ST-Girder; 2026-11-26), so it is cut to one case (builtin, AASHTO, G1–G5) as a cheap check that the
+//    import still works; engine/legacy.js is unchanged, and the other recorded payloads stay in tests/projects/st (other tests read them).
 // 2. Nothing dropped: every leaf of every part is either mapped or found at its own path under project.legacy.unmapped.
 // 3. Round trip: export → importJSON → identical project. Old autosave keys read only (a storage stand-in that throws on write).
 // 4. ST-Girder alone and the other entry points; refusals.
@@ -62,9 +65,11 @@ const note = (q, ours, ref, where, scale) => { const abs = Math.abs(ours - ref),
 const ext = (arr, f) => arr.reduce((a, v) => f(a, v), f === Math.max ? -Infinity : Infinity);
 const QA = [['M_DC1', 'M_DC1'], ['M_DC2', 'M_DC2'], ['M_DW', 'M_DW'], ['M_LLpos', 'M_LLpos'], ['M_LLneg', 'M_LLneg'], ['M_FATpos', 'M_FATpos'], ['M_FATneg', 'M_FATneg']];
 
-test('import the 20 recorded projects (Steel Bridge Design files), compute G1–G5: the model exact, analysis and negative flexure against GirderDetail', () => {
+// one case since 2026-11-26 (header, 1.): IMPORT_CASES was every PROJECTS × OWNERS pair
+const IMPORT_CASES = [['builtin', 'AASHTO']];
+test('import a recorded project (built-in, AASHTO; Steel Bridge Design file), compute G1–G5: the model exact, analysis and negative flexure against GirderDetail', () => {
   const FX = U.SBDFlexure, FRM = U.SBDFraming, RT = U.SBDRatingUI; let nG = 0;
-  for (const pr of PROJECTS) for (const ow of OWNERS) {
+  for (const [pr, ow] of IMPORT_CASES) {
     const r = M.importJSON(JSON.stringify(sbdFile(pr, ow))); assert.ok(r.ok, r.error); assert.equal(r.errors.map(e => e.msg).join('; '), '', `${pr} ${ow}`);
     const P = r.project; assert.equal(P.girders.length, 5);
     for (let gi = 0; gi < 5; gi++) {
@@ -104,10 +109,11 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
         if (sp.tens) note('negFlex tens. flange (GS8)' + sfx, mx(['GS8']), sp.tens.r, `${where} span ${sp.span}`); }
     }
   }
-  console.log(`       ${nG} girders of 20 imported projects; largest difference per quantity (relative to GirderDetail's largest |value| of the quantity on the girder; flexure: ratio difference / ratio):`);
+  console.log(`       ${nG} girders of ${IMPORT_CASES.length} imported project(s); largest difference per quantity (relative to GirderDetail's largest |value| of the quantity on the girder; flexure: ratio difference / ratio):`);
   Object.entries(big).forEach(([k, o]) => console.log(`       ${k.padEnd(34)} ${(100 * o.rel).toFixed(3).padStart(7)} %  ours ${o.ours.toFixed(3)} vs GirderDetail ${o.ref.toFixed(3)}  (${o.where})`));
-  assert.equal(nG, 100);
-  BOUNDS.forEach(([k, b]) => assert.ok(!big[k] || big[k].rel <= b, `${k}: ${(100 * big[k].rel).toFixed(3)} % > ${100 * b} %`));
+  assert.equal(nG, 5 * IMPORT_CASES.length);
+  // a quantity the case has none of (M_PL, the xsA rows: no pedestrian load on builtin) is skipped, as before (the message read big[k] eagerly)
+  BOUNDS.filter(([k]) => big[k]).forEach(([k, b]) => assert.ok(big[k].rel <= b, `${k}: ${(100 * big[k].rel).toFixed(3)} % > ${100 * b} %`));
 });
 // the documented differences (fixlog/steel-bridge.md, legacy import entry): bounds of the table above
 // - M_DC1 ≤ 1.0 %: the cross-frame point loads. GirderDetail's dead load weighed Preliminary sizing's suggested frame (K-frame, L3x3x3/8 bottom chord and
