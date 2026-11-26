@@ -789,6 +789,7 @@
     let rc = null; ctxOut = null;
     if (!errs.length) { rc = result(); if (rc.R.error) h += `<div class="alert err" role="alert"><b>The engine could not compute this design:</b> ${esc(rc.R.error)}. Results not shown.</div>`; }
     const ok = rc && !rc.R.error;
+    if (ok) h += sagNotice(rc);   // HP (engineer 2026-11-26): the girder sags at deck placement (above every output tab)
     if (TABUI[ui.otab] || ui.otab === 'rpt') h += TY.outBar(P);   // PR 3a-1: the girder type and line shown
     if ((TABUI[ui.otab] || ui.otab === 'rpt') && !errs.length) h += DMUI.srcBar(P);   // batch D1: the demands of the type shown (the steel app's srcBar)
     if (ui.otab === 'lds') h += deNotice();   // PS-23: the entered d_e differs from the computed one
@@ -886,6 +887,19 @@
   function deNotice() {
     const D = window.PSBDesign.deDiff(P); if (!D.rows.length || (P.notices && P.notices.de === D.sig)) return '';
     return `<div class="notice" id="deNotice" role="status"><div>${window.PSBDesign.deText(D, t => `<sub>${t}</sub>`)} <a href="#" data-goin="xsec">Cross-section tab</a>.</div><div class="nBtns"><button type="button" data-dedismiss>Close</button></div></div>`;
+  }
+  /* sagNotice(rc): HP (engineer decision 2026-11-26, "I don't want this sag case"; display only): when the girder type and line shown, or any
+     girder type x line already computed for this project (the cached Summary results), sags at deck placement (Δ_deck < 0, R.hp.sag of
+     engine/haunch.js: t_h stays at midspan and the haunch at the bearings is thinner than t_h), a warning banner (PS-22 style, in the page
+     flow) above the content of every output tab, naming each line, with a link to the Camber & deflection tab. Not dismissible: it goes when
+     the design no longer sags. The same text is a design warning of the engine (Summary, Report). */
+  function sagNotice(rc) {
+    const its = [], seen = new Set(), add = (key, R, lab) => { if (R && !R.error && R.hp && R.hp.sag && !seen.has(key)) { seen.add(key); its.push({ lab, R }); } };
+    const sh = BR.hasTypes(P) ? BR.shown(P) : null, d = window.PSBDesign.sel(P);
+    add(sh ? `${sh.k}|${sh.g}|${sh.s}` : 'base', rc.R, `${sh ? esc(P.types[sh.k].label) + ' on ' : ''}G${d.g}, span ${d.s}`);
+    try { const A = ALL.key === JSON.stringify(P) ? ALL.A : null; ((A && A.cells) || []).forEach(c => add(`${c.k}|${c.g}|${c.s}`, c.R, `${esc(c.label || '')} on G${c.g}, span ${c.s}`)); } catch (e) { /* the cached results only */ }
+    if (!its.length) return '';
+    return `<div class="notice" id="sagNotice" role="alert" style="border-left-color:var(--fail);background:#FEF2F2"><div><b>⚠ Girder sags at deck placement</b> (Δ<sub>deck</sub> &lt; 0): t<sub>h</sub> stays the haunch at midspan, so the haunch at the bearings is thinner than t<sub>h</sub>. ${its.map(x => `${x.lab}: Δ<sub>deck</sub> = ${fmt(x.R.hp.d, 2)} in, haunch at the bearings ${fmt(x.R.hp.brg, 2)} in (t<sub>h</sub> = ${fmt(x.R.hp.th, 2)} in)`).join('; ')}. Review the prestress, the camber and the haunch: <a href="#" data-gotab="camb">Camber &amp; deflection tab</a>.</div></div>`;
   }
   /* ---------- file ---------- */
   function exportFile(Q) {

@@ -9,6 +9,8 @@
 //   3. the worked steps cb.haunch (2.00) and cb.haunchBrg; the along-girder chart is drawn; the check summary column lists the warning;
 //   HDC (2026-11-25): DC1 from the average haunch: Δ_deck 3.302 in (5.30 at the bearings, 4.11 at 0.1L); the Loads tab's DC1 haunch row
 //   0.3876 klf from t̄_h = 3.101 in with § links (ld.havg, cb.deck); the steps ld.havg and ld.whaunch;
+//   4. HP-SAG (engineer 2026-11-26): no sag banner here; with 6 strands (Δ_deck = −0.32 in) t_h stays at midspan (2.00), the bearings 1.68 in
+//      (DC1 with t_h: HDC takes at least t_h), and the red sag banner (#sagNotice) is above every output tab;
 //   0 console errors.
 //   SHOT=<file.png> node tests/smoke/ps-bridge-haunch.mjs   (a screenshot of the haunch card and the along-girder chart when SHOT is set)
 import path from 'path';
@@ -45,6 +47,20 @@ try {
   ok('worked steps cb.haunch = 2.00 in, cb.haunchBrg = 5.30 in; the along-girder chart drawn');
   r = await p.evaluate(() => document.body.innerText.includes('RIDOT BDM 9.4.6: haunch up to 5.30 in'));
   assert.ok(r, 'the warning on the page'); ok('the warning is listed');
+  // HP-SAG (engineer 2026-11-26): no sag banner here; with 6 strands the girder sags at deck placement: t_h stays at midspan, the banner on every output tab
+  assert.equal(await p.evaluate(() => !!document.getElementById('sagNotice')), false, 'no sag banner without sag'); ok('no sag banner when Δ_deck ≥ 0');
+  if (!SHOT) {
+    await p.evaluate(() => { localStorage.clear(); const P = PSBModel.newProject(); P.base.owner = 'RIDOT'; P.base.girder = 'NEXT 24F'; P.spans.lengths = [45]; P.xs.bays = P.xs.bays.map(() => 10);
+      P.base.ts = 8; P.base.th = 2; P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; P.base.harp.n = 0;
+      P.base.loads.wNC = 0; P.base.loads.wBar = 0.5; P.base.loads.wDW = 0.3; localStorage.setItem('psb2.project.current', PSBModel.exportJSON(P)); });
+    await p.reload(); await p.waitForSelector('#tabBar [data-otab]', { timeout: 90000 }); await tab('camb'); await p.waitForSelector('#card-cbhaunch');
+    r = await p.evaluate(() => { const n = document.getElementById('sagNotice'), c = document.querySelector('#card-cbhaunch'), rows = [...c.querySelectorAll('tbody tr')].map(tr => [...tr.cells].map(td => td.innerText.trim()));
+      return { n: n ? n.innerText.replace(/\s+/g, ' ') : null, role: n && n.getAttribute('role'), link: !!(n && n.querySelector('[data-gotab="camb"]')), b0: rows[0][5], bm: rows[5][5] }; });
+    assert.ok(r.n && /Girder sags at deck placement/.test(r.n) && /Δdeck = -0\.32 in, haunch at the bearings 1\.68 in \(th = 2\.00 in\)/.test(r.n), String(r.n));
+    assert.equal(r.role, 'alert'); assert.ok(r.link, 'link to the Camber tab'); assert.equal(r.b0, '1.68'); assert.equal(r.bm, '2.00');
+    await tab('flex'); assert.ok(await p.evaluate(() => !!document.getElementById('sagNotice')), 'banner on another output tab');
+    ok('sag: banner (role alert, the line, Δ_deck −0.32, bearings 1.68 in) on the Camber and Flexure tabs; table 1.68 at the bearings, 2.00 at midspan');
+  }
   if (SHOT) { await p.setViewportSize({ width: 1280, height: 2600 }); await p.waitForTimeout(600);
     const c1 = await p.$('#card-cbhaunch'), c2 = await p.$('#gfx_cb_along');
     const b1 = await c2.boundingBox(), b2 = await c1.boundingBox(), y0 = Math.min(b1.y, b2.y), y1 = Math.max(b1.y + b1.height, b2.y + b2.height);

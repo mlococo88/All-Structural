@@ -9952,8 +9952,8 @@ R.haunch.forEach(r => { r.buildup0 = r.buildup; r.buildup = profile(th, d, r.par
 Steps: `cb.haunch` = max(t_h + Δ_deck(1 − ψ), 0.5) at ψ = 1 (midspan), `cb.haunchBrg` at ψ = 0 (bearings); Δ_deck < 0: max(t_h + |Δ_deck| ψ, 0.5).
 ### Problem
 The engine added the camber at midspan; the haunch is thickest at the bearings. Not a design-check issue (no check reads it), but the shown haunch (and the DXF sheet) was wrong for detailing.
-### Decision (pending engineer review)
-Δ_deck < 0 (the girder sags at deck placement): t_h is kept at the thinnest point, the bearings (never thinner than t_h anywhere).
+### Decision (engineer, 2026-11-26; replaces the pending choice below)
+Δ_deck < 0 (the girder sags at deck placement): **t_h stays at MIDSPAN always**, so the haunch at the bearings is max(t_h + Δ_deck(1 − ψ), 0.5) at ψ = 0 = max(t_h + Δ_deck, 0.5), thinner than t_h; and a warning is shown when the girder sags ("I don't want this sag case"). Was (pending review, superseded): t_h kept at the bearings, t_h + |Δ_deck|ψ. See the 2026-11-26 entry below (HP-SAG).
 ### Governing provision
 Geometry. AASHTO LRFD 10th Ed. 5.6.3.5.2 (camber); RIDOT BDM (April 2026) 9.4.6 (minimum nominal haunch at the girder centreline; a haunch thicker than 4 in to be reinforced), the warning for owner RIDOT. Other owners reported, not added: MassDOT Part I 3.5.1.2, 3.7.1.3; CTDOT BDM 8.1.2.4.
 ### Check case
@@ -9985,8 +9985,8 @@ w_h = (b · t̄_h / 144) · w_c,d,DL,  wdk = wdkDeck + w_h        // pass 2; R.h
 ```
 ### Problem
 DC1 carried the minimum haunch over the whole span (unconservative): the haunch grows toward the bearings by the camber at deck placement.
-### Decision (pending engineer review)
-Δ_deck < 0: average t_h + 2|Δ|/3 (t_h at the bearings, PR #1722); no balance (2kβ/3 ≥ 1): t_h kept and a design warning.
+### Decision (engineer, 2026-11-26; replaces the pending choice)
+Δ_deck < 0 (sag): DC1 uses at least t_h, w_h = b max(t_h + Δ_deck/3, t_h)/144 w_c,d,DL (= b t_h, the engine's value), with the sag warning of PR #1722; the no-balance case is moot under the midspan rule (it cannot arise). Was (pending review, superseded): t_h + 2|Δ|/3 and, for 2kβ/3 ≥ 1, t_h kept with a warning. The uniform average haunch load: kept (engineer 2026-11-26, as built). See HDC-SAG below.
 ### Governing provision
 AASHTO LRFD 10th Ed. 3.5.1 (dead loads), 5.6.3.5.2 (camber); RIDOT BDM (April 2026) 9.4.6 (dead load on the calculated haunch depth, 2 in minimum).
 ### Check case
@@ -9995,3 +9995,79 @@ NEXT 24F, L 45 ft, b 120 in, t_s 8, t_h 2 in, strands 16/16/12 straight, w_NC 0,
 `psbridge-haunch.test.mjs` (hand check, Δ < 0, no balance, box unchanged, section properties and e_g unchanged, steps); origin/main vs branch on 657 designs (495 changed, 32 verdict flips; the table in PR #1724); harness B with the old page through the same run; smoke `ps-bridge-haunch.mjs`; `psbridge-tabs` PS-10 test compares with the engine through the same run (the engine's own checks with the average-haunch DC1); smoke `ps-bridge-ut.mjs` updated (an added noncomposite utility lowers Δ_deck and so the haunch weight: its midspan moment Δw_h L²/8 is added to the expected M_u and Service III change).
 ### Open items
 The exact parabolic haunch load (half the midspan moment increase of the uniform average); every result computed twice (auto design, Compare slower).
+
+## 2026-11-26 — PR: claude/ps-haunch-profile (PR #1722) (HP-SAG) — engineer decisions on PR #1722: the sag case keeps t_h at midspan, with a sag warning (§4; a reported value and a warning only, no check, load or ratio changes) — NOT MERGED, engineer review
+### Request (engineer answers, 2026-11-26)
+- Δ_deck < 0 (sag): "t_h stays at MIDSPAN always (haunch at bearings = max(t_h + Δ_deck(1 − ψ), 0.5)), AND show a pop-up warning indicator when the girder sags at deck placement ('I don't want this sag case')."
+- Cross slope across the flange: not now (no change).
+- Camber tolerance: yes, as a Settings input, in a follow-up PR (not in this PR).
+### Where
+- `apps/ps-bridge/engine/haunch.js`: `profile` (anchor `const profile = (th, d, psi) =>`); `apply` (anchor `const xMax = H[vals.indexOf(max)].x;`: the RIDOT text for the sag case, new `sag` warning, `R.hp.sag`); export `SAG_RE`.
+- `apps/ps-bridge/engine/worked-end.js` camber() (anchor `if (R.hp && window.PSBHaunch) {`): one expression for both signs; notes.
+- `apps/ps-bridge/ui/camber.js` (tenth-point note, the sag warning in red, chart limit label), `apps/ps-bridge/ui/sheets.js` camber() note.
+- `apps/ps-bridge/index.html`: new `sagNotice(rc)` (anchor `function sagNotice(rc)`), called in `drawOut` after `const ok = rc && !rc.R.error;`: a red banner (the PS-22 notice style, `#sagNotice`, role="alert") above the content of every output tab while the girder type and line shown, or any computed type × line of the cached Summary results, sags at deck placement; it names each line (Δ_deck, the haunch at the bearings, t_h) and links to the Camber & deflection tab. Not dismissible (it goes when the design no longer sags). The same text is a design warning of the engine, so the Summary's warnings list and the Report list it per girder type and line.
+### Before
+```
+const profile = (th, d, psi) => Math.max(th + Math.max(d, 0) * (1 - psi) + Math.max(-d, 0) * psi, 0.5);   // Δ_deck < 0: t_h at the bearings
+```
+### After
+```
+const profile = (th, d, psi) => Math.max(th + d * (1 - psi), 0.5);   // t_h at midspan for every Δ_deck
+const brg = H[0].buildup, sag = hasH && d < 0 ? `Girder sags at deck placement: Δ_deck = … in (the camber at deck placement is downward). t_h stays the haunch at midspan, so the haunch at the bearings is t_h + Δ_deck = … in, thinner than the entered t_h = … in. Review the prestress, the camber and the haunch (Camber & deflection tab).` : null;
+R.hp = { …, brg, …, sag }; if (sag) R.warns.push(sag);
+```
+(With the 0.5 in floor binding the text reads "the haunch at the bearings is the 0.5 in floor (t_h + Δ_deck = … in)".)
+### Governing provision
+Geometry (no AASHTO provision sets the haunch profile); AASHTO LRFD 10th Ed. (2024) Art. 5.6.3.5.2 for the camber; the decision is the engineer's (2026-11-26).
+### Check case (by hand), tests/engine/psbridge-haunch.test.mjs
+NEXT 24F, L = 45 ft, flange 120 in, t_s 8 in, t_h 2 in, 6 straight strands at 2.875 in, w_NC 0, w_DC2 0.5, w_DW 0.3 klf: Δ_deck = −0.323 in (the girder sags at deck placement).
+| x | ψ | Before (pending rule) max(t_h − Δψ, 0.5) | After max(t_h + Δ(1 − ψ), 0.5) |
+|---|---|---|---|
+| 0 (bearings) | 0 | 2.00 | 2 − 0.323 = **1.68** |
+| 4.5 ft (0.1L) | 0.36 | 2 + 0.323(0.36) = 2.12 | 2 − 0.323(0.64) = **1.79** |
+| 22.5 ft (midspan) | 1 | 2 + 0.323 = 2.32 | **2.00** |
+Warning (after): "Girder sags at deck placement: Δ_deck = -0.32 in … the haunch at the bearings is t_h + Δ_deck = 1.68 in, thinner than the entered t_h = 2.00 in …"; none before. With t_h = 0.5 in the bearings are at the 0.5 in floor and the warning says so. Δ_deck ≥ 0: unchanged (the HP check case 5.35 / 4.14 / 2.00 in).
+### Designs that change
+Only designs that sag at deck placement (Δ_deck < 0) on a section with a haunch (I-girders, NEXT beams); no check, load or ratio changes (R.haunch is read by none). Of the 19 tab designs (tests/engine/psbridge-tab-cases.mjs): "NEXT 36F with a 6 in topping, no draped strands", Δ_deck = −8.427 in: midspan 10.43 → 2.00 in, bearings 2.00 → 0.50 in (the floor), plus the sag warning. (The box BIII-36 without topping, Δ_deck = −4.80 in, carries no haunch in this engine: its tabulated values change the same way, no warning.) The other 17 tab designs have Δ_deck ≥ 0: unchanged.
+### How verified
+`tests/engine/psbridge-haunch.test.mjs` (the sag test rewritten: the profile at every tenth point, the warning text, the 0.5 in floor, no warning without sag; every tab case: only the haunch values and the RIDOT / sag warnings differ from the page without the module); `psbridge-drawings-h` (bearing haunch max(t_h + Δ_deck, 0.5)); harness B (`tests/psbridge-compare.mjs`, the profile worked from the old app's Δ_deck of either sign); smoke `tests/smoke/ps-bridge-haunch.mjs` (the banner on a sagging design, none otherwise).
+### Open items
+Camber tolerance (± % of the predicted camber, a Settings input): the follow-up PR (claude/ps-haunch-camber-tol). Cross slope: not now.
+
+## 2026-11-26 — PR: claude/ps-haunch-dc1 (PR #1724) (HDC-SAG) — engineer decisions on PR #1724: DC1 takes at least t_h when the girder sags; the no-balance case removed (CALCULATION CHANGE, §4) — NOT MERGED, engineer review; PR #1722's HP-SAG merged in
+### Request (engineer answers, 2026-11-26)
+- "#1724 sag case DC1: use at least t_h: w_h = b·max(t_h + Δ_deck/3, t_h) (with the sag warning). No-balance case moot under the midspan rule; confirm in PR."
+- "#1724 uniform average haunch load: keep (as built)."
+- PR #1722's sag rule (HP-SAG above: t_h at midspan always, the sag warning and banner) merged into this branch (merge commit of claude/ps-haunch-profile).
+### Where
+- `apps/ps-bridge/engine/haunch.js` `run(inp, chain)` (anchor `function run(inp, chain) {`): the Δ_0 < 0 branch and the no-balance branch replaced by one branch `if (!(d0 > 0))`; the comment block "HDC".
+- `apps/ps-bridge/engine/worked.js` loads() (anchor `const hd = R.hdc && !R.hdc.same ? R.hdc : null;`): step `ld.havg` shows max(t_h + Δ_deck/3, t_h); step `ld.whaunch` (t_h) notes the sag case.
+- `apps/ps-bridge/ui/loads.js` (the DC1 haunch row).
+### Before
+```
+if (d0 === 0) { R0.hdc = { …, same: true }; return R0; }
+const neg = d0 < 0, den = neg ? 1 - 2 * k * beta / 3 : 1 + k * beta / 3;
+if (!(den > 0)) { R0.hdc = { …, same: true, diverge: true }; R0.warns.push(`Haunch weight (DC1): … cannot be balanced …`); return R0; }
+const d = d0 / den, add = neg ? -2 * d / 3 : d / 3, tavg = th + add;      // Δ < 0: t_h + 2|Δ|/3
+```
+### After
+```
+if (!(d0 > 0)) { R0.hdc = { …, tavg: th, add: 0, neg: d0 < 0, same: true }; return R0; }   // Δ_0 ≤ 0: t̄_h = max(t_h + Δ_0/3, t_h) = t_h
+const neg = false, d = d0 / (1 + k * beta / 3), add = Math.max(d / 3, 0), tavg = th + add;
+```
+i.e. w_h = b max(t_h + Δ_deck/3, t_h)/144 · w_c,d,DL. Δ_0 > 0: unchanged (Δ = Δ_0/(1 + kβ/3) > 0). Δ_0 < 0: w_h = b t_h/144 · w_c,d,DL, the moved engine's own value, so the result is pass 1 (the page without HDC), plus PR #1722's sag warning. The no-balance case (2kβ/3 ≥ 1 with Δ_0 < 0) cannot arise any more (no warning).
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 3.5.1 (dead loads), Art. 5.6.3.5.2 (camber); RIDOT BDM (April 2026) 9.4.6 (the haunch dead load). The rule is the engineer's (2026-11-26).
+### Check case (by hand), tests/engine/psbridge-haunch.test.mjs
+NEXT 24F, L 45 ft, b 120 in, t_s 8 in, t_h 2 in, 6 straight strands at 2.875 in, w_NC 0, w_DC2 0.5, w_DW 0.3 klf; k = 5(540)⁴/(12 · 384 · 5112.4 · 56,032) = 0.32209 in/klf, β = 120(0.150)/144 = 0.125 klf/in; pass 1 Δ_0 = −0.32299 in.
+| Quantity | Before (pending rule) | After |
+|---|---|---|
+| Δ_deck | Δ_0/(1 − 2kβ/3) = −0.32299/0.97316 = −0.33190 in | Δ_0 = −0.32299 in |
+| t̄_h | 2 + 2(0.33190)/3 = 2.2213 in | max(2 − 0.32299/3, 2) = max(1.8923, 2) = 2.0000 in |
+| w_h | 120(2.2213)/144(0.150) = 0.2777 klf | 120(2.0)/144(0.150) = 0.2500 klf (= the engine's) |
+| Haunch at the bearings (HP) | 2.00 in (pending rule) | 2 − 0.32299 = 1.68 in, the sag warning |
+The Δ_0 > 0 hand check above (t̄_h 3.1005 in, w_h 0.3876 klf, M_u 2335.2 → 2378.6 k-ft) is unchanged. A 120 ft version of the sagging design (2kβ/3 ≥ 1): before t_h kept and the "cannot be balanced" warning; after t_h, no such warning (the sag warning only).
+### Designs that change (this update; the PR's full table is in PR #1724)
+Old head (d734175a) → new head, `PSBHoldDown.compute` in Node, 785 designs (every line of the 19 tab designs, 38 recorded, 600 seeded, the NX test project): 69 change, every one a design that sags at deck placement (Δ_0 < 0), each back to the result without HDC; checks that flip back (FAIL → PASS) in 21 of them, e.g. the tab design "NEXT 36F with a 6 in topping, no draped strands" (every line): Δ_deck −15.02 → −8.43 in, w_h 1.501 → 0.250 klf, Srv comp (perm) 1.526 → 0.990, Srv comp (full) 1.337 → 0.935, Fatigue I (concrete) 1.004 → 0.702. Against the merge base (fbd41f4c): the check flips are now the 15 designs with Δ_deck > 0 of the PR's table (the 17 sagging NEXT / Type VI / Type IV designs of that table no longer change). No overall verdict flips in either comparison.
+### How verified
+`tests/engine/psbridge-haunch.test.mjs` (the sag test rewritten: w_h = b t_h, the result = pass 1, the sag warning, the step note; the no-balance test rewritten: a 120 ft sagging NEXT keeps t_h with no extra warning); `node tests/engine/run.mjs psbridge`; harness B; smokes `ps-bridge-haunch`, `-ut`, `-display`.

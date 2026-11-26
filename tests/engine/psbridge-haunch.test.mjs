@@ -4,7 +4,7 @@
 //   1. hand check: NEXT 24F, L = 45 ft, S = 10 ft, t_h = 2 in, 44 straight strands (Δ_deck = 3.346 in): midspan 5.35 -> 2.00 in, bearings
 //      2.00 -> 5.35 in, 0.1L 3.20 -> 4.14 in; only R.haunch[i].buildup changes (and buildup0, R.hp are added): the page's whole result with
 //      and without the correction, value by value;
-//   2. Δ_deck < 0 (decision pending engineer review): the minimum t_h at the bearings, t_h + |Δ_deck| at midspan;
+//   2. Δ_deck < 0 (engineer 2026-11-26): t_h stays at midspan, the haunch at the bearings max(t_h + Δ_deck, 0.5) < t_h, and the sag warning;
 //   3. RIDOT BDM 9.4.6: one warning when the haunch is thicker than 4 in (RIDOT only; not at 4 in or less; not for box beams);
 //   4. the anchors in the frozen engine's computeAll; a changed engine value is an error, not a silent second correction;
 //   5. the worked steps (midspan, bearings) carry the result's values; every tab case: only the haunch values and the RIDOT warning differ.
@@ -54,14 +54,24 @@ test('hand check: NEXT 24F 45 ft, t_h = 2 in: midspan 5.35 -> 2.00, bearings 2.0
   assert.deepEqual(diff(R, R0).filter(p => !isHP(p)), [], 'nothing else of R changes');
 });
 
-test('Δ_deck < 0 (decision pending engineer review): t_h kept at the bearings, t_h + |Δ_deck| at midspan', () => {
+test('Δ_deck < 0 (engineer 2026-11-26): t_h stays at midspan, max(t_h + Δ_deck, 0.5) at the bearings, and the sag warning', () => {
   const P = next45(P => { P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; }), { R, R0 } = both(P), d = R.cam.afterDeck, H = R.haunch;
   assert.ok(d < 0, 'sag at deck placement: ' + d);
-  near(H[0].buildup, 2, 1e-12, 'bearings'); near(H[5].buildup, 2 - d, 1e-12, 'midspan'); assert.equal(R.hp.neg, true); assert.equal(R.hp.min, 2);
-  H.forEach(r => assert.ok(r.buildup >= 2 - 1e-12, 'never thinner than t_h'));
-  assert.deepEqual(diff(R, R0).filter(p => !isHP(p)), []);
+  near(H[5].buildup, 2, 1e-12, 'midspan'); near(H[0].buildup, Math.max(2 + d, 0.5), 1e-12, 'bearings'); assert.ok(H[0].buildup < 2, 'thinner than t_h at the bearings');
+  H.forEach(r => near(r.buildup, Math.max(2 + d * (1 - r.par), 0.5), 1e-12, 'x = ' + r.x));
+  assert.equal(R.hp.neg, true); assert.equal(R.hp.mid, 2); assert.equal(R.hp.max, 2);
+  const w = R.warns.filter(x => W.PSBHaunch.SAG_RE.test(x)); assert.equal(w.length, 1); assert.equal(w[0], R.hp.sag);
+  assert.ok(w[0].includes(`Δ_deck = ${d.toFixed(2)} in`) && w[0].includes(`t_h + Δ_deck = ${H[0].buildup.toFixed(2)} in`), w[0]);
+  const wi = R.warns.indexOf(R.hp.sag);
+  assert.deepEqual(diff(R, R0).filter(p => !isHP(p)), [`warns.${wi}`], 'only the haunch and the sag warning');
   const st = W.PSBWorkedEnd.camber(W.PSBDesign.inputs(P), R).steps;
-  assert.ok(/the conservative choice/.test(st.find(s => s.id === 'cb.haunch').note));
+  assert.ok(/girder sags at deck placement/.test(st.find(s => s.id === 'cb.haunch').note));
+  assert.ok(/Thinner than t_h/.test(st.find(s => s.id === 'cb.haunchBrg').note));
+  // the 0.5 in floor: t_h = 0.5 in, the bearings at 0.5 in, the warning names the floor
+  const Q = next45(P => { P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; P.base.th = 0.5; }), Rq = W.PSBHoldDown.compute(W.PSBDesign.inputs(Q));
+  assert.ok(Rq.cam.afterDeck < 0); assert.equal(Rq.haunch[0].buildup, 0.5); assert.ok(/the 0\.5 in floor/.test(Rq.hp.sag), Rq.hp.sag);
+  // no sag: no warning
+  const Rn = W.PSBHoldDown.compute(W.PSBDesign.inputs(next45())); assert.equal(Rn.hp.sag, null); assert.ok(!Rn.warns.some(x => W.PSBHaunch.SAG_RE.test(x)));
 });
 
 test('RIDOT BDM 9.4.6: one warning when the haunch is thicker than 4 in (RIDOT only, not at 4 in or less, not for box beams)', () => {
@@ -89,7 +99,7 @@ test('the anchors in the frozen computeAll; a changed engine haunch value is an 
   assert.equal(R2.haunch[5].buildup, v, 'applied once');
 });
 
-test('worked steps: midspan and bearings carry the result; every tab case: only the haunch and the RIDOT warning differ', () => {
+test('worked steps: midspan and bearings carry the result; every tab case: only the haunch and the RIDOT / sag warnings differ', () => {
   const P = next45(), inp = W.PSBDesign.inputs(P), R = W.PSBHoldDown.compute(inp), E = W.PSBWorkedEnd.camber(inp, R);
   assert.ok(Object.is(E.steps.find(s => s.id === 'cb.haunch').value, R.haunch[5].buildup)); assert.ok(Object.is(E.steps.find(s => s.id === 'cb.haunchBrg').value, R.haunch[0].buildup));
   assert.equal(E.paths['cb.haunchBrg'], 'haunch.0.buildup'); assert.equal(E.paths['cb.haunch'], 'haunch.5.buildup');
@@ -97,8 +107,8 @@ test('worked steps: midspan and bearings carry the result; every tab case: only 
   let n = 0;
   for (const [name, Pc] of Object.entries(TAB_CASES(() => W.PSBModel.defaultProject()))) {
     const { R: Rc, R0 } = both(Pc); if (Rc.error) continue; n++;
-    const d = diff(Rc, R0).filter(p => !isHP(p)), wi = (Rc.warns || []).findIndex(x => W.PSBHaunch.WARN_RE.test(x));
-    assert.deepEqual(d, wi >= 0 ? [`warns.${wi}`] : [], name);
+    const d = diff(Rc, R0).filter(p => !isHP(p)), wi = [...(Rc.warns || [])].map((x, i) => W.PSBHaunch.WARN_RE.test(x) || W.PSBHaunch.SAG_RE.test(x) ? `warns.${i}` : null).filter(Boolean);
+    assert.deepEqual(d, wi, name);
   }
   assert.ok(n >= 7, 'cases ' + n);
 });
@@ -133,19 +143,22 @@ test('HDC hand check: NEXT 24F 45 ft, t_h = 2 in: t̄_h 3.1005 in, w_h 0.2500 ->
   Wk.pairs.forEach(p => assert.ok(Math.abs(p.shown - p.engine) <= 1e-9 * Math.max(1, Math.abs(p.engine)), `${p.id}: ${p.shown} vs ${p.engine}`));
 });
 
-test('HDC: Δ_deck < 0: t̄_h = t_h + 2|Δ_deck|/3 (never below t_h); box beams: nothing changes', () => {
-  const P = next45(P => { P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; }), inp = W.PSBDesign.inputs(P), R = W.PSBHoldDown.compute(inp), h = R.hdc;
-  assert.ok(h.neg && h.d < 0 && h.d0 < 0); near(h.d, h.d0 / (1 - 2 * h.k * h.beta / 3), 1e-12, 'Δ solved'); near(R.cam.afterDeck, h.d, 1e-9);
-  near(h.tavg, 2 - 2 * h.d / 3, 1e-12); assert.ok(h.tavg > 2); assert.ok(R.cp.wdkHaunch > h.w0);
+test('HDC: Δ_deck < 0 (engineer 2026-11-26): DC1 takes at least t_h, w_h = b max(t_h + Δ_deck/3, t_h) = b t_h: the result as before (and the sag warning); box beams: nothing changes', () => {
+  const P = next45(P => { P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; }), inp = W.PSBDesign.inputs(P), R = W.PSBHoldDown.compute(inp), Rp = profOnly(inp), h = R.hdc;
+  assert.ok(h.neg && h.same && h.d0 < 0 && Object.is(h.d, h.d0)); assert.equal(h.tavg, 2); assert.equal(h.add, 0);
+  assert.ok(Object.is(R.cp.wdkHaunch, h.w0)); near(R.cp.wdkHaunch, 120 * 2 / 144 * 0.150, 1e-12, 'w_h = b t_h / 144 w_c');
+  assert.deepEqual(diff(R, Rp).filter(p => !/^hdc/.test(p)), [], 'pass 1 is the answer (the HP result, sag warning included)');
+  assert.equal(R.warns.filter(w => W.PSBHaunch.SAG_RE.test(w)).length, 1, 'the sag warning (HP)');
+  const st = W.PSBWorked.loads(inp, R).steps.find(s => s.id === 'ld.whaunch'); assert.ok(st && /DC1 takes at least t_h/.test(st.note), st && st.note);
   const B = design(P => { P.base.girder = 'AASHTO BIII-36 (39in)'; P.base.ts = 6; P.base.harp.n = 0; P.base.rows = [{ n: 16, y: 2, nd: 4, dbnd: 8 }, { n: 4, y: 37, nd: 0, dbnd: 0 }];
     P.xs.bays = [3, 3, 3, 3]; P.xs.ohL = 1.5; P.xs.ohR = 1.5; P.spans.lengths = [70]; });
   const ib = W.PSBDesign.inputs(B), Rb = W.PSBHoldDown.compute(ib), Rbp = profOnly(ib);
   assert.equal(Rb.hdc, undefined); assert.deepEqual(diff(Rb, Rbp), [], 'box: the result as before');
 });
 
-test('HDC: no balance (Δ_0 < 0, 2kβ/3 ≥ 1; decision pending engineer review): t_h kept, one warning', () => {
+test('HDC: the no-balance case is moot under the midspan rule (engineer 2026-11-26): a long sagging NEXT keeps t_h, no extra warning', () => {
   const P = next45(P => { P.spans.lengths = [120]; P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; }), inp = W.PSBDesign.inputs(P), R = W.PSBHoldDown.compute(inp), Rp = profOnly(inp), h = R.hdc;
-  assert.ok(h && h.diverge && h.same && h.d0 < 0 && 2 * h.k * h.beta / 3 >= 1, JSON.stringify(h));
-  assert.ok(Object.is(R.cp.wdkHaunch, Rp.cp.wdkHaunch)); assert.equal(R.warns.filter(w => /cannot be balanced/.test(w)).length, 1);
-  assert.deepEqual(diff(R, Rp).filter(p => !/^hdc/.test(p)), [`warns.${R.warns.length - 1}`]);
+  assert.ok(h && h.same && h.neg && !h.diverge && h.d0 < 0 && 2 * h.k * h.beta / 3 >= 1, JSON.stringify(h));
+  assert.ok(Object.is(R.cp.wdkHaunch, Rp.cp.wdkHaunch)); assert.equal(R.warns.filter(w => /cannot be balanced/.test(w)).length, 0);
+  assert.deepEqual(diff(R, Rp).filter(p => !/^hdc/.test(p)), []);
 });

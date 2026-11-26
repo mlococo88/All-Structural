@@ -56,7 +56,7 @@
 //   I-girder bottom flange) is compared with the thickness worked here from the old app's girder (NEXT h − t_f, box the bottom slab, voided
 //   slab (h − D)/2, solid slab h); every other value with the old app, as before.
 //   HP (2026-11-25): the haunch along the girder (haunch.<i>.buildup, engine/haunch.js: t_h the minimum at midspan) is compared with the profile
-//   worked here from the old app's own Δ_deck and ψ, max(t_h + Δ⁺(1 − ψ) + Δ⁻ψ, 0.5); every other value with the old app, as before.
+//   worked here from the old app's own Δ_deck and ψ, max(t_h + Δ_deck(1 − ψ), 0.5) (Δ_deck < 0 too: engineer 2026-11-26); every other value with the old app, as before.
 //   HDC (2026-11-25): DC1 from the average haunch (engine/haunch.js run): the old app's engine computes through the same run (the module put
 //   in the old page; two passes with its compositeProps wrapped), so every value downstream of w_DC1 is compared with the old app as before.
 //   PS-35 (2026-11-14): a box beam / voided slab design gets the type (f) / (g) distribution factors (engine/lldf-fg.js): the old page computes
@@ -268,10 +268,10 @@ for (const name of names) {
       cmp(b.r, R.rating, 'rating.'); cmp(b.s, R.shrRating, 'shrRating.'); (b.v || []).forEach((v, j) => cmp(v, R.vehRatings[j], `vehRatings.${j}.`)); return d; })();
     paths.forEach(p => { vals[p] = at(R, p); });
     // HP (engineer decision 2026-11-25; engine/haunch.js after computeAll): t_h is the minimum haunch at midspan, the haunch along the girder
-    // max(t_h + Δ⁺(1 − ψ) + Δ⁻ψ, 0.5) (Δ = the old app's Δ_deck); the intended difference from the old app's t_h + Δψ, worked here from the
+    // max(t_h + Δ(1 − ψ), 0.5) (Δ = the old app's Δ_deck, of either sign: engineer 2026-11-26); the intended difference from the old app's t_h + Δψ, worked here from the
     // old app's own Δ_deck and ψ; every other value compared with the old app exactly, as before
     paths.forEach(p => { const m = /^haunch\.(\d+)\.buildup$/.exec(p); if (!m) return; const r = R.haunch[+m[1]], d = R.cam.afterDeck;
-      vals[p] = Math.max(+i.th + Math.max(d, 0) * (1 - r.par) + Math.max(-d, 0) * r.par, 0.5); });
+      vals[p] = Math.max(+i.th + d * (1 - r.par), 0.5); });
     // PS-10 hand values (no counterpart in the old app): from the inputs and the old app's f_pbt, A_b, w_sw
     const h = i.harp, L = +i.L, al = Math.atan((+h.yEnd - +h.yMid) / (12 * +h.frac * L)), Fstr = R.fpbt * R.ss.st.Ab * Math.sin(al), Ftot = 2 * +h.n * Fstr, Lg = L + 2 * (+i.opt.endOh || 0) / 12, Wb = R.g.wsw * Lg;
     const f = typeof i.opt.hdFrac === 'number' && i.opt.hdFrac > 0 ? i.opt.hdFrac : 0.75, lim = f * Wb;
