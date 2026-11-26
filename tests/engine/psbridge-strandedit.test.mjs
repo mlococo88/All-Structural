@@ -9,7 +9,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)),
+const W = loadShared('steps.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)),
   ...['vizkit', 'strands', 'strandedit', 'inputs'].map(n => path.join(APP, `ui/${n}.js`)));
 const plain = o => JSON.parse(JSON.stringify(o)), E = () => W.PSBStrandEdit;
 const R0 = [{ n: 12, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }];

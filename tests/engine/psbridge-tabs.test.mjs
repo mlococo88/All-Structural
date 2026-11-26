@@ -13,7 +13,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', 'deck.js', ...PBD, ...['sections', 'model', 'lldf-fg', 'deckdist', 'holddown', 'pierblock', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared('steps.js', 'deck.js', ...PBD, ...['sections', 'model', 'lldf-fg', 'deckdist', 'reltension', 'holddown', 'pierblock', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)));
 const at = (R, p) => p.split('.').reduce((o, k) => o == null ? o : o[k], R);
 const STEPS = (inp, R) => ({ section: W.PSBWorked.section(inp, R), loads: W.PSBWorked.loads(inp, R), analysis: W.PSBWorked.analysis(inp, R),
   losses: W.PSBWorkedStress.losses(inp, R), stresses: W.PSBWorkedStress.stresses(inp, R),
@@ -55,7 +55,7 @@ test('PR 2d-1: the owner hold-down check worked (MassDOT, default BT-72: F_hd = 
    L_g = 120 ft, W = 0.825590 × 120 = 99.07 kip, 0.75 W = 74.3 kip; ratio 1.276 (FAIL). */
 test('PR 2d-3: PS-10 hold-down check, default BT-72 under AASHTO (hand check 94.8 vs 74.3 kip)', () => {
   const P = W.PSBModel.defaultProject(); assert.equal(P.base.opt.hdCheck, true); assert.equal(P.base.opt.hdFrac, 0.75);
-  const inp = W.PSBDesign.inputs(P), R0 = W.computeAll(inp), R = W.PSBHoldDown.compute(inp), h = R.ps10;
+  const inp = W.PSBDesign.inputs(P), R0 = W.PSBRelTension.apply(inp, W.computeAll(inp)), R = W.PSBHoldDown.compute(inp), h = R.ps10;   // EZX: computeAll with the exact release-tension sum (engine/reltension.js), as the app
   assert.equal(R0.own, undefined); assert.equal(R0.checks.length + 1, R.checks.length, 'one check added');
   assert.deepEqual(JSON.parse(JSON.stringify(R.checks.slice(0, -1))), JSON.parse(JSON.stringify(R0.checks)), 'the engine\'s own checks unchanged');
   const ya = 60, ym = 8, frac = 0.40, L = 120, nh = 12, Ab = 0.217, fpbt = 0.75 * 270;   // the default inputs (harp, strand 0.6 in, f_pbt = 0.75 f_pu)

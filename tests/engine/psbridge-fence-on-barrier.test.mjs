@@ -12,7 +12,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', 'barrier.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'view3d', 'xsfig'].map(n => path.join(APP, `ui/${n}.js`)));
+const W = loadShared('steps.js', 'barrier.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'view3d', 'xsfig'].map(n => path.join(APP, `ui/${n}.js`)));
 W.PSBSections.install();
 const J = v => JSON.parse(JSON.stringify(v));
 function project() {
