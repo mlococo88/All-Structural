@@ -85,7 +85,7 @@
     // PR 3b: the Summary tab's tables (ui/summary.js model: the same choices among the same engine values): the girder × span grid, the
     // governing ratio of each check group per girder type with its line and a "see §" reference to the section that works the group, and
     // the weights per line, per type and the bridge total (SB-6)
-    if (B.all && B.all.n > 1 && window.PSBSummaryUI) subs.splice(1, 0, allSub(B, X, null));
+    if (B.all && B.all.n > 1 && window.PSBSummaryUI) { subs.splice(1, 0, allSub(B, X, null)); const ln = linesSub(B, X, null); if (ln) subs.splice(2, 0, ln); }   // RG: the lines not worked in full
     if (X.u == null) { const el = elevSub(X); if (el) subs.splice(1, 0, el); }   // 2026-11-15 (batch C): the Summary's girder elevations (one worked girder; several: after the tables)
     if ((R.warns || []).length) subs.push(sub('warn', `Design warnings of the engine (${R.warns.length})`, R.warns.map(w => note(plain(w), true))));
     return { title: 'Summary of checks', subs };
@@ -121,6 +121,39 @@
         tbl(['Girder type', 'Span', 'Weight per line (kip)', 'Weight (kip)'], wrs),
         note(`Weight: w$_{sw}$ (L + 2 e$_{end}$/12) per line, the weight W of the hold-down check (see [[${sk('end', null, null)}]]); a girder type\'s weight the sum over its lines, the bridge total the sum over every checked line (SB-6).`)]);
       }
+
+  /* linesSub(B, X, M): RG (2026-11-25, the engineer's request; display only): the girder lines this report does not work in full (each
+     girder type is worked on its governing line, report/data.js units: the line with the highest controlling D/C of the type's checks; on
+     a tie the next highest, and so on; a full tie the first line), one row per line of each type, its worked line first: each check
+     group's governing ratio and verdict (ui/summary.js model, the Summary tab's values), the governing check, the verdict and a link to
+     the worked sections of its type's governing line; a line whose verdict, governing check or a group's verdict differs from the worked
+     line is flagged "differs from G<n>: see values". Null in "every girder line" (B.mode 'all': every line is worked) or with one line.
+     M (several worked units, multiSecs) = { unit(k) -> the unit index of type k, range(i) -> its sections' "§a–§b" }; null: one worked girder. */
+  function linesSub(B, X, M) {
+    if (B.mode === 'all' || !B.all || !(B.all.n > 1) || !window.PSBSummaryUI) return null;
+    const SM = window.PSBSummaryUI.model(B.P, B.all), fx = (v, d) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—');
+    const one = () => { const ks = Object.keys(TABS).filter(t => X.inReport(t)); return ks.length ? `[[rs.${ks[0]}]]–[[rs.${ks[ks.length - 1]}]]` : '(sections not included)'; };
+    const wOf = T => { if (M) { const i = M.unit(T.k); return i < 0 ? null : { g: B.units[i].g, range: M.range(i) }; } return B.cell && B.cell.k === T.k ? { g: B.cell.g, range: one() } : null; };
+    const stat = z => (z.nF ? `FAIL (${z.nF})` : 'PASS'), rows = [], flagged = [];
+    let nOther = 0;
+    SM.types.forEach(T => { const w = wOf(T); if (!w) return;
+      const ls = T.lines.slice().sort((a, b) => (a.c.g === w.g ? -1 : b.c.g === w.g ? 1 : a.c.g - b.c.g)), wz = ls.find(z => z.c.g === w.g);
+      ls.forEach(z => { const me = z.c.g === w.g; if (!me) nOther++;
+        if (z.err || !wz || wz.err) { rows.push({ cells: [`G${z.c.g}`, plain(T.label), ...SM.used.map(() => '—'), `engine error: ${plain(z.err || wz.err)}`, { t: 'not computed', cls: 'ng' }, me ? 'worked in full' : `see ${w.range}`, '—'], cls: 'gov' }); return; }
+        const gc = SM.used.map(gp => { const q = z.groups[gp.id]; return q ? { t: `${fx(q.q.r, 3)} ${q.q.pass ? 'PASS' : 'FAIL'}`, n: true, cls: !q.q.pass ? 'ng' : q.q.r >= 0.9 ? 'hi' : 'ok' } : '—'; });
+        const diff = me ? [] : [].concat(!!z.nF !== !!wz.nF ? [`verdict ${z.nF ? 'FAIL' : 'PASS'}, G${w.g} ${wz.nF ? 'FAIL' : 'PASS'}`] : [],
+          z.gov && wz.gov && z.gov.q.n !== wz.gov.q.n ? [`governing check ${plain(z.gov.q.n)}, G${w.g} ${plain(wz.gov.q.n)}`] : [],
+          SM.used.filter(gp => { const a = z.groups[gp.id], b = wz.groups[gp.id]; return !!a !== !!b || (a && b && a.q.pass !== b.q.pass); }).map(gp => `${gp.name} verdict`));
+        if (diff.length) flagged.push(`G${z.c.g} (${plain(T.label)}): ${diff.join('; ')}`);
+        rows.push({ cells: [`G${z.c.g}`, plain(T.label), ...gc, z.gov ? `${plain(z.gov.q.n)} (${z.gov.gp.name})` : '—', { t: stat(z), cls: z.nF ? 'ng' : 'ok' },
+          me ? `worked in full: ${w.range}` : `see ${w.range} (G${w.g})`, me ? 'the governing line of the type' : diff.length ? { t: `differs from G${w.g}: see values (${diff.join('; ')})`, cls: 'hi' } : `as G${w.g}: the same verdicts and governing check`], cls: me ? '' : diff.length ? 'gov' : '' }); });
+    });
+    if (!nOther) return null;
+    return sub('ln', 'Girder lines not worked in full', [
+      note(`This report works each girder type in full on its governing line: the line with the highest controlling D/C (the largest demand / limit ratio of the type's checks; on a tie the next largest, and so on; a full tie: the first line). The ${nOther} other line${nOther > 1 ? 's are' : ' is'} summarised here, each type's worked line first: the governing ratio and verdict of each check group (the Summary tab's values, the engine's), the governing check and the verdict, and a link to the worked sections of the type's governing line, whose steps are those of every line of the type with that line's own values. Each line's own steps are on the result tabs with that type and line chosen, and the report works every line with the choice "Work every girder line in full".`),
+      tbl(['Line', 'Girder type', ...SM.used.map(gp => gp.name), 'Governing check', 'Status', 'Worked', 'Compared with the worked line'], rows, { wide: true, caption: 'Each girder line of each type: the governing ratio and verdict of each check group, the governing check and the line\'s verdict' }),
+      flagged.length ? note(`Lines that differ from their type's worked line (check their values in the table; the worked steps of that line are on the result tabs): ${flagged.join('. ')}.`, true) : note('Every line not worked in full has the verdicts and the governing check of its type\'s worked line.')]);
+  }
 
   /* ---------- 2. project, basis and assumptions ---------- */
   const ASSUME = [
@@ -365,7 +398,7 @@
   /* ---------- 3–14. the result tabs ---------- */
   function tabSec(B, k, X) {
     const [ui, wk] = TABS[k], U = window[ui], FT = window.PSBReportTab;
-    const html = U.output({ P: B.P, inp: B.inp, R: B.R, W: B.W, ui: X.every ? { every: true } : {} });   // ui.every (2026-11-15, batch C): the Report's "every station" detail   // ui {}: each chooser at its default (the governing / midspan station)
+    const html = U.output({ P: B.P, inp: B.inp, R: B.R, W: B.W, ui: Object.assign(X.every ? { every: true } : {}, k === 'rt' && !X.full ? { rtGov: true } : {}) });   // rtGov (RG, 2026-11-25): the governing stations of the rating   // ui.every (2026-11-15, batch C): the Report's "every station" detail   // ui {}: each chooser at its default (the governing / midspan station)
     const C = FT.cards(html, { tab: k, X, sec: k, inReport: X.inReport, figs: X.figs && X.figs[k] });   // figs: the tab's own graphics at their slots (ui/report.js)
     const subs = [], gTop = C.top.filter(i => i.type === 'figure'), nTop = C.top.filter(i => i.type !== 'figure');
     if (gTop.length) subs.push(sub('g', 'Graphics', gTop));
@@ -376,8 +409,29 @@
     });
     // 2026-11-23: the design-point header (each check of the section at its station, with the strand context there), before the worked steps
     { let pt = null; try { pt = ptSub(B, k); } catch (e) { pt = null; } if (pt) { const i = subs.findIndex(q => q.id === 'w'); subs.splice(i < 0 ? subs.length : i, 0, pt); } }
+    if (k === 'rt' && !X.full) { try { rtApp(B, X, U, FT, subs); } catch (e) { subs.push(sub('app', 'Not available', [note('Report error: ' + (e && e.message), true)])); } }
     if (!subs.length) subs.push(sub('n', 'Not available', [note('This tab shows nothing for this design.')]));
     return { title: (SECTIONS.find(q => q[0] === k) || [k, k])[1], subs };
+  }
+  /* RG (2026-11-25, the engineer's request; display only): the Rating section shows the governing stations (ui/rating.js govRows, the card
+     "Rating factors at the governing stations") unless the report works every girder line in full (X.full: the report as before). With
+     the Report's choice "Full rating table (appendix)" (X.rtApp) the card of every location (the tab's own, Detail "every station") is
+     put in a subsection marked app, moved by model() into the appendix at the end of the report; each links to the other. Its values
+     are not recorded (the tab's card writes no data-ev; a throw-away vals list), so the section records what the tab shows, as before. */
+  const APP_KEY = u => `rs.rtapp@u${u == null ? 0 : u}`;
+  function rtApp(B, X, U, FT, subs) {
+    const c = subs.find(q => /^Rating factors at the governing stations/.test(q.title)); if (!c) return;
+    c.items.push(note(X.rtApp ? `The table of every location: see [[${APP_KEY(X.u)}]] (appendix).` : 'The table of every location is on the [[tab:rt|Rating tab]]; the Report prints it as an appendix with the choice "Full rating table (appendix)".'));
+    if (!X.rtApp) return;
+    const C = FT.cards(U.output({ P: B.P, inp: B.inp, R: B.R, W: B.W, ui: { every: true } }), { tab: 'rt', X: { vals: [] }, sec: 'rtapp', inReport: X.inReport });
+    const a = C.subs.find(q => /^Rating factors at every location/.test(q.title)); if (!a) return;
+    subs.push({ ...sub('app', a.title, [note('The rating at every station of the engine\'s analysis grid, the table of the Rating tab; the governing stations: see [[rs.rt]].'), ...a.items]), key: APP_KEY(X.u), app: true });
+  }
+  /* RG: the appendix (model(), last): the subsections marked app taken out of the Rating sections shown, one per worked girder */
+  function appSec(B, secs) {
+    const out = [];
+    secs.forEach(s => { if (!/^rt(-u\d+)?$/.test(s.id)) return; const keep = []; s.subs.forEach(q => { if (q.app) out.push({ ...q, id: 'app' + out.length, title: B.multi ? `${q.title}: ${s.title.replace(/^Rating: /, '')}` : q.title }); else keep.push(q); }); s.subs = keep; });
+    return out.length ? { id: 'rtapp', key: 'rs.rtapp', title: 'Appendix: rating factors at every station', subs: out } : null;
   }
 
   /* the References of the front matter (2026-11-15, batch A): the articles the report's worked steps cite (each step's ref, every worked unit),
@@ -717,6 +771,7 @@
         works: `This report works ${B.mode === 'all' ? 'every girder type on every line' : 'each girder type on its governing line (the line with its largest check ratio; on a tie, the next largest)'}: ${list}. ${B.mode === 'all' ? '' : 'The other lines are the rows of the tables below, each pointing to its type\'s sections; their steps are on the result tabs with that type and line chosen (the [[tab:sum|Summary tab]] lists them).'}`,
         worked: `Worked: the section of this report that works the group for that girder type (${B.mode === 'all' ? 'on the line named' : 'on its governing line'}).` };
       subs.unshift(allSub(B, X, M)); { const el = elevSub(X); if (el) subs.splice(1, 0, el); }   // 2026-11-15 (batch C): the Summary's girder elevations
+      { const ln = linesSub(B, X, { unit: k => U.findIndex(u => u.k === k), range }); if (ln) subs.splice(1, 0, ln); }   // RG (2026-11-25): the lines not worked in full
       s1 = { title: 'Summary of checks', subs };
     } catch (e) { X.u = null; X.R = null; s1 = fail('sum', e); }
     if (on('sum')) secs.push({ id: 'sum', key: 'rs.sum', ...s1 }); else { dropped.push({ key: 'rs.sum', ...s1 }); for (let j = vals.length - 1; j >= 0; j--) if (vals[j].sec === 'sum') vals.splice(j, 1); }
@@ -740,7 +795,8 @@
     const inc = opt.include || null, on = k => !inc || inc[k] !== false, P = B.P, p = P.project || {}, R = B.R;
     const vals = [];
     const own = B.inp.owner && B.inp.owner !== 'AASHTO';
-    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null, planFig: opt.planFig || null, sumFig: opt.sumFig || null, every: !!opt.every, snap3d: opt.snap3d || null };   // snap3d: batch G8   // planFig (2026-11-14): §2's framing plan (ui/report.js); rs.own: the owner rules subsection of §2
+    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null, planFig: opt.planFig || null, sumFig: opt.sumFig || null, every: !!opt.every, snap3d: opt.snap3d || null,
+      full: opt.full != null ? !!opt.full : B.mode === 'all' && !!(B.all && B.all.n > 1), rtApp: !!opt.rtApp };   // RG (2026-11-25): full = every girder line worked in full (the report as before); rtApp: the rating table of every location as an appendix   // snap3d: batch G8   // planFig (2026-11-14): §2's framing plan (ui/report.js); rs.own: the owner rules subsection of §2
     X.V = (path, d, div) => { const v = at(X.R || R, path), text = OK().fx(div ? v / div : v, d); vals.push({ sec: X.cur, path, d, div: div || 0, text, ...(X.u != null ? { u: X.u } : {}) }); return text; };   // PS-25: X.R / X.u = the worked unit's result
     const secs = [], dropped = [];
     if (B.multi) multiSecs(B, X, opt, on, secs, dropped);   // PS-25: the worked sections once per girder type (or per line)
@@ -778,6 +834,7 @@
       const sm = pack('bom', () => bom(B, X, secs)); if (sm) secs.push(sm);
       if (on('sign')) secs.push({ id: 'sign', key: 'rs.sign', ...sign(B) });
       const se = pack('exec', () => exec(B, X, secs)); if (se) secs.unshift(se); }
+    { const ap = appSec(B, secs); if (ap) secs.push(ap); }   // RG (2026-11-25): the appendix, last (after the sign-off)
     // the figures (each tab's own graphics, opt.figures from ui/report.js; none in Node): numbered "Figure n.m" by section n (the numbers of
     // the shared viewer: the sections shown, in order) and their order m in it, as the caption's lead
     secs.forEach((s, i) => { let m = 0; s.subs.forEach(q => q.items.forEach(it => { if (it.type === 'figure') { m++; it.no = `${i + 1}.${m}`; it.caption = `Figure ${i + 1}.${m}: ${it.caption || ''}`; } })); });

@@ -10,7 +10,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
 const W = loadShared('steps.js', 'report.js', ...PBD,
-  ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)),
+  ...['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)),
   ...['outkit', 'nomen'].map(n => path.join(APP, `ui/${n}.js`)), ...['fromtab', 'data'].map(n => path.join(APP, `report/${n}.js`)));
 const at = (o, p) => String(p).split('.').reduce((a, k) => (a == null ? a : a[k]), o);
 const WTAB = { sec: 'section', ld: 'loads', an: 'analysis', ls: 'losses', st: 'stresses', fx: 'flexure', sh: 'shear', ez: 'endzone', cb: 'camber', rt: 'rating' };
