@@ -68,7 +68,7 @@
      The moved engine carries the haunch weight as w_h = b t_h / 144 w_c,d,DL (pbd-section.js compositeProps: wdkHaunch, in wdk, in w_DC1),
      i.e. the minimum t_h over the whole span. The haunch profile above averages, over the span, to
          t̄_h = t_h + Δ_deck/3            (Δ_deck ≥ 0: the mean of 1 − ψ is 1/3)
-         t̄_h = t_h + 2|Δ_deck|/3         (Δ_deck < 0, the decision pending engineer review above: the mean of ψ is 2/3)
+         t̄_h = t_h + 2|Δ_deck|/3         (Δ_deck < 0, the conservative choice above: the mean of ψ is 2/3)
      never below t_h. DC1 uses w_h = b t̄_h / 144 w_c,d,DL (b = the engine's haunch width: the top flange b_tf, a NEXT beam's flange width b_eff;
      box beams and deck slabs: no haunch, nothing changes). The section properties, e_g and the haunch-in-properties option keep t_h.
      Two passes, because the haunch weight lowers Δ_deck: pass 1 is the page's result as before (Δ_0); the camber at deck placement is linear in
@@ -79,7 +79,7 @@
      engine/rigid.js does with distFactors). Pass 2's own Δ_deck must equal Δ (relative 1e-9); else an error is thrown.
      run(inp, chain) -> R (pass 2) with R.hdc = { th, d0, d, tavg, add (t̄_h − t_h), b, wc, beta, k, w0 (pass 1 w_h), w (w_h), neg };
        R from pass 1 unchanged when there is no haunch width (box, deck slab), when R has an error, or when Δ_0 = 0 (then R.hdc.same = true).
-     Decision (pending engineer review): Δ_0 < 0 with 2kβ/3 ≥ 1 has no balance (each inch of haunch adds more than an inch of sag); pass 1 is kept
+     Decision (for the engineer's review; fixlog HDC): Δ_0 < 0 with 2kβ/3 ≥ 1 has no balance (each inch of haunch adds more than an inch of sag); pass 1 is kept
      (t_h only), R.hdc.diverge = true and one design warning is added. */
   function run(inp, chain) {
     const R0 = chain(inp);
@@ -88,9 +88,9 @@
     const k = 5 * Math.pow(Lin, 4) / (12 * 384 * cp.Ecg * R0.g.I), beta = b * wc / 144, d0 = R0.cam.afterDeck;
     if (d0 === 0) { R0.hdc = { th, d0, d: d0, tavg: th, add: 0, b, wc, beta, k, w0: cp.wdkHaunch, w: cp.wdkHaunch, neg: false, same: true }; return R0; }
     const neg = d0 < 0, den = neg ? 1 - 2 * k * beta / 3 : 1 + k * beta / 3;
-    if (!(den > 0)) {   // Δ_0 < 0 and 2kβ/3 ≥ 1: no balance (more haunch, more sag, more haunch); decision pending engineer review: t_h kept, a warning
+    if (!(den > 0)) {   // Δ_0 < 0 and 2kβ/3 ≥ 1: no balance (more haunch, more sag, more haunch); fixlog HDC: t_h kept, a warning
       R0.hdc = { th, d0, d: d0, tavg: th, add: 0, b, wc, beta, k, w0: cp.wdkHaunch, w: cp.wdkHaunch, neg, same: true, diverge: true };
-      if (Array.isArray(R0.warns)) R0.warns.push(`Haunch weight (DC1): the girder sags at deck placement (Δ_deck = ${f2(d0)} in) and the average haunch weight cannot be balanced (2kβ/3 = ${f2(2 * k * beta / 3)} ≥ 1: each inch of haunch adds more sag); DC1 uses t_h only. Check the design (decision pending engineer review).`);
+      if (Array.isArray(R0.warns)) R0.warns.push(`Haunch weight (DC1): the girder sags at deck placement (Δ_deck = ${f2(d0)} in) and the average haunch weight cannot be balanced (2kβ/3 = ${f2(2 * k * beta / 3)} ≥ 1: each inch of haunch adds more sag); DC1 uses t_h only. Check the design.`);
       return R0;
     }
     const d = d0 / den, add = neg ? -2 * d / 3 : d / 3, tavg = th + add;
