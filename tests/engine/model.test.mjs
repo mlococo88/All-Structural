@@ -26,6 +26,7 @@ test('validation: bad inputs are reported with their path', () => {
 
 test('save / load round trip; nothing written outside sbd2.*', () => {
   const s = store({ 'stgirder.session': 'x' }), p = M.defaultProject(); p.project.name = 'Test bridge';
+  p.girders.forEach(g => { g.beffOv = false; });   // BEFF (2026-11-25): the flag as the app now saves it (the load writes it on a project saved without it)
   assert.equal(M.save(s, p), true);
   assert.deepEqual([...s.m.keys()].sort(), ['sbd2.project.current', 'stgirder.session']);
   const r = M.load(s); assert.equal(r.source, 'saved'); assert.deepEqual(plain(r.project), plain(p));
@@ -40,7 +41,8 @@ test('an unreadable saved project is kept under a backup key, not lost', () => {
 });
 
 test('JSON export / import; newer versions refused; old GirderDetail and ST-Girder files refused without engine/legacy.js', () => {
-  const p = M.defaultProject(), r = M.importJSON(M.exportJSON(p));
+  const p = M.defaultProject(); p.girders.forEach(g => { g.beffOv = false; });   // BEFF (2026-11-25): the flag as the app now saves it (the load writes it on a project saved without it)
+  const r = M.importJSON(M.exportJSON(p));
   assert.equal(r.ok, true); assert.deepEqual(plain(r.project), plain(p));
   assert.equal(M.importJSON(JSON.stringify({ ...p, version: 2 })).ok, false);
   assert.equal(M.importJSON('nope').ok, false);

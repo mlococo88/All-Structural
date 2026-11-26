@@ -29,6 +29,7 @@ const ctx = { ll: new Map() };
 
 test('Saved data: an old project reads the splice variable as Lock; export / import unchanged; the Lock result equals origin/main\'s', () => {
   const P = M.defaultProject(); P.autodesign = { mode: 'new', objective: 'weight', vars: { tb: { mode: 'range', min: 1, max: 2 } } };   // as saved before (no spl, no splRules)
+  P.girders.forEach(g => { g.beffOv = false; });   // BEFF (2026-11-25): the flag as the app now saves it (the load writes it on a project saved without it)
   const txt = M.exportJSON(P), R = M.importJSON(txt); assert.ok(R.ok, R.error); assert.equal(M.exportJSON(R.project), txt);
   const S = AD.settings(R.project); assert.equal(S.V.spl.mode, 'lock'); assert.equal(S.V.spl.forced, '');
   // the defaults of the rules (AASHTO: no owner limit)
