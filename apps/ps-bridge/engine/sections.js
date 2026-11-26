@@ -103,6 +103,37 @@
      of the old library (24F, 28F, 32F, 36F at 96 and 144 in: A, I, y_b, y_t, B) is the sheet's. The engine's own GIRDERS entry is changed in
      place at install (no engine file edited); withLegacy puts the old value back (the old app's results of an imported design). */
   const NEXT_FIX = [{ name: 'NEXT 28F', at: 'pMax', key: 'I', old: 88218, now: 92836, w: 144, dwg: '9.2.3', page: 124 }];
+  /* NF-4 (engineer answer 2026-11-26, "NEXT F library: flange 4 in for NEXT F, 8 in for NEXT D"; CLAUDE.md §4, the result changes listed in
+     fixlog/ps-bridge.md NF-4): the old library's NEXT F entries (PCI Northeast, the same values as MassDOT Part II dwg 9.2.3) carried
+     flangeT 8 in; their own tabulated areas give a 4 in flange: (A at 144 in − A at 96 in) / 48 in = (1,164 − 972) / 48 = 4.0 in (24F), and
+     the same 192 in² for 28F, 32F, 36F. The MassDOT NEXT F entries (MD, below) already have 4 in and the MassDOT NEXT D 8 in (dwg 11.2.3).
+     The engine's GIRDERS entry is changed in place at install (no engine file edited); withLegacy puts the old value back (the old app's
+     results of an imported design). The flange thickness g.next.ft is read by the drawing (halfPolygon) and the width-at-height of the
+     release tension force (sectionWidthAt), the weak-axis I_y and J (weakAxisAndJ, wrapped below: the engine's NEXT branch takes the flange
+     8 in in its own expression), the handling I_y (approxIy, d = [ft, 0, h − ft, 0]), the flanged-section flexure without a topping (h_f),
+     the pier negative-moment block limit (t_bf), PS-34's stem depth, the applicability item t_s without a topping and the geometry
+     hand-off's tf. */
+  const NEXT_FT = ['NEXT 24F', 'NEXT 28F', 'NEXT 32F', 'NEXT 36F'].map(name => ({ name, old: 8, now: 4 }));
+  /* the engine's weak-axis I_y and J of a NEXT (pbd-section.js weakAxisAndJ) take the flange as 8 in in its expression: with the flange
+     g.next.ft (4 in for a NEXT F, NF-4) the same expressions with ft for 8; ft = 8 (a NEXT D) or not a number: the engine's own result.
+     The anchor must be found once in the engine's function (else an error: the engine changed). */
+  const WJ_ANCHOR = 'const hs=Math.max(1,h-8), As=B*hs;';
+  let wjWrapped = false;
+  function wrapWeakJ() {
+    const G = typeof window !== 'undefined' ? window : globalThis, orig = G.weakAxisAndJ;
+    if (wjWrapped || typeof orig !== 'function') return;
+    const t = Function.prototype.toString.call(orig), k = t.split(WJ_ANCHOR).length - 1;
+    if (k !== 1) throw new Error(`PSBSections: the anchor of weakAxisAndJ found ${k} times (expected once): ${WJ_ANCHOR}`);
+    G.weakAxisAndJ = function (g) {
+      const ft = g && g.isNext && g.next ? +g.next.ft : NaN;
+      if (!(ft > 0) || ft === 8) return orig(g);
+      const B = (g.next && +g.next.B) || 10, cc = (g.next && +g.next.stemCC) || 60, w = +g.btf || +g.w, h = +g.h;
+      const hs = Math.max(1, h - ft), As = B * hs, Iy = 2 * (B * Math.pow(hs, 3) / 12 + As * Math.pow(cc / 2, 2)) + ft * Math.pow(w, 3) / 12;
+      const J = 2 * G.rectTorsionJ(B, hs) + G.rectTorsionJ(w, ft), bMax = Math.max(+g.btf || 0, +g.bbf || 0, +g.w || 0);
+      return { Iweak: Iy, J, Sy: bMax > 0 ? Iy / (bMax / 2) : 0, bMax };
+    };
+    wjWrapped = true;
+  }
   /* LIB: the section library revision of P.secLib (optional project field, added 2026-11-14 with PS-38 / PS-40): a project opened without it
      (or below LIB) that uses a section whose values changed since (NEXT_FIX; a CTDOT voided slab's void spacing, PS-40) is told so once on
      open (migrate: a 'rev' item in P.legacySection) and P.secLib = LIB is written. It is written only on a project that uses such a section
@@ -128,6 +159,7 @@
     });
     putBoxes(); putSlabs();
     NEXT_FIX.forEach(f => { const e = GIRDERS[f.name]; if (e && e[f.at] && e[f.at][f.key] === f.old) e[f.at][f.key] = f.now; });   // PS-38
+    NEXT_FT.forEach(f => { const e = GIRDERS[f.name]; if (e && e.next && e.flangeT === f.old) e.flangeT = f.now; });   // NF-4 (engineer 2026-11-26)
     installed = true;
   }
 
@@ -220,7 +252,9 @@
     const added = Object.keys(LEGACY).filter(k => !(k in GIRDERS)); added.forEach(k => { GIRDERS[k] = Object.assign({}, LEGACY[k]); });
     const back = NEXT_FIX.filter(f => GIRDERS[f.name] && GIRDERS[f.name][f.at] && GIRDERS[f.name][f.at][f.key] === f.now);   // PS-38: the old app's value
     back.forEach(f => { GIRDERS[f.name][f.at][f.key] = f.old; });
-    try { return fn(); } finally { added.forEach(k => { delete GIRDERS[k]; }); back.forEach(f => { GIRDERS[f.name][f.at][f.key] = f.now; }); }
+    const backT = NEXT_FT.filter(f => GIRDERS[f.name] && GIRDERS[f.name].flangeT === f.now);   // NF-4: the old app's 8 in
+    backT.forEach(f => { GIRDERS[f.name].flangeT = f.old; });
+    try { return fn(); } finally { added.forEach(k => { delete GIRDERS[k]; }); back.forEach(f => { GIRDERS[f.name][f.at][f.key] = f.now; }); backT.forEach(f => { GIRDERS[f.name].flangeT = f.now; }); }
   }
   const src = n => (STD[n] ? STD[n].src : null);
   /* DOT_J (PS-35, engineer 2026-11-14): the St. Venant torsional constant J of a standard section from the DOT reference sheets, which the
@@ -460,6 +494,6 @@
   }
   const noTopText = inp => noTop(inp) ? `No cast-in-place topping is entered for this ${inp.girder} (deck thickness t<sub>s</sub> = 0, PS-42): the type (k) distribution factor equations are evaluated with t<sub>s</sub> = 0 in their deck-slab term K<sub>g</sub> / (12 L t<sub>s</sub>³), so the moment distribution factor comes out very large and is likely very conservative. Add the topping (deck thickness t<sub>s</sub>, <a href="#" data-goin="xsec">Cross-section tab</a>) or review the distribution factor by hand (for example a refined analysis) and enter it (<a href="#" data-goin="loads">Loads tab</a>).` : '';
 
-  install(); wrapVoids(); wrapMD();
-  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, LIB, XCHK, xchk, uses, stamp, MD, ORDER_MD, group, rowGrid, applyRows, rowNote, extrapText, mdOf, mdHalf, mdVoids, mdNote, noTop, noTopText, roundPoly, nxW, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
+  install(); wrapVoids(); wrapMD(); wrapWeakJ();
+  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, NEXT_FT, WJ_ANCHOR, LIB, XCHK, xchk, uses, stamp, MD, ORDER_MD, group, rowGrid, applyRows, rowNote, extrapText, mdOf, mdHalf, mdVoids, mdNote, noTop, noTopText, roundPoly, nxW, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
 })();

@@ -10022,3 +10022,111 @@ See the PR description: every NEXT design tried (library and MassDOT NEXT F and 
 - The change table of PR #1721 (the NEXT reductions; a NEXT verdict can change NG → OK) approved by the engineer 2026-11-25 with the merge.
 ### Saved data
 None.
+
+## 2026-11-26 — PR: claude/ps-next-flange (NF-4) — the NEXT F flange 4 in (was 8) in the old library's NEXT 24F–36F, and the weak-axis I_y and J of a NEXT with its flange; NEXT D 8 in checked (§4: the result changes listed) — NOT MERGED, engineer review
+### Request (engineer answer, 2026-11-26)
+"PS NEXT library: flange 4 in for NEXT F, 8 in for NEXT D. Fix the NEXT F drawing (and I_y, J) to 4 in; check NEXT D uses 8 in. Display/I_y/J; list any result change."
+### Where
+- `apps/ps-bridge/engine/sections.js`: new `NEXT_FT` (after `const NEXT_FIX = …`), applied in `install()` (anchor `NEXT_FIX.forEach(f => { const e = GIRDERS[f.name];`: the old library's `GIRDERS['NEXT 24F' … 'NEXT 36F'].flangeT` 8 → 4, the engine's entry changed in place, no engine file edited) and put back in `withLegacy` (the old app's results of an imported design); new `wrapWeakJ()` (called after `install(); wrapVoids(); wrapMD();`): the engine's `weakAxisAndJ` wrapped so a NEXT's I_y and J take the flange `g.next.ft` where the engine's NEXT branch writes 8 (anchor `const hs=Math.max(1,h-8), As=B*hs;` checked once, else an error); ft = 8 (NEXT D) or not given: the engine's own result.
+- `apps/ps-bridge/engine/worked.js` weakSteps (anchor `} else if (G.isNext) {`): the steps `sec.wk.hs`, `sec.wk.Iy`, `sec.wk.Jf` with t_f.
+- `tests/psbridge-compare.mjs` (harness B): the old page computes a NEXT F with flangeT 4 and the same I_y / J (the intended difference).
+- MassDOT NEXT F (dwg 9.2.3) and NEXT D (dwg 11.2.3) entries: already 4 in and 8 in (`MD`, PS-37): checked, not changed.
+### Before / After
+```
+GIRDERS['NEXT 24F' | 'NEXT 28F' | 'NEXT 32F' | 'NEXT 36F'].flangeT:  8  →  4
+weakAxisAndJ (NEXT):  hs = max(1, h − 8); I_y = 2[B hs³/12 + B hs (c/2)²] + 8 b_f³/12; J = 2 J(B, hs) + J(b_f, 8)
+                  →   hs = max(1, h − t_f); I_y = 2[B hs³/12 + B hs (c/2)²] + t_f b_f³/12; J = 2 J(B, hs) + J(b_f, t_f)     (t_f = g.next.ft)
+```
+The old library's entries carry the MassDOT dwg 9.2.3 values (PS-38) and their own areas give a 4 in flange: (A at 144 in − A at 96 in)/(144 − 96) = (1,164 − 972)/48 = 4.0 in for the 24F, and 192/48 = 4.0 in for the 28F, 32F and 36F.
+### What reads the flange (g.next.ft, g.d = [ft, 0, h − ft, 0])
+The section outline (halfPolygon: the drawing, the 3D view, the DXF), and through it the width at a height of the release tension force (5.9.2.3.1b, engine/reltension.js exact parts) and of the pier top tension steel (5.12.3.3.5); the handling weak-axis I (approxIy, lateral stability FS); the weak-axis I_y and J (Section tab, the psSection hand-off; no check); the flanged flexure h_f without a topping; the pier negative-moment block limit t_bf and PS-34's stem depth h − t_f (warnings); the applicability item t_s of a NEXT without a topping; the geometry hand-off's tf.
+### Governing provision
+Section geometry (MassDOT LRFD Bridge Manual Part II dwg 9.2.3, the NEXT F; dwg 11.2.3, the NEXT D). The changed checks: AASHTO LRFD 10th Ed. (2024) Art. 5.9.2.3.1b (bonded reinforcement for the tensile force, Table 5.9.2.3.1b-1), 5.12.3.3.5; PCI lateral stability (handling, the engine's own method).
+### Check case (by hand), tests/engine/psbridge-next-flange.test.mjs
+The tab design "NEXT 36F with a 6 in topping, no draped strands", G2: b_f = 120 in, h = 36 in, B = 13.0 in, stems 60 in c/c.
+| Quantity | Before (t_f 8 in) | After (t_f 4 in) |
+|---|---|---|
+| Outline: flange underside | y = 28 in | y = 32 in |
+| I_y = 2[13 hs³/12 + 13 hs (30)²] + t_f (120)³/12 | hs 28: 702,762.7 + 1,152,000 = 1,854,763 in⁴ | hs 32: 819,797.3 + 576,000 = 1,395,797 in⁴ |
+| J = 2 J(13, hs) + J(120, t_f) | 2(14,530.75) + 19,619.84 = 48,681 in⁴ | 2(17,450.47) + 2,506.24 = 37,407 in⁴ |
+| Handling I (approxIy) = t_f (120)³/12 + (36 − t_f)(26)³/12 | 1,152,000 + 41,010.7 = 1,193,011 in⁴ | 576,000 + 46,869.3 = 622,869 in⁴ |
+| Release tension at x = 3 ft: f_t = −0.65937, f_b = 3.47786 ksi, c = 36(0.65937)/(0.65937 + 3.47786) = 5.7375 in | all in the flange: T = 120(5.7375)(0.65937)/2 = 226.99 kip | flange 0–4 in: 480 in² × 0.42954 = 206.17 kip; stems 4–5.7375 in: 26(1.7375) = 45.18 in² × 0.09983 = 4.51 kip; T = 210.68 kip |
+| A_s,req = T / 30 ksi; ratio to A_s,prov = 0.62 in² | 7.566 in²; 12.204 FAIL | 7.023 in²; 11.327 FAIL |
+NEXT D (MassDOT NEXT 28D): t_f = 8 in, I_y and J the engine's own (unchanged).
+### Designs that change (origin/main d363e363 → this branch, `PSBHoldDown.compute`, 785 designs: the 19 tab designs on every line, 38 recorded, 600 seeded, the NX test project)
+68 change, every one a NEXT F of the old library; no verdict flips (every one was already FAIL, and no check flips PASS / FAIL). Changed checks: Release tens. steel (5.9.2.3.1b) in 55 (lower: the thinner flange holds less of the tension zone), Lifting FS and Hauling FS (crack, screening) in 24 (the handling I), Top tens. steel (pier, 5.12.3.3.5) in 6. Every changed ratio, before → after:
+| Design (line) | Changed checks |
+|---|---|
+| tab: NEXT 36F with a 6 in topping, no draped strands G2 | Release tens. steel (5.9.2.3.1b) 12.2038 → 11.3271 |
+| tab: NEXT 36F with a 6 in topping, no draped strands G3 | Release tens. steel (5.9.2.3.1b) 12.2038 → 11.3271 |
+| tab: NEXT 36F with a 6 in topping, no draped strands G4 | Release tens. steel (5.9.2.3.1b) 12.2038 → 11.3271 |
+| tab: NEXT 36F with a 6 in topping, no draped strands G1 | Release tens. steel (5.9.2.3.1b) 12.2038 → 11.3271 |
+| tab: NEXT 36F with a 6 in topping, no draped strands G5 | Release tens. steel (5.9.2.3.1b) 12.2038 → 11.3271 |
+| next_skew | Release tens. steel (5.9.2.3.1b) 8.6384 → 7.6677 |
+| shape_NEXT_24F | Release tens. steel (5.9.2.3.1b) 6.3462 → 6.3459 |
+| shape_NEXT_28F | Release tens. steel (5.9.2.3.1b) 7.1749 → 7.0117 |
+| shape_NEXT_32F | Release tens. steel (5.9.2.3.1b) 7.9351 → 7.4162 |
+| shape_NEXT_36F | Release tens. steel (5.9.2.3.1b) 8.6384 → 7.6677 |
+| seed022:shape_NEXT_24F,ext,debond,hand | Lifting FS (crack, screening) 0.0328 → 0.0339; Hauling FS (crack, screening) 0.0163 → 0.0164 |
+| seed025:shape_NEXT_32F,cont3,rate | Release tens. steel (5.9.2.3.1b) 6.3435 → 6.2283; Top tens. steel (pier, 5.12.3.3.5) 2.8299 → 2.7072 |
+| seed026:next_skew,ext,approx,debond,hand | Release tens. steel (5.9.2.3.1b) 4.2415 → 4.1458; Lifting FS (crack, screening) 0.0189 → 0.0197; Hauling FS (crack, screening) 0.0155 → 0.0155 |
+| seed027:shape_NEXT_36F | Release tens. steel (5.9.2.3.1b) 7.4047 → 7.0853 |
+| seed055:shape_NEXT_24F,MassDOT | Release tens. steel (5.9.2.3.1b) 7.0983 → 7.0857 |
+| seed058:shape_NEXT_32F,RIDOT,debond | Release tens. steel (5.9.2.3.1b) 5.5108 → 5.2161 |
+| seed060:shape_NEXT_36F,ext,approx,MassDOT,cont2,midas+,hand | Lifting FS (crack, screening) 0.0734 → 0.1206; Hauling FS (crack, screening) 0.0265 → 0.0358 |
+| seed088:shape_NEXT_24F,ext,CTDOT,rate,hand,deck | Lifting FS (crack, screening) 0.0280 → 0.0283; Hauling FS (crack, screening) 0.0165 → 0.0166 |
+| seed090:shape_NEXT_28F,approx,RIDOT,cont3,rate,hand | Release tens. steel (5.9.2.3.1b) 5.6333 → 5.6319; Top tens. steel (pier, 5.12.3.3.5) 2.9066 → 2.8696; Lifting FS (crack, screening) 0.0348 → 0.0442; Hauling FS (crack, screening) 0.0165 → 0.0171 |
+| seed093:shape_NEXT_36F,CTDOT,debond | Release tens. steel (5.9.2.3.1b) 9.9700 → 8.6440 |
+| seed123:shape_NEXT_28F,ext,CTDOT,debond | Release tens. steel (5.9.2.3.1b) 4.7371 → 4.7106 |
+| seed124:shape_NEXT_32F | Release tens. steel (5.9.2.3.1b) 8.7492 → 8.2794 |
+| seed126:shape_NEXT_36F,approx,CTDOT,debond,rate | Release tens. steel (5.9.2.3.1b) 8.6562 → 7.6367 |
+| seed156:shape_NEXT_28F,MassDOT,cont3,debond,midas+,rate,hand | Lifting FS (crack, screening) 0.0508 → 0.0749; Hauling FS (crack, screening) 0.0199 → 0.0235 |
+| seed157:shape_NEXT_32F,CTDOT,cont2 | Release tens. steel (5.9.2.3.1b) 5.9910 → 5.8791; Top tens. steel (pier, 5.12.3.3.5) 3.4568 → 3.2589 |
+| seed159:shape_NEXT_36F,ext,cont3r,debond | Release tens. steel (5.9.2.3.1b) 6.3135 → 5.8688 |
+| seed161:next_skew,approx | Release tens. steel (5.9.2.3.1b) 6.8461 → 6.5756 |
+| seed190:shape_NEXT_32F,cont2r,debond | Release tens. steel (5.9.2.3.1b) 5.2594 → 5.1846 |
+| seed192:shape_NEXT_36F,ext,RIDOT,rate,hand,deck | Lifting FS (crack, screening) 0.0196 → 0.0209; Hauling FS (crack, screening) 0.0157 → 0.0159 |
+| seed206:next_skew,MassDOT,cont2r,deck | Release tens. steel (5.9.2.3.1b) 10.7865 → 9.9681 |
+| seed223:shape_NEXT_32F,ext,cont2r,midas+,hand,deck | Lifting FS (crack, screening) 0.0736 → 0.1217; Hauling FS (crack, screening) 0.0251 → 0.0338 |
+| seed225:shape_NEXT_36F,ext,hand,deck | Release tens. steel (5.9.2.3.1b) 8.2577 → 7.4345; Lifting FS (crack, screening) 0.0250 → 0.0311; Hauling FS (crack, screening) 0.0169 → 0.0182 |
+| seed251:next_skew,ext,CTDOT,cont2r,rate,deck | Release tens. steel (5.9.2.3.1b) 21.8860 → 19.5893 |
+| seed255:shape_NEXT_28F,ext,cont2r,hand | Release tens. steel (5.9.2.3.1b) 6.5253 → 6.5252; Top tens. steel (pier, 5.12.3.3.5) 4.5948 → 4.5168; Lifting FS (crack, screening) 0.0513 → 0.0759; Hauling FS (crack, screening) 0.0211 → 0.0258 |
+| seed256:shape_NEXT_32F,MassDOT,debond,hand | Release tens. steel (5.9.2.3.1b) 1.8485 → 1.8433; Lifting FS (crack, screening) 0.0241 → 0.0272; Hauling FS (crack, screening) 0.0158 → 0.0159 |
+| seed258:shape_NEXT_36F,ext,rate | Release tens. steel (5.9.2.3.1b) 9.2857 → 8.1448 |
+| seed288:shape_NEXT_28F,MassDOT,hand | Release tens. steel (5.9.2.3.1b) 8.2172 → 7.9365; Lifting FS (crack, screening) 0.0233 → 0.0233; Hauling FS (crack, screening) 0.0161 → 0.0161 |
+| seed289:shape_NEXT_32F,CTDOT,debond,rate | Release tens. steel (5.9.2.3.1b) 5.8808 → 5.6867 |
+| seed291:shape_NEXT_36F,MassDOT,cont3,debond,hand,deck | Lifting FS (crack, screening) 0.0242 → 0.0284; Hauling FS (crack, screening) 0.0156 → 0.0160 |
+| seed319:shape_NEXT_24F,debond | Release tens. steel (5.9.2.3.1b) 5.7302 → 5.7260 |
+| seed321:shape_NEXT_28F,CTDOT,deck | Release tens. steel (5.9.2.3.1b) 9.4567 → 9.4528 |
+| seed322:shape_NEXT_32F,ext,RIDOT | Release tens. steel (5.9.2.3.1b) 7.7166 → 7.4101 |
+| seed324:shape_NEXT_36F,cont2r,debond,midas+ | Release tens. steel (5.9.2.3.1b) 6.2226 → 5.7861 |
+| seed341:next_skew,ext,RIDOT,cont2 | Release tens. steel (5.9.2.3.1b) 7.4044 → 6.9265 |
+| seed354:shape_NEXT_28F,rate,deck | Release tens. steel (5.9.2.3.1b) 7.6512 → 7.4346 |
+| seed355:shape_NEXT_32F,MassDOT,cont3r,debond,hand,deck | Release tens. steel (5.9.2.3.1b) 2.7383 → 2.6778; Lifting FS (crack, screening) 0.0401 → 0.0575; Hauling FS (crack, screening) 0.0211 → 0.0259 |
+| seed386:next_skew,ext,approx,CTDOT | Release tens. steel (5.9.2.3.1b) 8.1728 → 7.5353 |
+| seed387:shape_NEXT_28F,debond | Release tens. steel (5.9.2.3.1b) 7.4791 → 7.4211 |
+| seed390:shape_NEXT_36F,MassDOT,debond,rate,hand | Lifting FS (crack, screening) 0.0211 → 0.0238; Hauling FS (crack, screening) 0.0168 → 0.0180 |
+| seed418:shape_NEXT_24F,ext,RIDOT,cont2,hand | Lifting FS (crack, screening) 0.0454 → 0.0610; Hauling FS (crack, screening) 0.0219 → 0.0268 |
+| seed421:shape_NEXT_32F,ext,approx,cont3r,midas+ | Release tens. steel (5.9.2.3.1b) 7.1658 → 6.9454; Top tens. steel (pier, 5.12.3.3.5) 4.8619 → 4.4377 |
+| seed423:shape_NEXT_36F,ext,CTDOT,cont4,debond | Top tens. steel (pier, 5.12.3.3.5) 3.8024 → 3.2982 |
+| seed431:next_skew,ext,approx,hand,deck | Lifting FS (crack, screening) 0.0276 → 0.0359; Hauling FS (crack, screening) 0.0180 → 0.0204 |
+| seed451:shape_NEXT_24F,ext,CTDOT,hand | Release tens. steel (5.9.2.3.1b) 6.7117 → 6.7077; Lifting FS (crack, screening) 0.0276 → 0.0276; Hauling FS (crack, screening) 0.0164 → 0.0165 |
+| seed454:shape_NEXT_32F,approx,CTDOT | Release tens. steel (5.9.2.3.1b) 7.2592 → 6.9493 |
+| seed476:next_skew,approx,MassDOT,rate,hand | Lifting FS (crack, screening) 0.0177 → 0.0179; Hauling FS (crack, screening) 0.0155 → 0.0156 |
+| seed486:shape_NEXT_28F,approx,CTDOT,cont3r,rate,hand | Release tens. steel (5.9.2.3.1b) 4.0284 → 4.0201; Lifting FS (crack, screening) 0.0501 → 0.0737; Hauling FS (crack, screening) 0.0226 → 0.0285 |
+| seed487:shape_NEXT_32F,approx,MassDOT,hand,deck | Release tens. steel (5.9.2.3.1b) 9.7382 → 9.4043; Lifting FS (crack, screening) 0.0234 → 0.0241; Hauling FS (crack, screening) 0.0157 → 0.0158 |
+| seed489:shape_NEXT_36F,CTDOT | Release tens. steel (5.9.2.3.1b) 4.2823 → 3.8813 |
+| seed517:shape_NEXT_24F,cont3r,rate,hand,deck | Lifting FS (crack, screening) 0.0484 → 0.0644; Hauling FS (crack, screening) 0.0188 → 0.0213 |
+| seed521:next_skew | Release tens. steel (5.9.2.3.1b) 18.8028 → 16.6771 |
+| seed552:shape_NEXT_28F,approx,rate,deck | Release tens. steel (5.9.2.3.1b) 5.2095 → 5.1857 |
+| seed553:shape_NEXT_32F,cont3r,debond,deck | Release tens. steel (5.9.2.3.1b) 4.8966 → 4.8176 |
+| seed555:shape_NEXT_36F,ext,cont4r,deck | Release tens. steel (5.9.2.3.1b) 7.4099 → 6.9313 |
+| seed566:next_skew,ext,RIDOT,cont2 | Release tens. steel (5.9.2.3.1b) 7.8659 → 7.1908 |
+| seed585:shape_NEXT_28F,RIDOT | Release tens. steel (5.9.2.3.1b) 7.8664 → 7.6991 |
+| seed586:shape_NEXT_32F,RIDOT,hand,deck | Release tens. steel (5.9.2.3.1b) 7.1388 → 6.7649; Lifting FS (crack, screening) 0.0275 → 0.0339; Hauling FS (crack, screening) 0.0166 → 0.0174 |
+| seed588:shape_NEXT_36F,ext,approx,CTDOT,hand | Release tens. steel (5.9.2.3.1b) 7.1257 → 6.3937; Lifting FS (crack, screening) 0.0220 → 0.0257; Hauling FS (crack, screening) 0.0159 → 0.0164 |
+### How verified
+`tests/engine/psbridge-next-flange.test.mjs` (new: the library, withLegacy, the hand values above, the NEXT D, the anchor, the steps); `psbridge-massdot`, `psbridge-sections`, `psbridge-ps33`, `psbridge-ps38` updated for the 4 in flange (their before values: the old entries); `node tests/engine/run.mjs psbridge`; harness B (the old page with flangeT 4 and the same I_y / J).
+### Decisions (pending engineer review)
+- NF-4a. A project saved before is not told on open (no PS-38 style notice): the flange is not a saved value; the result changes are those listed above.
+- NF-4b. A Custom NEXT keeps the engine's 8 in in I_y / J unless its own flangeT is given.
