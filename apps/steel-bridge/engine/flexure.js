@@ -50,8 +50,8 @@
   const ES = 29000, ED = 'AASHTO LRFD 10th Ed.';
   const St = () => window.SharedSteps, SEC = () => window.SBDSections;
   const n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), n4 = x => St().n(x, 4), g0 = x => St().g(x, 0), g1 = x => St().g(x, 1);
-  const pa = x => (x < 0 ? `(${n2(x)})` : n2(x));
-  const pp = x => `(${n2(x)})`;   // a factor times a moment: always in parentheses, 1.25(1450.00) (SB2-C1, display only)
+  const pa = x => (x < 0 ? `(${n2(x)})` : n2(x));   // a term of a sum: a negative value in parentheses, M_DC1 + M_DC2 = 1450.00 + (−12.75)
+  const pp = x => `(${n2(x)})`;   // a factor times a moment: always in parentheses, 1.25(1450.00) (SB2-C1, display only; SBRF-1, 2026-11-25: also the moment reversal step, which used pa and printed "0.860.19")
   const r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2), r3 = v => +(+v).toFixed(3);
 
   /* ---------- load factors ---------- */
@@ -459,9 +459,12 @@
       [['DC1', 'dc', 'dcMin', r.MDC1], ['DC2', 'dc', 'dcMin', r.MDC2], ['DW', 'dw', 'dwMin', r.MDW]].forEach(([k, mx, mn, Mm]) =>
         w.add({ id: 'gam.' + k, label: `γ_p for ${k}: maximum where it adds to the ${pos ? 'positive' : 'negative'} moment, minimum where it relieves it`, sym: `\\gamma_{${k}}`, eq: '', sub: `M_{${k}} = ${n2(Mm)}\\text{ kip-ft}`, value: r.gm[k], unit: '', d: 2, ref: tbl }));
       if (r.ut) [['UT', r.MUT], ['UF', r.MUF]].forEach(([k, Mm]) => w.add({ id: 'gam.' + k, label: `γ for ${k === 'UT' ? 'existing utilities (DW factors)' : 'future utility allowance (γ_DC max, 0 min)'}`, sym: `\\gamma_{${k}}`, eq: '', sub: `M_{${k}} = ${n2(Mm)}`, value: r.gm[k], unit: '', d: 2, ref: tbl }));
-      w.add({ id: 'Mu', label: 'Strength I factored moment', sym: 'M_{u}', eq: '\\gamma_{DC1}M_{DC1} + \\gamma_{DC2}M_{DC2} + \\gamma_{DW}M_{DW} + 1.75M_{LL+IM}' + (r.ut ? ' + \\gamma_{UT}M_{UT} + \\gamma_{UF}M_{UF}' : ''),
+      // SBRF-2 (2026-11-25, display only): with the owner's η / m (the steps own.ll, own.sll above) the LL+IM factor is written γ_LL (= 1.75ηm) and
+      // γ_LL,SII (= 1.30m), the factors the substitution uses; before, the equation read 1.75 / 1.30 while the numbers were 2.205 / 1.56
+      const ow = !!(G.own && (G.own.eta !== 1 || G.own.etaN !== 1 || G.own.m !== 1)), gLL = ow ? '\\gamma_{LL}' : '1.75', gSL = ow ? '\\gamma_{LL,SII}' : '1.30';
+      w.add({ id: 'Mu', label: 'Strength I factored moment', sym: 'M_{u}', eq: `\\gamma_{DC1}M_{DC1} + \\gamma_{DC2}M_{DC2} + \\gamma_{DW}M_{DW} + ${gLL}M_{LL+IM}` + (r.ut ? ' + \\gamma_{UT}M_{UT} + \\gamma_{UF}M_{UF}' : ''),
         sub: `${n2(r.gm.DC1)}${pp(r.MDC1)} + ${n2(r.gm.DC2)}${pp(r.MDC2)} + ${n2(r.gm.DW)}${pp(r.MDW)} + ${G.own ? n3(G.ll) : n2(G.ll)}${pp(r.MLL)}` + (r.ut ? ` + ${n2(r.gm.UT)}${pp(r.MUT)} + ${n2(r.gm.UF)}${pp(r.MUF)}` : ''), value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Eq. 3.4.1-1` });
-      w.add({ id: 'Ms', label: 'Service II moment', sym: 'M_{s}', eq: 'M_{DC1} + M_{DC2} + M_{DW} + 1.30M_{LL+IM}', sub: `${pa(r.MDC1)} + ${pa(r.MDC2)} + ${pa(r.MDW)} + ${n2(G.sll)}${pp(r.MLL)}` + (r.ut ? ` + ${pa(r.MUT)} + ${r.svU}${pp(r.MUF)}` : ''), value: r.Ms, unit: 'kip-ft', d: 1, ref: tbl });
+      w.add({ id: 'Ms', label: 'Service II moment', sym: 'M_{s}', eq: `M_{DC1} + M_{DC2} + M_{DW} + ${gSL}M_{LL+IM}`, sub: `${pa(r.MDC1)} + ${pa(r.MDC2)} + ${pa(r.MDW)} + ${n2(G.sll)}${pp(r.MLL)}` + (r.ut ? ` + ${pa(r.MUT)} + ${r.svU}${pp(r.MUF)}` : ''), value: r.Ms, unit: 'kip-ft', d: 1, ref: tbl });
     } else {
       w.add({ id: 'Mu', label: 'Strength I factored moment (factored demands as given)', sym: 'M_{u}', eq: '\\sum M_{u,i}', sub: ['DC1', 'DC2', 'DW', 'LL', 'UT', 'UF'].map(k => pa(r.fA[k])).join(' + '), value: r.Mu, unit: 'kip-ft', d: 1, ref: `${ED} Eq. 3.4.1-1` });
       w.add({ id: 'Ms', label: 'Service II moment (factored demands as given)', sym: 'M_{s}', eq: '\\sum M_{s,i}', sub: ['DC1', 'DC2', 'DW', 'LL', 'UT', 'UF'].map(k => pa(r.fB[k])).join(' + '), value: r.Ms, unit: 'kip-ft', d: 1, ref: tbl });
@@ -588,7 +591,7 @@
     // Fatigue I stress ranges
     [['T', 'top', r.d, r.dfT], ['B', 'bottom', 0, r.dfB]].forEach(([k, f, y, v]) => w.add({ id: `fat${k}`, label: nc ? `Fatigue I stress range, ${f} of steel (noncomposite: steel section)` : `Fatigue I stress range, ${f} of steel (positive on n, negative on ${r.minR ? 'n: 6.6.1.2.1 rebar ≥ 1%' : 'steel + rebar'})`, sym: `(\\Delta f)_{${f}}`, eq: '\\gamma(|f(M_{fat}^{+})| + |f(M_{fat}^{-})|)',
       sub: `${n2(r.gfat)}(|f(${n2(r.MfP)})| + |f(${n2(r.MfN)})|)`, value: v, unit: 'ksi', d: 2, ref: `${ED} Table 3.4.1-1, Art. 6.6.1.2.1, 6.10.1.1.1c`, note: 'Resistance (ΔF)_n: the fatigue module.' }));
-    if (!r.factored) w.add({ id: 'rev', label: 'Strength I opposite extreme (moment reversal)', sym: 'M_{u,opp}', eq: '\\gamma_{p}M_{DC1} + \\gamma_{p}M_{DC2} + \\gamma_{p}M_{DW} + 1.75M_{LL,opp}', sub: `${n2(r.gmO.DC1)}${pa(r.MDC1)} + ${n2(r.gmO.DC2)}${pa(r.MDC2)} + ${n2(r.gmO.DW)}${pa(r.MDW)} + ${n2(G.ll)}${pa(r.MLLo)}`,
+    if (!r.factored) w.add({ id: 'rev', label: 'Strength I opposite extreme (moment reversal)', sym: 'M_{u,opp}', eq: `\\gamma_{p}M_{DC1} + \\gamma_{p}M_{DC2} + \\gamma_{p}M_{DW} + ${G.own && (G.own.eta !== 1 || G.own.etaN !== 1 || G.own.m !== 1) ? '\\gamma_{LL}' : '1.75'}M_{LL,opp}`, sub: `${n2(r.gmO.DC1)}${pp(r.MDC1)} + ${n2(r.gmO.DC2)}${pp(r.MDC2)} + ${n2(r.gmO.DW)}${pp(r.MDW)} + ${n2(G.ll)}${pp(r.MLLo)}`,
       value: r.Mrev, unit: 'kip-ft', d: 1, ref: tbl, note: r.rev ? `Reverses: also check this section in ${pos ? 'negative' : 'positive'} flexure.` : 'Same sign as M_u: no reversal.', ok: !r.rev });
     return [].concat(w.steps, c.steps);
   }

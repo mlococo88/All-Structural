@@ -322,7 +322,9 @@
     if (mod && mod.errors) warnings.push(`Loads module: ${mod.errors[0]} The entered loads and factors are used.`);
     if (LD.source === 'none entered') warnings.push('No dead loads for this girder: DC1 wet deck, DC2, DW and construction LL are 0 unless entered on the Loads tab (Override calculated value). Only the girder steel is computed here.');
     if (DF.manual) warnings.push(`Live load distribution factors: ${DF.src}. LL+IM is per girder only with this girder's factors.`);
-    if (LD.src.CL === 'none') warnings.push(LD.cl.on ? 'Construction live load: the tributary deck width needs the loads module (complete cross-section); M_CL is 0.' : 'Construction live load not calculated (a project saved before 2026-11-09) and not entered: M_CL is 0. Loads tab: "Calculate the construction live load".');
+    // SBRF-8 (2026-11-25, wording only): the warning names its condition (the option off, nothing entered); before, "a project saved before
+    // 2026-11-09", which was wrong for a project saved later with the option still off
+    if (LD.src.CL === 'none') warnings.push(LD.cl.on ? 'Construction live load: the tributary deck width needs the loads module (complete cross-section); M_CL is 0.' : 'Construction live load not calculated ("Calculate the construction live load" is off on the Loads tab) and not entered: M_CL is 0.');
     if (LD.src.CL === 'calc' && LD.cl.own && LD.cl.q < LD.cl.own - 1e-9) warnings.push(`Construction live load q_CL = ${LD.cl.q} psf is below the owner's minimum ${LD.cl.own} psf (${LD.cl.ownCite}).`);
     const FM = fmOf(P, mod, mod && mod.j != null ? mod.j : lineOf(P, g));
     if (FM && !isNum(FM.Pj)) warnings.push('Finishing machine: its share to this girder needs the loads module (complete cross-section); it is not applied.');
