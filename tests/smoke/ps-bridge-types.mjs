@@ -281,7 +281,7 @@ await o.b.close();
 o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
 const RPQ = () => p.evaluate(() => ({ secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent.trim()), unres: document.querySelectorAll('.rp-doc .rp-bad').length,
   steps: document.querySelectorAll('.rp-doc .rp-step').length, nSt: window.PSBReportUI.state.M.sections.reduce((a, s) => a + s.subs.reduce((b, q) => b + q.items.filter(i => i.type === 'steps').reduce((c, i) => c + i.steps.length, 0), 0), 0),
-  kErr: document.querySelectorAll('.rp-doc .katex-error').length, gov: (document.querySelector('[data-rpworked="gov"]') || {}).checked, all: (document.querySelector('[data-rpworked="all"]') || {}).checked,
+  kErr: document.querySelectorAll('.rp-doc .katex-error').length, gov: !!document.querySelector('[data-rpworked="all"]') && !document.querySelector('[data-rpworked="all"]').checked, all: (document.querySelector('[data-rpworked="all"]') || {}).checked,
   ui: JSON.parse(localStorage.getItem('psb2.ui') || '{}'), proj: localStorage.getItem('psb2.project.current') }));
 const rptOpen = async () => { await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 120000 }); await p.waitForTimeout(300); };
 await rptOpen();
@@ -311,7 +311,7 @@ await rptOpen();
   await p.emulateMedia({ media: 'screen' }); await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   await p.reload(); await ready(p); await rptOpen(); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 66, null, { timeout: 120000 });
   check((await RPQ()).all, 'PS-25: the choice kept after a reload');
-  await p.check('[data-rpworked="gov"]'); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 30, null, { timeout: 120000 }); }
+  await p.uncheck('[data-rpworked="all"]'); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 30, null, { timeout: 120000 }); }
 // PS-26 (engineer decision 2026-11-13): RIDOT, the Exterior type's own f′c 9.0 ksi: §2's Owner rules table has one "Applied here" column per
 // girder type (its f′c, limit and ratio), each heading's "see §" goes to that type's sections; the in-app Owner rules tab keeps one column (the
 // type shown) with the same cell as that type's column; §1 Key quantities "DF_M / DF_V (see §)" goes to the Moment distribution factor step
