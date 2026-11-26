@@ -4,6 +4,8 @@ The tools stay single, self-contained HTML files with no build step and no npm (
 
 **Engine tests (Node only, no browser):** `node tests/engine/run.mjs` loads the classic scripts in `shared/` into a Node `vm` context and runs every `tests/engine/*.test.mjs` (add a name fragment to run some: `node tests/engine/run.mjs moving-load`). See `shared/README.md`.
 
+**Only the affected tests (2026-11-26):** `node tests/engine/affected.mjs [<git range>]` (default `origin/main...HEAD`) prints the engine test files a branch's changes affect, worked out from what each test file actually loads (its `loadShared` / `path.join` paths and its local helper modules), not from file names. For a PR that touches one app only, the pre-merge full run is `node tests/engine/run.mjs $(node tests/engine/affected.mjs)`. A change to shared code (`shared/**`), to `tests/engine/harness.mjs` / `run.mjs` / `affected.mjs`, to `tests/libs/**`, or to any path it cannot place prints every file, so it runs everything (CLAUDE.md §3). `--why` lists on stderr how each changed path was mapped. A full file name given to `run.mjs` (ending `.test.mjs`) now runs that file only (`legacy.test.mjs` no longer also runs `psbridge-legacy.test.mjs`); a name fragment still matches every file containing it. The mapping rules are in the header of `tests/engine/affected.mjs`. Browser smokes are not covered: run the changed tool's smokes as before.
+
 **Steel Bridge Design (2026-11-19, SBDA):** the old single-file app is archived as `archive/Steel Bridge Design (archived 2026-11-19).html`; the GirderDetail / Preliminary sizing / ST-Girder tests and scripts below read that file (constant `SBD_ARCHIVE_FILE` in `tests/engine/harness.mjs`, re-exported by `tests/lib.mjs`), and a git ref older than the archiving is read under its old name. `Steel Bridge Design.html` is now a redirect page to `apps/steel-bridge/index.html`.
 
 ## Requirements
@@ -51,6 +53,11 @@ node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # 
 
 # Steel Bridge (apps/steel-bridge) Report tab: browser smoke test with print emulation (0 console errors, 0 KaTeX errors, links, print)
 node tests/smoke/steel-bridge-report.mjs
+
+# Steel Bridge Report fixes (SBRF, 2026-11-25): a made-up 10-girder bridge with a mountable sidewalk and two girder types; the girder-type
+# bar on the screen and not printed, "Type: <label> on line G6", the b_eff note, bracketed substitutions, Z_r once; 0 console / KaTeX
+# errors, 0 unresolved § links. Engine test: node tests/engine/run.mjs sb-report-fixes (every worked step's substitution scanned)
+node tests/smoke/steel-bridge-report-fixes.mjs
 
 # shared/report.js: a § link ends with its target at the top of the reading area although the report above it is still being laid out
 # (content-visibility, a figure that grows late), in the window and in a scroll container; a key pressed meanwhile stops it (RGS)

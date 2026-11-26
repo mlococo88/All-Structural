@@ -23,7 +23,7 @@ const W = loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-l
   'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'ui/constructibility.js', 'engine/splplace.js', 'engine/autodesign.js'].map(E));
 const AD = W.SBDAutoDesign, M = W.SBDModel, J = o => JSON.parse(JSON.stringify(o));
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
-const runAD = (P, settings) => { const it = AD.run(P, { settings, maxIt: 5, trimTries: 2 }); let s; while (!(s = it.next()).done); return s.value; };
+const runAD = (P, settings, opt) => { const it = AD.run(P, { settings, maxIt: 5, trimTries: 2, ...(opt || {}) }); let s; while (!(s = it.next()).done); return s.value; };
 
 test('Saved data: a project without autodesign.vars round-trips unchanged and reads every variable at its default', () => {
   // as saved before this PR: the Auto design inputs of PR 1 (mode, objective, price list, limits) and an Apply's undo snapshot
@@ -119,7 +119,7 @@ test('Apply: the tabs\' ratios on the applied project equal the candidate\'s (on
 
 test('A lock no design can meet is reported with what governs', () => {
   // the bottom flange held at most 3/4 in thick and at most 16 in wide: the pier sections cannot carry the negative moment
-  const P = M.defaultProject(), R = runAD(P, { mode: 'refine', topN: 1, vars: { tb: { mode: 'range', max: 0.75 }, bb: { mode: 'range', max: 16 } } });
+  const P = M.defaultProject(), R = runAD(P, { mode: 'refine', topN: 1, vars: { tb: { mode: 'range', max: 0.75 }, bb: { mode: 'range', max: 16 } } }, { current: false });   // current: false (test time): R.current not read; the note and lists as before
   assert.equal(R.cands.length, 0);
   assert.match(R.note, /^No candidate passes (the full check )?with these locks and ranges \(.*Bottom flange thickness t_b … to 0.75.*\): governing [\w-]+ [A-Z]+\d+/, R.note);
 });
