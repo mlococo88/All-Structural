@@ -10023,7 +10023,7 @@ See the PR description: every NEXT design tried (library and MassDOT NEXT F and 
 ### Saved data
 None.
 
-## 2026-11-26 — PR: claude/ps-next-flange (NF-4) — the NEXT F flange 4 in (was 8) in the old library's NEXT 24F–36F, and the weak-axis I_y and J of a NEXT with its flange; NEXT D 8 in checked (§4: the result changes listed) — NOT MERGED, engineer review
+## 2026-11-26 — PR: claude/ps-next-flange (PR #1740: https://github.com/mlococo88/All-Structural/pull/1740) (NF-4) — the NEXT F flange 4 in (was 8) in the old library's NEXT 24F–36F, and the weak-axis I_y and J of a NEXT with its flange; NEXT D 8 in checked (§4: the result changes listed) — NOT MERGED, engineer review
 ### Request (engineer answer, 2026-11-26)
 "PS NEXT library: flange 4 in for NEXT F, 8 in for NEXT D. Fix the NEXT F drawing (and I_y, J) to 4 in; check NEXT D uses 8 in. Display/I_y/J; list any result change."
 ### Where
