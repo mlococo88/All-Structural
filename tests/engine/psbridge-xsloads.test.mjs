@@ -20,7 +20,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PIN = '58204bac99b576db79d1dc3ac8eed0b47cf70018', FROM = 30, TO = 114;
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const ENG = ['sections', 'model', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'];
+const ENG = ['sections', 'model', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'];
 const W = loadShared('steps.js', ...PBDF, ...ENG.map(n => path.join(APP, `engine/${n}.js`)));
 // before this PR: bridge-dl.js and design.js of the commit before it (tests/engine/psbridge-xsloads.before/, copies kept for this test)
 const OLD = path.join(ROOT, 'tests/engine/psbridge-xsloads.before');
@@ -142,7 +142,7 @@ test('input checks of the new fields', () => {
 });
 
 test('figures (display only): the cross-section and the 3D view draw the curb, railing, fence and median; the 3D sidewalk from the deck edge (XS-D3)', () => {
-  const U = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'view3d', 'xsfig'].map(n => path.join(APP, `ui/${n}.js`)));
+  const U = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'view3d', 'xsfig'].map(n => path.join(APP, `ui/${n}.js`)));
   U.PSBSections.install();
   const P = full(U.PSBModel.newProject(), 'aashto'), m = U.PSBXsFig.model(P, 1), G = U.PSB3DUI.geom(P), Wd = 42 * 12;
   const k = a => a.map(q => q.kind + (q.side || '')).sort().join();

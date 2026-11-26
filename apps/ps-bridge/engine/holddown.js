@@ -41,7 +41,12 @@
   const engineFG = inp => (window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));
   // NX-1 (2026-11-25, engineer-approved §4 change): a NEXT F with a cast-in-place deck gets the per-stem type (k) factors (engine/lldf-next.js);
   // every other shape the factors as before
-  const compute0 = inp => apply(inp, window.PSBLldfNext ? window.PSBLldfNext.run(inp, engineFG) : engineFG(inp));
+  // EZX (2026-11-25, engineer "Merge, then exact"; §4): the concrete tensile force of 5.9.2.3.1b (release, top and bottom) and near an
+  // interior support (5.12.3.3.5) summed exactly by parts instead of the engine's 240 strips (engine/reltension.js): R.relSteel, R.cont.svc
+  // and their two checks; the engine's strip values kept in R.relT.strip. Applied to each engine result here, before the stages that run
+  // the chain more than once (UT-N, PL-A: their present / absent states then compare the same values)
+  const relT = (inp, R) => (window.PSBRelTension ? window.PSBRelTension.apply(inp, R) : R);
+  const compute0 = inp => apply(inp, relT(inp, window.PSBLldfNext ? window.PSBLldfNext.run(inp, engineFG) : engineFG(inp)));
   // PS-34 (2026-11-14): the pier compression block checked against the family's thickness (engine/pierblock.js; a warning only)
   const compute1 = inp => { const R = compute0(inp); return window.PSBPierBlock ? window.PSBPierBlock.apply(inp, R) : R; };
   // E1-D4 / E1-D5 (engineer decisions 2026-11-21): the engine's load rating with φ_s = 1.0 for shear and the positive-moment dead-load

@@ -17,7 +17,7 @@ import { recordedCases, seededCases } from './psbridge-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const ENG = nx => ['sections', 'model', 'rigid', 'lldf-fg', ...(nx ? ['lldf-next'] : []), 'lldf-opt', 'ut', 'pl', 'applicability', 'deckdist', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`));
+const ENG = nx => ['sections', 'model', 'rigid', 'lldf-fg', ...(nx ? ['lldf-next'] : []), 'lldf-opt', 'ut', 'pl', 'applicability', 'deckdist', 'reltension', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`));
 const UI = ['outkit', 'vizkit', 'bridgedl', 'xsfig', 'section', 'loads', 'inputs'].map(n => path.join(APP, `ui/${n}.js`));
 const W = loadShared('steps.js', 'deck.js', ...PBD, ...ENG(true), ...UI, 'report.js', ...['fromtab', 'data', 'builders'].map(n => path.join(APP, `report/${n}.js`)));
 const W0 = loadShared('steps.js', 'deck.js', ...PBD, ...ENG(false));   // the same app without engine/lldf-next.js (= before NX-1)
