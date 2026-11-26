@@ -10000,6 +10000,19 @@ None: no key or format changed; no new input (a_g and s_x are fixed, see the dec
 - SH-SP-4. A_v < A_v,min is tested as s > s_Av,min + 0.001 in (the engine's spacing tolerance), at the spacing provided at the station; λ = 1.0 (normal-weight, as the engine).
 - SH-SP-5. The shear worked steps now work the station where V_u/φV_n governs (was the critical section; the critical section's location stays the first step).
 ### Open items (raised, not changed: CLAUDE.md §4)
-- SH-SP-6. Slabs: 5.7.2.3 excepts members that meet the Art. 5.2 definition of a slab from the transverse reinforcement requirement; the engine applies 5.7.2.3 to deck slabs and box beams as to girders. With this change deck slabs (no A_v,min) take β by Eq. -2; their spacing check passed in every design tried (5.7.2.3 never required stirrups), but whether solid / voided deck slabs are "slabs" for 5.7.2.3 is for the engineer.
+- SH-SP-6. Slabs: 5.7.2.3 excepts members that meet the Art. 5.2 definition of a slab from the transverse reinforcement requirement; the engine applies 5.7.2.3 to deck slabs and box beams as to girders. With this change deck slabs (no A_v,min) take β by Eq. -2; their spacing check passed in every design tried (5.7.2.3 never required stirrups). **Decided by the engineer 2026-11-26: deck slab beams are NOT slabs under 5.7.2.3; they are treated as beams (the PR as built, no change).**
 - SH-SP-7. `engine/legacy.js` ("From the old app") compares the old app's result with this app's using the bare `computeAll` on both sides (a like-for-like parity of the import, not a design check); not changed. (The capacity hand-off that also called it was removed by PR #1716 before this merge.)
 - SH-SP-8. The old single-file app (`Prestressed Bridge Design.html`, frozen) has the same two issues.
+
+## 2026-11-26 — PR: claude/ps-shear-spacing (PR #1728) — engineer decisions recorded (no code change)
+### Request (engineer answers, 2026-11-26)
+- SH-SP-6 (#1728): "deck slab beams are NOT slabs under 5.7.2.3; treat them as beams (keep the PR as built)". The SH-SP entry above now reads decided; no code or result changes.
+- PS splitting resistance (AASHTO LRFD 10th Ed. (2024) Art. 5.9.4.4.1; raised by the review of a real NEXT F project, question 7 of that review): "use the force AFTER transfer (as now)". The app's splitting demand stays P_r = 0.04 P_i with P_i the prestressing force just after transfer (after the elastic shortening loss), as the moved engine computes it (`splitDem`, End zone tab, steps `ez.Pi`, `ez.Pr`). No code or result changes.
+### Where
+`fixlog/ps-bridge.md` only (this record and the SH-SP-6 line above).
+### Before / After
+No code change. Before: SH-SP-6 open; the splitting force an open question. After: both decided by the engineer as built.
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 5.7.2.3 (with the Art. 5.2 definition of a slab) and Art. 5.9.4.4.1 (splitting resistance: at least 4 % of the total prestressing force at transfer).
+### Check case
+None needed: no value changes (the SH-SP check case above is unchanged; the splitting check of any design is unchanged).
