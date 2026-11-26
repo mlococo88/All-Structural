@@ -10081,8 +10081,57 @@ The per-check ratios of every row: in the PR.
 - NX-D5. NEXT D is not changed (engine whole-beam factors, with a design warning): MassDOT takes type (i) with its own K_g (3.7.6); RIDOT BDM 2.4.6.3 does not allow NEXT D without the State Bridge Engineer's approval. A NEXT F with t_s = 0 is not changed either (warning).
 - NX-D6. The shear skew correction c_V on every line over the whole span, and the moment skew with the engine's θ (the larger skew), as the engine does for type (k).
 ### Open items (raised, not changed)
-- NX-O1. 4.6.2.2.2d lets a negative d_e outside the range be limited to −1.0 ft; the app (I-girders, and now the NEXT stems) flags d_e < −1.0 as an applicability FAIL instead (10 seeded designs with an entered d_e of 0 or 1 ft get d_e,st < −1.0). Apply the limit?
-- NX-O2. MassDOT 3.5.4.2 distributes DC1, DC2, DW and PL to NEXT beams per stem; the app distributes them per girder line (unchanged).
-- NX-O3. RIDOT BDM Table 5-1: NEXT Type F support skew up to 15°; no warning is given above it.
+- NX-O1. 4.6.2.2.2d lets a negative d_e outside the range be limited to −1.0 ft; the app (I-girders, and now the NEXT stems) flags d_e < −1.0 as an applicability FAIL instead (10 seeded designs with an entered d_e of 0 or 1 ft get d_e,st < −1.0). Apply the limit? **Decided by the engineer 2026-11-26: limit d_e to −1.0 ft (in the e factor), a warning instead of a FAIL: done (NX-O1 entry below).**
+- NX-O2. MassDOT 3.5.4.2 distributes DC1, DC2, DW and PL to NEXT beams per stem; the app distributes them per girder line (unchanged). **Decided by the engineer 2026-11-26: dead loads per stem for NEXT beams, all owners (NX-O2 entry below).**
+- NX-O3. RIDOT BDM Table 5-1: NEXT Type F support skew up to 15°; no warning is given above it. **Decided by the engineer 2026-11-26: add the design warning: done (NX-O3 entry below).**
 ### Owner guidance
-- RIDOT BDM (April 2026): no NEXT LLDF provision; 2.4.6.3 (NEXT D needs the State Bridge Engineer's approval); 3.4.1.1.2 (m of Table 3.6.1.1.2-1 not applied with the approximate-method distribution factors, "already included in the equations"; m = 1.2 removed for fatigue); 3.4.1.1.1 (with sidewalks, two lane cases: sidewalk as travel way without pedestrian load, and curb to curb with it); 4.4.1 (refined analysis where the 4.6.2 ranges are not met). Question for the engineer: does RIDOT 3.4.1.1.2 also mean no m on the lever rule and the rigid section (AASHTO 3.6.1.1.2 and C4.6.2.2.2d apply it there; the app applies it, the more conservative reading)?
+- RIDOT BDM (April 2026): no NEXT LLDF provision; 2.4.6.3 (NEXT D needs the State Bridge Engineer's approval); 3.4.1.1.2 (m of Table 3.6.1.1.2-1 not applied with the approximate-method distribution factors, "already included in the equations"; m = 1.2 removed for fatigue); 3.4.1.1.1 (with sidewalks, two lane cases: sidewalk as travel way without pedestrian load, and curb to curb with it); 4.4.1 (refined analysis where the 4.6.2 ranges are not met). Question for the engineer: does RIDOT 3.4.1.1.2 also mean no m on the lever rule and the rigid section (AASHTO 3.6.1.1.2 and C4.6.2.2.2d apply it there; the app applies it, the more conservative reading)? **Decided by the engineer 2026-11-26: apply m on the lever rule and the rigid section (as built).**
+
+## 2026-11-26 — PR: claude/ps-next-lldf (PR #1726) (NX-O1, NX-O3) — engineer decisions on NX-1: the exterior stem's d_e limited to −1.0 ft in e (a warning, not a FAIL); a RIDOT warning for a NEXT F on a support skew above 15° (§4; NX-O3 display only) — NOT MERGED, engineer review
+### Request (engineer answers, 2026-11-26)
+- "#1726 RIDOT m on lever rule / rigid section: YES, apply m (keep as built)."
+- "#1726 NX-O1: LIMIT d_e to −1.0 ft per 4.6.2.2.2d (use −1.0 in the e factor, warning instead of FAIL). Further §4 change, engineer review."
+- "#1726 NX-O3: add a design WARNING for RIDOT + NEXT F + support skew > 15 deg (RIDOT BDM Table 5-1). Display only."
+### Where
+- `apps/ps-bridge/engine/lldf-next.js` `compute` (anchor `const DE_MIN = -1.0, deLim = deSt < DE_MIN, deE = deLim ? DE_MIN : deSt;`): e_M, e_V from deE; `nx.deE`, `nx.deLim`. `steps` (anchor `const deE = q.deLim ? q.deE : q.deSt`): new step `ld.nx.deLim`, `ld.nx.eM` / `ld.nx.eV` with d_e,lim. `card`: the d_e,st row notes the limit. New `deWarn(q)` and `skewWarn(inp, g)` (`RIDOT_SKEW = 15`), both pushed in `run` (anchor `const q = R.df && R.df.nx; if (q && q.deLim) R.warns.push(deWarn(q));`).
+- `apps/ps-bridge/engine/applicability.js` `of` (anchor `// NX-O1 (engineer 2026-11-26; Art. 4.6.2.2.2d)`): the NEXT F exterior stem's d_e item below −1.0 ft is level 'warn' (not 'fail'); above 5.5 ft still a FAIL. I-girders: unchanged (open item below).
+### Before
+```
+const eM = 0.77 + deSt / 9.1, eV = 0.6 + deSt / 10, eMg = eM * m2, eVg = eV * v2;
+if (df.ext) it('de', …, nx ? nx.deSt : +ld.de || 0, RANGE.de[0], RANGE.de[1], TK.ext);          // d_e,st < −1.0: FAIL (the applicability check)
+```
+### After
+```
+const DE_MIN = -1.0, deLim = deSt < DE_MIN, deE = deLim ? DE_MIN : deSt;
+const eM = 0.77 + deE / 9.1, eV = 0.6 + deE / 10, eMg = eM * m2, eVg = eV * v2;               // the lever rule and the rigid section keep d_e,st
+if (df.ext) it('de', …, nx ? nx.deSt : +ld.de || 0, RANGE.de[0], RANGE.de[1], TK.ext, nx && nx.deLim ? { level: 'warn', note: … } : null);
+R.warns: "Live load distribution, NEXT F exterior stem: d_e,st = … ft is below the range of applicability (−1.0 ≤ d_e ≤ 5.5 ft); it is limited to −1.0 ft in the correction factors e_M and e_V (AASHTO LRFD 10th Ed. Art. 4.6.2.2.2d); …"
+R.warns (RIDOT, NEXT F, |θ| > 15°): "RIDOT BDM Table 5-1 (Beam Usage Guide): a NEXT Type F beam is recommended for support skews up to 15°; this span's support skew is …° (Bridge layout tab)."
+```
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2d (a negative d_e outside the range of Table 4.6.2.2.2d-1 limited to −1.0 ft; verified in the 10th Ed. text) and Table 4.6.2.2.3b-1 (shear, whose exterior beams take the provisions of 4.6.2.2.2d); RIDOT BDM (April 2026) Table 5-1, Beam Usage Guide (NEXT Type F: maximum support skew 15°; verified in the manual).
+### Decision (pending engineer review)
+- NX-O1a. The limit is used in both e_M and e_V; the lever rule and the rigid section keep the actual d_e,st (they place the wheels at their real positions).
+- NX-O1b. Applied to the NEXT F exterior stems of this PR only. The I-girders' d_e (the frozen engine's e) is still an applicability FAIL below −1.0 ft: the same limit for them is a separate change for the engineer (open item).
+- NX-O3a. θ = the larger skew of the span's two supports (inputs.loads.skew), as the distribution factors; a NEXT F with or without a topping.
+### Check case (by hand), tests/engine/psbridge-lldf-next.test.mjs
+The NX-1 test project with overhangs 2.0 ft and no sidewalks (4 NEXT 24F at 10 ft, 45 ft, 8 in deck, barriers 14 in, N_L 3, RIDOT), exterior beam G1: d_e = 2.0 − 14/12 = 0.8333 ft; d_e,st = 0.8333 − 2.5 = −1.6667 ft.
+| Quantity | Before | After |
+|---|---|---|
+| e_M = 0.77 + d/9.1 | d = −1.6667: 0.58685 | d = −1.0: 0.66011 |
+| e_V = 0.6 + d/10 | 0.43333 | 0.50000 |
+| e_M g_M2 (g_M2 = 0.49206) | 0.28877 | 0.32481 |
+| e_V g_V2 (g_V2 = 0.59626) | 0.25838 | 0.29813 |
+| lever rule, rigid section (actual d_e,st) | 0.16000, 0.41111 | 0.16000, 0.41111 |
+| g_M,ext = max(e g, lever, rigid) | 0.41111 (rigid) | 0.41111 (rigid) |
+| DF_M, DF_V (exterior beam) | 0.90317, 1.00737 | 0.90317, 1.00737 (unchanged: the rigid section governs) |
+| LLDF range of applicability (4.6.2.2) | FAIL (d_e = −1.667 ft) | warning (limited) |
+NX-O3: the NX-1 test project with skews 20°: one warning "… up to 15°; this span's support skew is 20.0° …"; at 15° and 0°, and for owner AASHTO, none.
+### Designs that change (old head 0a5ca0eb → this commit, 785 designs: the tab designs on every line, 38 recorded, 600 seeded, the NX test project)
+17 change, all NEXT F; no distribution factor, ratio of a design check or verdict changes in any:
+- NX-O1, 10 exterior NEXT F designs with d_e,st = −1.5 or −2.5 ft (entered d_e 1.0 or 0 ft): the applicability FAIL (ratio 1.500 or 2.500) is removed and the warning added; e_M, e_V change but the rigid section (or the lever rule) governs in every one, so DF_M and DF_V are unchanged; each stays FAIL overall on other checks: seed024, seed026, seed222, seed251, seed258, seed385, seed386, seed431, seed555, seed588.
+- NX-O3, 7 (warning only): seed116, seed341, seed566 (RIDOT, 30°), the NX test project at 35° (G1 to G4).
+### How verified
+`tests/engine/psbridge-lldf-next.test.mjs` (new tests NX-O1 and NX-O3: the hand values above, the applicability level, the warning, the steps); the comparison above; `node tests/engine/run.mjs psbridge`; smoke `tests/smoke/ps-bridge-nextlldf.mjs`.
+### Open items
+I-girders: the same −1.0 ft limit for their e (frozen engine) is not applied (NX-O1b).

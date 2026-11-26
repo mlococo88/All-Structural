@@ -180,3 +180,30 @@ test('NX-1 (9) the Report of the test project: the assumption note, the DF row, 
     ['ld.nx.S', 'ld.nx.Kg', 'ld.nx.gMi', 'ld.dfmRaw', 'ld.dfm', ...(g === 1 ? ['ld.nx.lever', 'ld.nx.rigid', 'ld.nx.gMe'] : [])].forEach(id => assert.ok(st.includes(id), id));
   }
 });
+
+test('NX-O1 (engineer 2026-11-26): d_e,st below −1.0 ft is limited to −1.0 ft in e_M and e_V (4.6.2.2.2d); a warning, not an applicability FAIL', () => {
+  // overhangs 2.0 ft, barriers 14 in, no sidewalks: d_e = 2.0 − 14/12 = 0.8333 ft, d_e,st = 0.8333 − 2.5 = −1.6667 ft
+  const P = project(W, Q => { Q.xs.ohL = 2; Q.xs.ohR = 2; Q.xs.dl.swL = { w: 0, t: 0 }; Q.xs.dl.swR = { w: 0, t: 0 }; }), { inp, R } = cell(W, P, 1), q = R.df.nx;
+  near(inp.loads.de, 2 - 14 / 12, 1e-9, 'd_e'); near(q.deSt, 2 - 14 / 12 - 2.5, 1e-9, 'd_e,st'); assert.equal(q.deLim, true); assert.equal(q.deE, -1);
+  // by hand: e_M = 0.77 + (−1.0)/9.1 = 0.66011 (was 0.77 − 1.6667/9.1 = 0.58685), e_V = 0.6 − 0.1 = 0.5 (was 0.43333)
+  near(q.eM, 0.77 - 1 / 9.1, 1e-12, 'e_M'); near(q.eV, 0.5, 1e-12, 'e_V'); near(q.eMg, q.eM * q.m2, 1e-12); near(q.eVg, q.eV * q.v2, 1e-12);
+  assert.equal(q.eM.toFixed(5), '0.66011'); assert.equal(q.eV.toFixed(5), '0.50000');
+  // the lever rule and the rigid section keep the actual d_e,st: x_w = d_e,st − 2 = −3.667 ft (S_lev 5 ft): 1.2(0.5)(5 − 3.667)/5 = 0.16000
+  near(q.lever, 1.2 * 0.5 * (5 + q.deSt - 2) / 5, 1e-12, 'lever'); near(q.terms[0].x, q.deSt - 2, 1e-12);
+  assert.equal(q.govM, 'rigid'); assert.equal(q.govV, 'rigid');   // the rigid section governs here (0.41111), so DF_M, DF_V are those before the limit
+  const it = R.ap.items.find(x => x.key === 'de'); assert.equal(it.ok, false); assert.equal(it.level, 'warn');
+  assert.notEqual(R.ap.level, 'fail'); assert.ok(!R.checks.some(c => c.n === W.PSBApplic.NAME), 'no applicability FAIL check');
+  assert.ok(R.warns.includes(W.PSBLldfNext.deWarn(q)) && /limited to −1\.0 ft in the correction factors e_M and e_V/.test(W.PSBLldfNext.deWarn(q)));
+  const steps = W.PSBWorked.loads(inp, R).steps, s = id => steps.find(x => x.id === id);
+  assert.ok(s('ld.nx.deLim') && Object.is(s('ld.nx.deLim').value, -1)); assert.ok(Object.is(s('ld.nx.eM').value, q.eM) && Object.is(s('ld.nx.eV').value, q.eV));
+  // d_e,st ≥ −1.0 ft (the test project, 1.333 ft): no limit, no warning, no step
+  const E = cell(W, project(W), 1).R; assert.equal(E.df.nx.deLim, false); assert.ok(!E.warns.some(w => /NEXT F exterior stem: d_e,st/.test(w)));
+  assert.ok(!W.PSBWorked.loads(cell(W, project(W), 1).inp, E).steps.some(x => x.id === 'ld.nx.deLim'));
+});
+
+test('NX-O3 (engineer 2026-11-26): RIDOT, a NEXT F and a support skew above 15° (RIDOT BDM Table 5-1): one design warning', () => {
+  const sk = d => cell(W, project(W, Q => { Q.xs.skews = [d, d]; }), 2).R, has = R => R.warns.filter(w => /^RIDOT BDM Table 5-1/.test(w));
+  assert.equal(has(sk(15)).length, 0, '15° (the limit)'); assert.equal(has(sk(0)).length, 0);
+  const R = sk(20), w = has(R); assert.equal(w.length, 1); assert.ok(/support skews up to 15°; this span's support skew is 20\.0°/.test(w[0]), w[0]);
+  const R0 = cell(W, project(W, Q => { Q.xs.skews = [20, 20]; Q.base.owner = 'AASHTO'; }), 2).R; assert.equal(has(R0).length, 0, 'not RIDOT');
+});

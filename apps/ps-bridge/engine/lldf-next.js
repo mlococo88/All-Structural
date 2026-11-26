@@ -23,6 +23,7 @@
                            g_lever = 1.2 Σ 0.5 (S_lev + x_w) / S_lev, x_w = d_e,st − 2, d_e,st − 8 (x_w > −S_lev)
                          two or more lanes: g_M = e_M g_M2, e_M = 0.77 + d_e,st / 9.1 (Table 4.6.2.2.2d-1);  g_V = e_V g_V2,
                            e_V = 0.6 + d_e,st / 10 (Table 4.6.2.2.3b-1) (no m: it is in the equations)
+                           (NX-O1, engineer 2026-11-26: d_e,st < −1.0 ft is limited to −1.0 ft in e_M and e_V, Art. 4.6.2.2.2d)
                          rigid cross-section (Eq. C4.6.2.2.2d-1, 4.6.2.2.3b; NX-D3): the 2 N_b stems at their positions (beam lines ± c),
                            R = m (N_L / N_st + X_ext Σe / Σx²), e_j = X_ext + d_e,st − 5 − 12 j, m = 1.2, 1.0, 0.85, 0.65 (3.6.1.1.2),
                            the largest over 1 … N_L lanes (as the engine's I-girders)
@@ -84,7 +85,10 @@
       const de = +ld.de || 0, deSt = de - c, Slev = 2 * c;
       const terms = [deSt - 2, deSt - 8].map(x => ({ x, on: x > -Slev, ord: (Slev + x) / Slev }));
       const R0 = terms.reduce((a, t) => a + (t.on ? 0.5 * t.ord : 0), 0), lever = 1.2 * R0;
-      const eM = 0.77 + deSt / 9.1, eV = 0.6 + deSt / 10, eMg = eM * m2, eVg = eV * v2;
+      // NX-O1 (engineer 2026-11-26; 4.6.2.2.2d): a negative d_e outside the range is limited to −1.0 ft in the correction factor e (moment and
+      // shear); the lever rule and the rigid section keep the actual d_e,st; engine/applicability.js shows a warning, not a FAIL
+      const DE_MIN = -1.0, deLim = deSt < DE_MIN, deE = deLim ? DE_MIN : deSt;
+      const eM = 0.77 + deE / 9.1, eV = 0.6 + deE / 10, eMg = eM * m2, eVg = eV * v2;
       const P = stems(inp, Nb, Sb, c), xbar = P.xs.reduce((a, v) => a + v, 0) / Nst, Xext = Math.abs(P.xs[P.ext] - xbar);
       const sumX2 = P.xs.reduce((a, v) => a + (v - xbar) * (v - xbar), 0), trials = [];
       let rigid = 0, rigidNL = 0;
@@ -96,7 +100,7 @@
       }
       const gMe = Math.max(eMg, lever, rigid), gVe = Math.max(eVg, lever, rigid);
       const govM = gMe === eMg ? 'e' : gMe === lever ? 'lever' : 'rigid', govV = gVe === eVg ? 'e' : gVe === lever ? 'lever' : 'rigid';
-      Object.assign(nx, { de, deSt, Slev, terms, R0, lever, eM, eV, eMg, eVg, X: P.X, xs: P.xs, extIdx: P.ext, xbar, Xext, sumX2, trials, rigid, rigidNL, rigid1, gMe, gVe, govM, govV });
+      Object.assign(nx, { de, deSt, deE, deLim, Slev, terms, R0, lever, eM, eV, eMg, eVg, X: P.X, xs: P.xs, extIdx: P.ext, xbar, Xext, sumX2, trials, rigid, rigidNL, rigid1, gMe, gVe, govM, govV });
       gM = gMe + gMi; gV = gVe + gVi; lever1 = lever + m1;
     } else { gM = 2 * gMi; gV = 2 * gVi; lever1 = 0; }
     nx.gM = gM; nx.gV = gV;
@@ -111,12 +115,25 @@
     if (!(+inp.ts > 0)) return 'Live load distribution, NEXT F without a cast-in-place deck (t_s = 0): the per-stem type (k) factors of NX-1 need the deck thickness (K_g / 12 L t_s³), so the engine\'s whole-beam factors are used, the exterior beam with the interior factor. Check the factors (or enter them on the Loads tab).';
     return '';
   }
+  /* deWarn(q): NX-O1 (engineer 2026-11-26): the design warning of a NEXT F exterior stem with d_e,st below −1.0 ft (limited in e) */
+  const deWarn = q => `Live load distribution, NEXT F exterior stem: d_e,st = ${q.deSt.toFixed(3)} ft is below the range of applicability (−1.0 ≤ d_e ≤ 5.5 ft); it is limited to −1.0 ft in the correction factors e_M and e_V (AASHTO LRFD 10th Ed. Art. 4.6.2.2.2d); the lever rule and the rigid section use the actual value (Loads & LLDF tab).`;
+  /* skewWarn(inp, g): NX-O3 (engineer 2026-11-26; display only, a design warning): owner RIDOT, a NEXT F, and a support skew above 15° (RIDOT
+     BDM (April 2026) Table 5-1, Beam Usage Guide: NEXT Type F, maximum support skew 15°); θ = inputs.loads.skew (the larger skew of the span's
+     two supports). '' otherwise. RIDOT_SKEW = 15. */
+  const RIDOT_SKEW = 15;
+  function skewWarn(inp, g) {
+    if (kind(g) !== 'F') return '';
+    const P_ = W().PBD, owner = P_ && P_.ownerOf ? P_.ownerOf(inp) : (inp.owner || 'AASHTO'), th = Math.abs(+(inp.loads && inp.loads.skew) || 0);
+    return owner === 'RIDOT' && th > RIDOT_SKEW + 1e-9 ? `RIDOT BDM Table 5-1 (Beam Usage Guide): a NEXT Type F beam is recommended for support skews up to ${RIDOT_SKEW}°; this span's support skew is ${th.toFixed(1)}° (Bridge layout tab).` : '';
+  }
   /* run(inp, inner): inner(inp) with the global distFactors giving the per-stem factors for a NEXT F with a deck; the NEXT D / no-deck warning */
   function run(inp, inner) {
     const w = W(), orig = w.distFactors;
     w.distFactors = function (i, g, cp) { const df = orig(i, g, cp); return applies(i, g) ? compute(i, g, cp, df) : df; };
     let R; try { R = inner(inp); } finally { w.distFactors = orig; }
-    if (R && !R.error && R.g && Array.isArray(R.warns)) { const t = warnText(inp, R.g); if (t) R.warns.push(t); }
+    if (R && !R.error && R.g && Array.isArray(R.warns)) { const t = warnText(inp, R.g); if (t) R.warns.push(t);
+      const q = R.df && R.df.nx; if (q && q.deLim) R.warns.push(deWarn(q));   // NX-O1 (engineer 2026-11-26)
+      const sw = skewWarn(inp, R.g); if (sw) R.warns.push(sw); }   // NX-O3 (engineer 2026-11-26)
     return R;
   }
   /* label(R): the method text of the every-line table ('' when not per stem) */
@@ -153,9 +170,12 @@
         sub: `1.2\\left(${on.map(t => `\\frac{0.5(${n(q.Slev, 3)} + ${par(t.x, 3)})}{${n(q.Slev, 3)}}`).join(' + ') || '0'}\\right)`, value: q.lever, unit: 'lanes/stem', d: 4, ref: A10 + '4.6.2.2.2d, 4.6.2.2.3b, 3.6.1.1.2',
         note: `S_lev = ${n(q.Slev, 3)} ft, the actual spacing of the beam's two stems; wheels 2 ft and 8 ft inside the traffic face: x_w = d_e,st − 2 = ${n(q.terms[0].x, 3)} ft and d_e,st − 8 = ${n(q.terms[1].x, 3)} ft from the exterior stem (outboard +)${q.terms[1].on ? '' : '; the second wheel is past the hinge (not counted)'}. m = 1.2 (one lane) is applied to the lever rule.` },
         1.2 * on.reduce((a, t) => a + 0.5 * (q.Slev + t.x) / q.Slev, 0));
-      add({ id: 'nx.eM', label: 'Exterior stem: correction factor, moment', sym: 'e_{M}', eq: '0.77 + \\frac{d_{e,st}}{9.1}', sub: `0.77 + \\frac{${par(q.deSt, 3)}}{9.1}`, value: q.eM, unit: '', d: 4, ref: T + '4.6.2.2.2d-1, type (k)' }, 0.77 + q.deSt / 9.1);
+      const deE = q.deLim ? q.deE : q.deSt, dS = q.deLim ? 'd_{e,lim}' : 'd_{e,st}';   // NX-O1 (engineer 2026-11-26): d_e,st < −1.0 ft limited to −1.0 ft in e
+      if (q.deLim) add({ id: 'nx.deLim', label: 'Exterior stem: d_e,st limited to −1.0 ft in the correction factor e', sym: 'd_{e,lim}', eq: '\\max(d_{e,st},\\ -1.0)', sub: `\\max(${par(q.deSt, 3)},\\ -1.0)`, value: q.deE, unit: 'ft', d: 3, ref: A10 + '4.6.2.2.2d, Table 4.6.2.2.2d-1',
+        note: 'A negative d_e outside the range of applicability (−1.0 ≤ d_e ≤ 5.5 ft) is limited to −1.0 ft (Art. 4.6.2.2.2d; engineer 2026-11-26): used in e_M and e_V; the lever rule and the rigid section use the actual d_e,st. A warning, not a FAIL (range of applicability step).' }, Math.max(q.deSt, -1.0));
+      add({ id: 'nx.eM', label: 'Exterior stem: correction factor, moment', sym: 'e_{M}', eq: `0.77 + \\frac{${dS}}{9.1}`, sub: `0.77 + \\frac{${par(deE, 3)}}{9.1}`, value: q.eM, unit: '', d: 4, ref: T + '4.6.2.2.2d-1, type (k)' }, 0.77 + deE / 9.1);
       add({ id: 'nx.eMg', label: 'Exterior stem, two or more lanes: moment', sym: 'e_{M}\\,g_{M2}', eq: 'e_{M}\\,g_{M2}', sub: `${n(q.eM, 4)}(${n(q.m2, 4)})`, value: q.eMg, unit: 'lanes/stem', d: 4, note: 'g_M2 of the stem (step g_M2 above); no multiple presence factor (in the equation).' }, q.eM * q.m2);
-      add({ id: 'nx.eV', label: 'Exterior stem: correction factor, shear', sym: 'e_{V}', eq: '0.6 + \\frac{d_{e,st}}{10}', sub: `0.6 + \\frac{${par(q.deSt, 3)}}{10}`, value: q.eV, unit: '', d: 4, ref: T + '4.6.2.2.3b-1, type (k)' }, 0.6 + q.deSt / 10);
+      add({ id: 'nx.eV', label: 'Exterior stem: correction factor, shear', sym: 'e_{V}', eq: `0.6 + \\frac{${dS}}{10}`, sub: `0.6 + \\frac{${par(deE, 3)}}{10}`, value: q.eV, unit: '', d: 4, ref: T + '4.6.2.2.3b-1, type (k)' }, 0.6 + deE / 10);
       add({ id: 'nx.eVg', label: 'Exterior stem, two or more lanes: shear', sym: 'e_{V}\\,g_{V2}', eq: 'e_{V}\\,g_{V2}', sub: `${n(q.eV, 4)}(${n(q.v2, 4)})`, value: q.eVg, unit: 'lanes/stem', d: 4 }, q.eV * q.v2);
       add({ id: 'nx.xbar', label: 'Rigid section: centroid of the stems from the first beam line', sym: '\\bar{x}', eq: '\\frac{\\sum x_{i}}{N_{st}}', sub: `\\frac{${q.xs.map(v => par(v, 2)).join(' + ')}}{${q.Nst}}`, value: q.xbar, unit: 'ft', d: 3, ref: A10 + 'C4.6.2.2.2d',
         note: `Stems at each beam line ± c = ${n(q.c, 3)} ft (beam lines ${q.X.map(v => n(v, 2)).join(', ')} ft).` }, q.xs.reduce((a, v) => a + v, 0) / q.xs.length);
@@ -203,7 +223,7 @@
       ['Beam spacing S<sub>b</sub> / stem spacing S / stems N<sub>st</sub>', `${ev('df.nx.Sb', 3, 'ft')} / ${ev('df.nx.S', 3, 'ft')} ${wk('ld.nx.S')} / ${q.Nst} ${wk('ld.nx.Nst')}`],
       ['K<sub>g</sub>: beam / one stem (used)', `${ev('df.nx.KgB', 0, 'in⁴')} ${wk('ld.nx.Kgb')} / <b>${ev('df.nx.Kg', 0, 'in⁴')}</b> ${wk('ld.nx.Kg')}`],
       ['Interior stem g<sub>M</sub>: one lane / two or more', `${ev('df.nx.m1', 4)} / ${ev('df.nx.m2', 4)} ${wk('ld.nx.m1')}`], ['Interior stem g<sub>V</sub>: one lane / two or more', `${ev('df.nx.v1', 4)} / ${ev('df.nx.v2', 4)} ${wk('ld.nx.v1')}`],
-      ...(ext ? [['Exterior stem d<sub>e,st</sub> (beam d<sub>e</sub> − c)', `${ev('df.nx.deSt', 3, 'ft')} ${wk('ld.nx.de')}`]] : []),
+      ...(ext ? [['Exterior stem d<sub>e,st</sub> (beam d<sub>e</sub> − c)', `${ev('df.nx.deSt', 3, 'ft')} ${wk('ld.nx.de')}${q.deLim ? `; below −1.0 ft: limited to ${ev('df.nx.deE', 1, 'ft')} in e<sub>M</sub>, e<sub>V</sub> (4.6.2.2.2d) ${wk('ld.nx.deLim')}` : ''}`]] : []),
       ['Skew θ', ev('df.th', 1, '°')], ['Moment skew reduction r<sub>M</sub>', `${ev('df.skM', 4)} ${wk('ld.skM')}`], ['Shear skew correction c<sub>V</sub>', `${ev('df.skV', 4)} ${wk('ld.skV')}`],
       ...(lr ? [['Distribution options', k.esc(lr)]] : []),
       ['DF<sub>M</sub> used (this beam)', `<b>${ev('dfm', 4, 'lanes')}</b> ${wk('ld.dfm')}`], ['DF<sub>V</sub> used (this beam)', `<b>${ev('dfv', 4, 'lanes')}</b> ${wk('ld.dfv')}`],
@@ -231,5 +251,5 @@
       <div class="tscroll"><table class="tbl" id="nxLines"><thead><tr><th>Span</th><th class="lft">Line</th><th class="lft">Girder type</th><th class="lft">The line's factor (2 stems per beam)</th><th>DF<sub>M</sub></th><th>DF<sub>V</sub></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
       <p class="note">Each NEXT F beam is two type (k) stems at the stem spacing S = S<sub>b</sub> / 2; its factor is the sum of its stems' (NX-1). An exterior line (G1, G${P.xs.nb}) takes its exterior stem's governing candidate plus its interior stem's factor; an interior line twice the interior stem's. DF in lanes per beam, after the skew factors and any distribution option. § opens the worked steps (Loads &amp; LLDF tab) with that type and line.</p></div></section>`;
   }
-  W().PSBLldfNext = { kind, applies, compute, warnText, run, label, steps, card, xsCard };
+  W().PSBLldfNext = { kind, applies, compute, warnText, deWarn, skewWarn, RIDOT_SKEW, run, label, steps, card, xsCard };
 })();

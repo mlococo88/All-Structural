@@ -23,7 +23,8 @@
      Art. 4.6.3.3.2 (the skew index I_S of grid and plate analyses of steel bridges) is not a limit on a line-girder analysis and does not
        apply to concrete girders: not shown (engineer, 2026-11-23).
    NX-1 (2026-11-25): a NEXT F per stem as type (k) (engine/lldf-next.js, R.df.nx): S = the stem spacing S_b / 2, N_b = the stems 2 N_b,
-   K_g = the stem's, d_e = the exterior stem's d_e,st (the same type (k) ranges).
+   K_g = the stem's, d_e = the exterior stem's d_e,st (the same type (k) ranges; NX-O1, engineer 2026-11-26: d_e,st < −1.0 ft is a warning, not a
+   FAIL: Art. 4.6.2.2.2d limits it to −1.0 ft in e, which engine/lldf-next.js does).
    Values tested (those the distribution factors were computed with): S = inputs.S (the girder line's spacing, engine/design.js lineS; NEXT:
    the beam width b_tf / 12, the engine's S for a double tee), t_s = inputs.ts (NEXT with no topping: the integral top flange, K_g not used:
    no K_g item), L = inputs.L, N_b = inputs.nGirders, K_g = R.df.Kg, d_e = inputs.loads.de (exterior), θ = inputs.loads.skew (the larger
@@ -84,7 +85,9 @@
       if (nx) it('Nb', 'Number of stems (2 per NEXT F beam)', 'N_b', '', 0, nx.Nst, RANGE.Nb[0], RANGE.Nb[1], TK.int);
       else it('Nb', 'Number of beams', 'N_b', '', 0, Math.round(+inp.nGirders || 0), RANGE.Nb[0], RANGE.Nb[1], TK.int, { note: 'With three beams the tables take the lesser of the equation and the lever rule, which the equations here do not do.' });
       if (!(next && df.kgOmitted)) it('Kg', nx ? 'Longitudinal stiffness parameter of one stem' : 'Longitudinal stiffness parameter', 'K_g', 'in⁴', 0, df.Kg, RANGE.Kg[0], RANGE.Kg[1], TK.kg);
-      if (df.ext) it('de', nx ? 'Exterior stem to the barrier face' : 'Exterior web to the barrier face', 'd_e', 'ft', 3, nx ? nx.deSt : +ld.de || 0, RANGE.de[0], RANGE.de[1], TK.ext);
+      // NX-O1 (engineer 2026-11-26; Art. 4.6.2.2.2d): the NEXT F exterior stem's d_e,st below −1.0 ft is limited to −1.0 ft in e (engine/lldf-next.js): a warning, not a FAIL
+      if (df.ext) it('de', nx ? 'Exterior stem to the barrier face' : 'Exterior web to the barrier face', 'd_e', 'ft', 3, nx ? nx.deSt : +ld.de || 0, RANGE.de[0], RANGE.de[1], TK.ext,
+        nx && nx.deLim ? { level: 'warn', note: 'Below −1.0 ft: limited to −1.0 ft in the correction factor e (Art. 4.6.2.2.2d; engineer 2026-11-26); the lever rule and the rigid section use the actual value.' } : null);
       // LL-O (2026-11-23): with "Exterior not less than interior" on, the interior equations are also used at the interior girder spacing
       // S_int (engine/lldf-opt.js): tested where it differs from this line's S (the same S: the item above is that test)
       { const oi = df.opt && df.opt.int; if (oi && !next && isNum(oi.S) && Math.abs(oi.S - (+inp.S)) > 1e-9) it('Sint', 'Interior girder spacing (option "Exterior not less than interior")', 'S_int', 'ft', 3, oi.S, RANGE.S[0], RANGE.S[1], TK.int); }
