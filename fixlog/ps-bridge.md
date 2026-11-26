@@ -9996,3 +9996,29 @@ No key or format changed. The existing `psb2.ui` → `rpt.worked` ('gov' | 'all'
 - RG-e. In the default mode the governing-stations table replaces the table of every location whatever the Detail choice; with every line in full the tables are as before and the appendix box is greyed.
 ### Open items
 - None (no calculation issue found).
+
+## 2026-11-25 — PR: claude/ps-ez-next-stems (PR #1721: https://github.com/mlococo88/All-Structural/pull/1721) (EZN) — NEXT beams: the concrete tensile force of 5.9.2.3.1b counts the two stems only, not the gap between them (§4 calculation change; approved by the engineer 2026-11-25)
+### Request (engineer, 2026-11-25: "Fix NEXT stems only")
+EZNI open item 2: for a NEXT beam below the flange the engine's width (`sectionWidthAt`, the outermost edge of the outline at y) counts the gap between the two stems as concrete (NEXT 36F: 73 in instead of 2 × 13 = 26 in), over-stating the tension force there. NEXT shapes only; box beams and voided slabs keep their voids-ignored (conservative) basis.
+### Where
+- `apps/ps-bridge/engine/reltension.js` (EZX): new `chordWidth(G, y)` (the length of the horizontal line at y inside the closed outline `halfPolygon(G)`, × 2) and `widthAt(G, y) = G.isNext ? chordWidth(G, y) : sectionWidthAt(G, y)`; `parts()` reads `widthAt` instead of `sectionWidthAt`; the NEXT part below the flange is named "stems (the two stems; the gap between them not counted)" (was "stems (outline to the outer stem faces, as the engine)").
+- NEXT = `G.isNext`: the library's NEXT 24F–36F and MassDOT's NEXT F (24–36) and D (28–40) (sections.js gives both the engine's NEXT object; MassDOT's outline has tapered stems and fillets, read as drawn).
+- Frozen `engine/pbd-*.js` unchanged byte for byte. `sectionWidthAt` is read only by the engine's `releaseTensionForce` (release T top / bottom and the pier T, now replaced in R by reltension.js); `halfPolygon` (the outline) also feeds the drawings, the strand / input checks and the 3D view, which are not changed. Section properties (A, I, y_b) come from the shape tables, not from the outline width.
+### Before / After
+- Before (EZX): width b(y) = `sectionWidthAt(G, y)` = 2 × (the largest x of the half outline at y). NEXT below the flange: 2 × (outer stem face) = 2(stemCC/2 + B/2) (NEXT 36F: 2(30 + 6.5) = 73 in).
+- After: NEXT: b(y) = 2 × Σ(x_out − x_in) over the outline's crossings at y = the two stems (NEXT 36F: 2 × 13 = 26 in); every other shape as before. The sum T = Σ A_i f_i (EZX) is otherwise unchanged.
+### Governing provision
+AASHTO LRFD 10th Ed. Art. 5.9.2.3.1b, Table 5.9.2.3.1b-1 (the tensile force in the concrete computed on the uncracked section, carried by bonded reinforcement at 0.5 f_y ≤ 30 ksi); near an interior support Art. 5.12.3.3.5 with the same table. Unchanged; the section's concrete width is corrected for NEXT.
+### Check case (by hand): NEXT 36F, bottom tension at midspan (default project with this girder, 10 strands at y = 2 in, no draped strands)
+f_top = 2.158 ksi, f_bot = −2.542 ksi at x = 60 ft. c = 36(2.542)/(2.542 + 2.158) = 19.474 in (below the 28 in stems' top: one part, the stems).
+- Before: b = 73 in; A = 73 × 19.474 = 1421.6 in²; ȳ = 9.737 in; f = 2.542(1 − 9.737/19.474) = 1.2712 ksi; T = 1421.6 × 1.2712 = 1807.1 kip; A_s,req = 1807.1/30 = 60.24 in².
+- After: b = 26 in; A = 26 × 19.474 = 506.32 in²; same ȳ and f; T = 506.32 × 1.2712 = 643.6 kip; A_s,req = 643.6/30 = 21.45 in².
+### Changes at displayed precision
+See the PR description: every NEXT design tried (library and MassDOT NEXT F and D, simple and 2 × 80 ft continuous, the tab design NEXT 36F with a topping). With A_s,prov = 0.62 in² no verdict changes (D/C stays above 1); a verdict can change NG → OK where A_s,prov lies between the new and old A_s,req (test: NEXT 36F with 25 in²).
+### How verified
+`tests/engine/psbridge-ez-next-stems.test.mjs` (the widths; NEXT only; the hand check; other shapes unchanged; the NG → OK case); `tests/engine/psbridge-ez-noint.test.mjs` (the fine strip check on `widthAt`); before / after in Node: only R.relSteel, R.cont.svc.Ttop / AsTop, their checks and R.relT differ, on NEXT designs only; psbridge tests, check-syntax, the full engine suite, `tests/smoke/ps-bridge-ez-noint.mjs`.
+### Decisions
+- EZN-a (approved by the engineer 2026-11-25): "NEXT" is `G.isNext` (the library NEXT and MassDOT NEXT F and D); the MassDOT stems are read from the drawn outline (tapered, with fillets and the 0.75 in bottom chamfers).
+- The change table of PR #1721 (the NEXT reductions; a NEXT verdict can change NG → OK) approved by the engineer 2026-11-25 with the merge.
+### Saved data
+None.
