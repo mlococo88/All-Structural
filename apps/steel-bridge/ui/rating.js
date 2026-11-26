@@ -65,7 +65,7 @@
     const pl = { _schema: 'sbd2-analysis', pedestrianInLL: !!q, stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
       ownerRules: { owner: (P.ownerRules || {}).owner || 'AASHTO', haunchInProperties: !R.h0 },
       girderDetail: { label: g.label || g.id, girder: gi + 1, position: g.position, materials: { Fyf: M.GRADES[m.steel.top].Fy, Fyw: M.GRADES[m.steel.web].Fy, fc: m.concrete.fc, wc: m.concrete.wc },
-        deck: { ts: d.ts, haunch: d.haunch, beff: g.beff, Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
+        deck: { ts: d.ts, haunch: d.haunch, beff: (window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, g) : g.beff), Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
         skew: { bySupport: sk, max: Math.max(0, ...sk.map(Math.abs)) }, details: {} } };
     return { pl, R };
   }
@@ -216,7 +216,7 @@
     if (srcOf(P) === 'custom' && window.SBDCustomDemands) h += `<p class="note">${window.SBDCustomDemands.SPECS.rt.unf.note}</p>` + window.SBDCustomDemands.card(P, 'flex', ctx.g) + window.SBDCustomDemands.card(P, 'shear', ctx.g);   // the two tables (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Rating results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="rt_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
-    else if (S.R && !stale) h += results(S.R);
+    else if (S.R && !stale) h += results(S.R, ctx);
     host.innerHTML = h;
     window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const on = (id, ev, f) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, f); }, redraw = () => render(host, ctx);
@@ -259,9 +259,9 @@
   const rfSt = q => window.SBDSub.stepSt(q.kind === 'fat' ? [{ step: 'rt.fat', st: rfBad(q.inv) }] : [{ step: 'rt.inv', st: rfBad(q.inv) }, { step: 'rt.opr', st: q.opr === undefined ? '' : rfBad(q.opr) }]);
   const capSt = r => r && r.checks ? window.SBDSub.stepSt(window.SBDSub.rows(r.checks)) : null;
   const grpOf = q => q.kind === 'flex' ? (q.region === 'pos' ? 'flexP' : 'flexN') : q.kind;
-  function results(R) {
+  function results(R, ctx) {   // ctx: the tab's (BEFF, 2026-11-25: the b_eff link)
     const s = R.sum, gi = s.gov.inv, go = s.gov.opr, idx = q => R.rows.indexOf(q), lk = q => q ? ` <a class="wk" href="#rt-steps" data-rtgo="${idx(q)}">§</a>` : '';
-    let h = `<section class="sec"><div class="secHead">Load rating: governing (HL-93 design load)</div><div class="secBody"><p class="note">${R.what}</p>
+    let h = `<section class="sec"><div class="secHead">Load rating: governing (HL-93 design load)</div><div class="secBody"><p class="note">${R.what}</p>${ctx && window.SBDSub && window.SBDSub.beffNote ? window.SBDSub.beffNote(ctx.P, ctx.g || 0) : ''}
       <div class="rt-box"><div class="${cls(gi && gi.inv)}"><div class="l">Inventory RF (governing)</div><div class="n">${gi ? rfTxt(gi.inv) : '—'}</div><div class="l">${gi ? `${window.SBDSub.html(gi.title)}, ${esc(gi.name)}` : ''}${lk(gi)}</div></div>
         <div class="${cls(go && go.opr)}"><div class="l">Operating RF (governing)</div><div class="n">${go ? rfTxt(go.opr) : '—'}</div><div class="l">${go ? `${window.SBDSub.html(go.title)}, ${esc(go.name)}` : ''}${lk(go)}</div></div>
         ${s.target && s.tgt && s.tgt.inv ? `<div class="${s.tgt.inv.pass ? 'fx-ok' : 'fx-ng'}"><div class="l">Owner design rating target (${esc(s.target.cite)})</div><div class="n">${rfTxt(s.tgt.inv.rf)} ${s.tgt.inv.pass ? '≥' : '<'} ${fmt(s.tgt.inv.need, 2)}</div><div class="l">HL-93 Inventory; reported, the girder is not resized for it</div></div>` : ''}

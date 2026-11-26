@@ -118,7 +118,7 @@
     const pl = { _schema: 'sbd2-custom', pedestrianInLL: false, stations: st, member: { supports: sup.slice(), spans: sup.slice(1).map((x, k) => +(x - sup[k]).toFixed(6)) }, section: { zones },
       ownerRules: { owner: own, haunchInProperties: !h0 },
       girderDetail: { label: G.label || G.id, girder: g + 1, position: G.position, materials: { Fyf: M.GRADES[m.steel.top].Fy, Fyw: M.GRADES[m.steel.web].Fy, fc: m.concrete.fc, wc: m.concrete.wc, gradeFlange: m.steel.top, gradeWeb: m.steel.web },
-        deck: { ts: d.ts, haunch: d.haunch, beff: G.beff, Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
+        deck: { ts: d.ts, haunch: d.haunch, beff: (window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, G) : G.beff), Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
         skew: { bySupport: sk, max: Math.max(0, ...sk.map(Math.abs)) }, details: {} } };
     if (SPECS[mod].sup) pl.reactions = RW.sup.map(o => (o ? { DC1: num(o.DC1), DC2: num(o.DC2), DW: num(o.DW), UT: num(o.UT), UF: num(o.UF), LL: num(o.LL) + num(o.PL), PL: num(o.PL) } : null));
     return { pl, rows: RW.rows, sup: RW.sup, mode: RW.mode, xs: RW.rows.map(r => +r.x) };

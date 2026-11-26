@@ -126,6 +126,13 @@
      girders[i].dfPull (added 2026-11-01, B2 hand-offs; optional): { use, spans: [{ gM, gV, fatM, fatV }], piers: [{ gM }], source: { producer,
                   producerFile, producedAt, project, adoptedAt, line, girder, basis, basisLbl, fields } }: the factors pulled from LL & DL Distribution
                   (bridgeSuite.v1.lldf, ui/handoffs.js), laid over this girder's factors field by field (engine/analysis.js dfOf); absent: unchanged
+     girders[i].beffOv (added 2026-11-25, BEFF; engineer's choice "Calculated, optional override"; optional, true | false): false: the
+                  b_eff of the type on each of its lines is that line's tributary width, tribBeff(xs, j) (AASHTO LRFD 10th Ed. Art. 4.6.2.6.1),
+                  so each line has its own; girders[i].beff is kept in the file, not used. true ("Override b_eff" ticked): girders[i].beff on
+                  every line of the type (the rule of every project saved before). Absent (a project saved before this field): migrateBeff on
+                  load writes false when girders[i].beff is within 0.5 in of the tributary width of every line of the type, else true (with a
+                  one-time notice); an in-memory project without it reads the same rule (beffOvOf). girders[i].beff is never deleted or
+                  rewritten by it, so an older copy of the app still reads the file (it uses girders[i].beff on every line, as before).
      girders[i].lineOv (added 2026-11-13, SBLO; engineer decisions SB-7, SB-9, SB-10; optional): the values entered for one line of the type
                   only, { '<line j>': { loadsManual, dfManual, loadsOverride, dfOverride, clOverride, dfPull, custom: { <module>: { mode, rows, sup } } } },
                   each over the type's own (a blank / absent value: the type's); absent: the type's values on every line, as before. See lineOv below.
@@ -298,6 +305,70 @@
      half the adjacent spacing + the overhang; interior: half of each adjacent spacing), the rule engine/legacy.js uses for its girders */
   function tribBeff(xs, j) { const n = Math.round(+xs.nb), B = xs.bays || []; if (!(n >= 2) || B.length !== n - 1) return NaN;
     const ft = j === 0 ? B[0] / 2 + +xs.ohL : j === n - 1 ? B[n - 2] / 2 + +xs.ohR : (B[j - 1] + B[j]) / 2; return +(ft * 12).toFixed(6); }
+  /* ---------- BEFF (2026-11-25; engineer's choice "Calculated, optional override"; CLAUDE.md §4 change) ----------
+     The b_eff a check uses for girder type g on line j: beffOf(P, g, j) (j absent: the type's line, designLine; on an atLine view that is
+     the view's line). Override (beffOvOf true): the entered g.beff on every line, as before. Calculated: tribBeff(P.xs, j), the line's own
+     tributary width (exterior line: half the adjacent spacing + the overhang; interior: half of each adjacent spacing); a width that cannot
+     be calculated (no complete cross-section) falls back to g.beff (validate reports it). beffOvOf(P, g): g.beffOv when true / false, else
+     (absent: a project saved before 2026-11-25) BEFF_TOL's rule, beffAuto: calculated only when g.beff is within 0.5 in of the tributary
+     width of every line of the type (typeLines), else the entered value. beffStep(P, g, j): the worked step of line j (SharedSteps form,
+     id 'beff.G<j+1>'). migrateBeff(P): the load-time migration (§5), writes beffOv of every type without one by beffAuto; never
+     changes or deletes g.beff; returns a one-line notice listing the types that keep their entered b_eff as an override, else null; a
+     project whose cross-section is not valid (xsOk) is left as it is (nothing written, no notice) until a later load. */
+  const BEFF_TOL = 0.5;
+  const giOf = (P, g) => { const G = (P && P.girders) || []; for (let k = 0; k < G.length; k++) if (G[k] === g) return k; return g && g.id != null ? Array.from(G).findIndex(q => q && q.id === g.id) : -1; };
+  /* xsOk(xs): a cross-section the tributary widths can be judged on (N_b ≥ 2, N_b − 1 bays all > 0, overhangs ≥ 0); otherwise beffAuto
+     keeps the entered value and migrateBeff waits (writes nothing) until a load with a valid cross-section */
+  const xsOk = xs => { const n = Math.round(+((xs || {}).nb)), B = (xs || {}).bays; return n >= 2 && Array.isArray(B) && B.length === n - 1 && B.every(v => isNum(+v) && +v > 0) && isNum(+xs.ohL) && +xs.ohL >= 0 && isNum(+xs.ohR) && +xs.ohR >= 0; };
+  function beffAuto(P, gi) {
+    const g = P.girders[gi], b = +g.beff, L = typeLines(P, gi); if (!L.length || !isNum(b) || !xsOk(P.xs)) return true;
+    return !L.every(j => { const t = tribBeff(P.xs, j); return isNum(t) && Math.abs(t - b) <= BEFF_TOL + 1e-9; });
+  }
+  function beffOvOf(P, g) { if (!g) return true; if (typeof g.beffOv === 'boolean') return g.beffOv; const gi = giOf(P, g); return gi < 0 ? true : beffAuto(P, gi); }
+  function beffOf(P, g, j) {
+    if (!g) return NaN; if (beffOvOf(P, g)) return +g.beff;
+    const t = P && P.xs ? tribBeff(P.xs, Number.isInteger(j) ? j : designLine(P, g)) : NaN; return isNum(t) ? t : +g.beff;
+  }
+  /* beffBridge(P, g): the one bridge-wide b_eff of the studs' option "Bridge-wide, as GirderDetail" (studs.beffMode 'bridge').
+     BEFF-1, decided by the engineer 2026-11-26 (CLAUDE.md §4 change): the SMALLEST b_eff of the girder lines: min over every line j that has a
+     girder type of beffOf(P, type of j, j) (calculated: the line's tributary width; Override ticked: the type's entered value); a tie takes the
+     lower line. Before (2026-11-25): the first girder type of position 'exterior', on G1 when that type is on G1 (else its design line).
+     A project with no line assigned to a type (no cross-section): the rule before (the first exterior type, or g). beffBridgeOf(P, g):
+     { v, j (the governing line, 0-based; null for the fallback), gi (its type), list: [{ j, gi, v }] }; beffBridgeStep(P, g): its worked step
+     (id 'beff.bridge'). */
+  function beffBridgeOf(P, g) {
+    const LT = P && P.xs ? lineTypes(P) : [], list = LT.map((t, j) => (t.length ? { j, gi: t[0], v: beffOf(P, P.girders[t[0]], j) } : null)).filter(q => q && isNum(q.v));
+    if (list.length) { const m = list.reduce((a, q) => (q.v < a.v - 1e-9 ? q : a)); return { v: m.v, j: m.j, gi: m.gi, list }; }
+    const q = ((P && P.girders) || []).find(t => t && t.position === 'exterior') || g, k = giOf(P, q), L = k >= 0 ? typeLines(P, k) : [];
+    return { v: beffOf(P, q, L.includes(0) ? 0 : undefined), j: null, gi: k, list: [] };
+  }
+  function beffBridge(P, g) { return beffBridgeOf(P, g).v; }
+  function beffBridgeStep(P, g) {
+    const B = beffBridgeOf(P, g), ref = 'AASHTO LRFD 10th Ed. Art. 4.6.2.6.1', fm = v => (+v).toFixed(2);
+    if (B.j == null) return { id: 'beff.bridge', label: 'Studs, bridge-wide b_eff (no girder line has a type): the first exterior girder type\'s b_eff', sym: 'b_{eff}', eq: '', sub: '', value: B.v, unit: 'in', d: 2, ref };
+    return { id: 'beff.bridge', label: `Studs, bridge-wide b_eff ("Bridge-wide, as GirderDetail"): the smallest b_eff of the girder lines, on line G${B.j + 1}`, sym: 'b_{eff}', eq: '\\min_{j}\\,b_{eff,j}',
+      sub: `\\min(${B.list.map(q => fm(q.v)).join(',\\ ')})`, value: B.v, unit: 'in', d: 2, ref,
+      note: `${B.list.map(q => `G${q.j + 1} ${fm(q.v)} in`).join(', ')} (each line's b_eff, steps beff.G<j>). One width for every girder's studs (engineer's decision BEFF-1, 2026-11-26: the smallest line b_eff; before, the first exterior type's b_eff on G1).` };
+  }
+  function beffStep(P, g, j) {
+    const xs = (P && P.xs) || {}, n = Math.round(+xs.nb), B = xs.bays || [], ov = beffOvOf(P, g), jj = Number.isInteger(j) ? j : designLine(P, g), G = 'G' + (jj + 1);
+    const fm = v => (isNum(+v) ? (+v).toFixed(3) : '\\text{—}'), ref = 'AASHTO LRFD 10th Ed. Art. 4.6.2.6.1', id = 'beff.' + G, v = beffOf(P, g, jj);
+    if (ov) return { id, label: `Effective flange width b_eff, line ${G}: entered (Override b_eff ticked on the type)`, sym: 'b_{eff}', eq: '', sub: '', value: v, unit: 'in', d: 2, ref,
+      note: `The entered value of the girder type is used on every line of the type. The tributary width of ${G} would be ${isNum(tribBeff(xs, jj)) ? (+tribBeff(xs, jj)).toFixed(2) + ' in' : '— (no complete cross-section)'}.` };
+    const L = jj === 0, R = jj === n - 1;
+    const eq = L ? '12\\left(\\frac{S_{1}}{2} + w_{oh,L}\\right)' : R ? `12\\left(\\frac{S_{${n - 1}}}{2} + w_{oh,R}\\right)` : `12\\left(\\frac{S_{${jj}} + S_{${jj + 1}}}{2}\\right)`;
+    const sub = L ? `12\\left(\\frac{${fm(B[0])}}{2} + ${fm(xs.ohL)}\\right)` : R ? `12\\left(\\frac{${fm(B[n - 2])}}{2} + ${fm(xs.ohR)}\\right)` : `12\\left(\\frac{${fm(B[jj - 1])} + ${fm(B[jj])}}{2}\\right)`;
+    return { id, label: `Effective flange width b_eff, line ${G} (${L || R ? 'exterior' : 'interior'}): tributary width`, sym: 'b_{eff}', eq, sub, value: v, unit: 'in', d: 2, ref,
+      note: `${L || R ? `Exterior line: one-half the spacing to the adjacent girder plus the full overhang (girder centreline to deck edge, ${L ? 'left' : 'right'})` : 'Interior line: one-half the spacing to the adjacent girder on each side'}; spacings and overhang in ft, b_eff in in.` };
+  }
+  function migrateBeff(P) {
+    if (!P || !xsOk(P.xs)) return null;   // an invalid cross-section: decided on a later load (until then beffOvOf keeps the entered value)
+    const keep = []; ((P && P.girders) || []).forEach((g, gi) => { if (!g || typeof g !== 'object' || typeof g.beffOv === 'boolean') return;
+      g.beffOv = beffAuto(P, gi); if (!g.beffOv) return;
+      const L = typeLines(P, gi), w = L.map(j => `${'G' + (j + 1)} ${isNum(tribBeff(P.xs || {}, j)) ? (+tribBeff(P.xs, j)).toFixed(1) : '—'}`);
+      keep.push(`${g.label || g.id} ${isNum(+g.beff) ? (+g.beff).toFixed(1) : '—'} in (calculated: ${w.length ? w.join(', ') + ' in' : 'no line'})`); });
+    return keep.length ? `b_eff is now calculated on each girder line (AASHTO LRFD 10th Ed. Art. 4.6.2.6.1). Girder type${keep.length > 1 ? 's' : ''} that keep${keep.length > 1 ? '' : 's'} the entered b_eff ("Override b_eff" ticked, Girders & plates tab): ${keep.join('; ')}.` : null;
+  }
   /* setLines(P, gi, lines): type gi takes exactly these lines; each is removed from any other type (which then stores its own lines). The
      design line: kept when still one of the lines (written as a number), else the first of them. */
   function setLines(P, gi, lines) {
@@ -331,7 +402,7 @@
   function addType(P, src, o) {
     o = o || {}; const G = P.girders, s = G[src] || G[0], ids = new Set([...G.map(q => q.id), ...Object.values(P.custom || {}).flatMap(m => Object.keys(m || {}))]);
     let k = G.length + 1; while (ids.has('G' + k)) k++;
-    const g = { id: 'G' + k, label: o.label || `Type ${G.length + 1}`, position: s.position, beff: s.beff, segments: JSON.parse(JSON.stringify(s.segments)) };
+    const g = { id: 'G' + k, label: o.label || `Type ${G.length + 1}`, position: s.position, beff: s.beff, ...(typeof s.beffOv === 'boolean' ? { beffOv: s.beffOv } : {}), segments: JSON.parse(JSON.stringify(s.segments)) };
     const gi = G.push(g) - 1, sNo = G.indexOf(s) + 1;
     const ly = P.stiffeners && P.stiffeners.layout; if (ly && Array.isArray(ly.bays)) ly.bays.filter(q => +q.g === sNo).forEach(q => ly.bays.push({ ...q, g: gi + 1 }));
     const pl = P.splices && P.splices.plates; if (Array.isArray(pl)) pl.filter(q => q && q.g != null && +q.g === sNo - 1).forEach(q => pl.push({ ...JSON.parse(JSON.stringify(q)), g: gi }));
@@ -354,8 +425,8 @@
      the tributary width of G1) on the two exterior lines. defaultProject() itself is unchanged (the engines' tests and baselines use it). */
   function newProject() {
     const p = defaultProject(), nb = p.xs.nb, g = p.girders[0];
-    g.label = 'Interior'; g.line = 1; g.lines = Array.from({ length: nb - 2 }, (_, i) => i + 1);
-    p.girders.push({ id: 'G2', label: 'Exterior', position: 'exterior', line: 0, lines: [0, nb - 1], beff: tribBeff(p.xs, 0), segments: JSON.parse(JSON.stringify(g.segments)) });
+    g.label = 'Interior'; g.line = 1; g.lines = Array.from({ length: nb - 2 }, (_, i) => i + 1); g.beffOv = false;   // BEFF (2026-11-25): calculated on each line
+    p.girders.push({ id: 'G2', label: 'Exterior', position: 'exterior', line: 0, lines: [0, nb - 1], beff: tribBeff(p.xs, 0), beffOv: false, segments: JSON.parse(JSON.stringify(g.segments)) });
     return p;
   }
   /* ---------- per-line overrides of a girder type (SBLO, 2026-11-13; engineer decisions SB-7, SB-9, SB-10 of 2026-11-13) ----------
@@ -469,7 +540,9 @@
       if (!['interior', 'exterior'].includes(g.position)) E(`${gp}.position`, 'Position must be "interior" or "exterior".');
       if (g.lines != null && !(Array.isArray(g.lines) && g.lines.every(j => Number.isInteger(j) && j >= 0))) E(`${gp}.lines`, `${g.label || g.id}: the girder lines of the type must be a list of line numbers.`);   // SB-2
       if (g.lineOv != null && (typeof g.lineOv !== 'object' || Array.isArray(g.lineOv) || Object.keys(g.lineOv).some(k => !/^\d+$/.test(k) || !g.lineOv[k] || typeof g.lineOv[k] !== 'object'))) E(`${gp}.lineOv`, `${g.label || g.id}: the per-line values must be an object of line entries.`);   // SBLO
-      if (d.composite) pos(g.beff, `${gp}.beff`, 'Effective flange width');
+      if (g.beffOv != null && typeof g.beffOv !== 'boolean') E(`${gp}.beffOv`, `${g.label || g.id}: "Override b_eff" must be true or false.`);   // BEFF
+      if (d.composite) { if (beffOvOf(p, g)) pos(g.beff, `${gp}.beff`, 'Effective flange width');   // BEFF (2026-11-25): the entered value when overridden, else each line's tributary width
+        else typeLines(p, gi).forEach(j => { const t = tribBeff(p.xs, j); if (!(isNum(t) && t > 0)) E(`${gp}.beff`, `${g.label || g.id}: b_eff of line G${j + 1} cannot be calculated (girder spacing and overhang of the Cross-section tab); enter them or tick "Override b_eff".`); }); }
       const S = Array.isArray(g.segments) ? g.segments : [];
       if (!S.length) E(`${gp}.segments`, `${g.label || g.id}: enter at least one plate segment.`);
       S.forEach((s, si) => {
@@ -642,7 +715,9 @@
   function importLegacy(obj, opt) {
     const k = legacyKind(obj), L = typeof window !== 'undefined' && window.SBDLegacy;
     if (!L) return { ok: false, legacy: k, error: `${k || 'This'} project files cannot be imported: engine/legacy.js is not loaded. The file was not changed.` };
-    return { ...L.importLegacy(obj, opt), legacy: k };
+    const r = { ...L.importLegacy(obj, opt), legacy: k };
+    if (r.ok && r.project) { const n = migrateBeff(r.project); if (n) { r.notes = [...(r.notes || []), n]; if (r.summary && Array.isArray(r.summary.notes)) r.summary.notes.push(n); } }   // BEFF (2026-11-25)
+    return r;
   }
 
   /* exportJSON(p): the file text (pretty-printed). importJSON(text): { ok, project, errors, warnings, notes } or { ok: false, error }
@@ -664,7 +739,7 @@
     let p; try { p = migrate(obj); } catch (e) { return { ok: false, error: e.message }; }
     hideRec(p);   // SHO: the hand-off record, kept with the project but off its own JSON text
     const RLm = typeof window !== 'undefined' && window.SBDRolled && window.SBDRolled.migrate;   // ROLL-CAP (2026-11-24): uncapped rolled-shape plates → capped
-    const notes = [migrateNbList(p), migrateLineOv(p), RLm ? RLm(p) : ''].filter(Boolean);   // field migrations within version 1 (2026-11-02; SBLO 2026-11-13: per-line values)
+    const notes = [migrateNbList(p), migrateLineOv(p), RLm ? RLm(p) : '', migrateBeff(p)].filter(Boolean);   // BEFF (2026-11-25): beffOv of each type   // field migrations within version 1 (2026-11-02; SBLO 2026-11-13: per-line values)
     const v = validate(p);
     return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
   }
@@ -694,5 +769,5 @@
      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
     return t || (o && o !== 'AASHTO' ? o : ''); };
-  window.SBDModel = { hideRec, carryRec, setRec, clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, renumberLines, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { hideRec, carryRec, setRec, clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, BEFF_TOL, beffOvOf, beffOf, beffBridge, beffBridgeOf, beffBridgeStep, beffStep, migrateBeff, setLines, assignLine, renumberLines, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();

@@ -184,7 +184,7 @@
     P.xs = xs;
     const types = groups.map((g, k) => { const j = g.lines[0];
       return { id: 'G' + (k + 1), label: g.ext ? (nExt === 1 ? 'Exterior' : `Exterior ${labels[j]}`) : (nInt === 1 ? 'Interior' : `Interior ${labels[j]}`), position: g.ext ? 'exterior' : 'interior',
-        line: j, lines: g.lines.slice(), beff: M.tribBeff(xs, j), segments: clone(sched[j]) }; });
+        line: j, lines: g.lines.slice(), beff: M.tribBeff(xs, j), beffOv: false, segments: clone(sched[j]) }; });   // BEFF (2026-11-25): b_eff calculated on each line (beff: the first line's, kept for older copies of the app)
     P.girders = types;
     map('Girders', ['segments', 'girder_schedule_same_all', 'girder_segments_by_label', 'girder_segments_by_span'], sameAll ? 'one schedule for all girders' : 'a schedule per girder',
       'Girders & plates › girder types (girders[i].segments, lines)', types.map(t => `${t.label}: ${t.lines.map(j => labels[j]).join(', ')} (${t.segments.length} segment${t.segments.length > 1 ? 's' : ''})`).join('; '),

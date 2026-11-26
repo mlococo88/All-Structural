@@ -129,6 +129,7 @@
     const D = window.SBDDrawings; if (D && D.plateGirderOf) return D.plateGirderOf(P, j, nbOf(P));
     const k = P.girders.findIndex(g => AN().lineOf(P, g) === j); return k >= 0 ? k : 0;
   }
+  const M_lines = (P, pg) => (window.SBDModel && window.SBDModel.typeLines ? window.SBDModel.typeLines(P, pg) : []);   // BEFF: the lines worked on the type's card
   const lineName = (P, j) => { const nb = nbOf(P); return `G${j + 1}${j === 0 || j === nb - 1 ? ' (exterior)' : ' (interior)'}`; };
   const pgName = (P, pg) => { const g = P.girders[pg] || {}; return esc(g.label || g.id || 'G' + (pg + 1)); };
   function lineRun(P, j, opt) {
@@ -137,7 +138,9 @@
     const pg = plateOf(P, j), g = P.girders[pg], own = AN().lineOf(P, g) === j;
     if (own) return { j, pg, own, R: AN().analyzeGirder(P, pg, opt) };
     if (g.loads && g.df) return { j, pg, own, err: `Plate girder ${g.label || g.id} carries the dead loads and factors of a hand-off for one girder line; girder line G${j + 1} cannot take them. Give G${j + 1} a plate girder of its own (Girders & plates tab).` };
-    const Q = JSON.parse(JSON.stringify(P)); Q.girders[pg].line = j;
+    const Q = JSON.parse(JSON.stringify(P)), MD = window.SBDModel;
+    if (MD && MD.beffOf && !MD.typeLines(P, pg).includes(j)) { Q.girders[pg].beff = MD.beffOf(P, g); Q.girders[pg].beffOv = true; }   // BEFF (2026-11-25): a line with no type of its own takes the type's b_eff (on the type's line), as before
+    Q.girders[pg].line = j;
     return { j, pg, own, R: AN().analyzeGirder(Q, pg, opt) };
   }
   /* every line's camber (dead loads only: opt.ll = false gives the same camber, computed before the live load) */
@@ -168,7 +171,7 @@
       ${errs.length ? `<div class="alert err">${errs.join('<br>')}</div>` : ''}
       <p class="note">in, downward +; camber = Δ<sub>steel</sub> + Δ<sub>wet</sub> + Δ<sub>DC2+DW</sub>${A.some(a => a.camber && a.camber.ut) ? ' + Δ<sub>UT</sub>' : ''} of each girder (its own dead loads: deck and overhang, DC2 and DW shares, cross-frame point loads; the plates of its plate girder). Each girder at the same fraction of its span (centerline spans). Click a girder to see its components, LL deflection and worked steps. Excludes the vertical profile.</p>
       <p class="note"><b>Basis:</b></p><ul class="note" style="margin:4px 0 0 18px;padding:0">
-      <li>A girder with no plate girder of its own takes the plates and the effective flange width b<sub>eff</sub> of the plate girder named on the girder selector (as the Drawings, SB2-DW1): an exterior girder on an interior plate girder has the interior b<sub>eff</sub>, so its composite stiffness is not its own (add an exterior plate girder on the <a href="#" data-goto="gird">Girders &amp; plates tab</a>).</li>
+      <li>A girder with no plate girder of its own takes the plates of the plate girder named on the girder selector (as the Drawings, SB2-DW1) and that type's b<sub>eff</sub> on its own line: the line's tributary width (4.6.2.6.1) unless the type's Override b<sub>eff</sub> is ticked, when it has the type's entered b<sub>eff</sub>, so its composite stiffness is not its own (add a plate girder of its own on the <a href="#" data-goto="gird">Girders &amp; plates tab</a>).</li>
       <li>Dead loads or distribution factors entered as overrides on the Loads tab for a plate girder apply to every girder that takes its plates.</li>
       <li>A tenth point between two analysis stations takes the value linear between them (stations about 1 ft apart).</li>
       <li>The LL deflection check (SA3) is reported once per plate girder, on its own girder, in the Summary tab and the Report summary.</li></ul>`, 'df-all');
@@ -185,7 +188,7 @@
     const pg = j != null ? plateOf(P, j) : gi, own = j == null || AN().lineOf(P, P.girders[pg]) === j;
     h += `<p class="note">Live load deflection check and dead-load deflections (camber) of girder <b>${j != null ? lineName(P, j) : pgName(P, gi)}</b>${j != null ? `, with the plates of plate girder <b>${pgName(P, pg)}</b>` : ''}, from its analysis (the engine of the <a href="#" data-gotab="an">Analysis tab</a>; nothing is calculated differently here). Inputs: <a href="#" data-goto="loads">Loads tab</a> (analysis settings, L/…, sidewalk, cracked zones).</p>`;
     if (!own) { const g = P.girders[pg], ext = j === 0 || j === nb - 1;
-      h += `<div class="alert">Girder ${lineName(P, j)} has no plate girder of its own: it takes the plates and the effective flange width b<sub>eff</sub> = ${f(g.beff, 1)} in of plate girder ${pgName(P, pg)} (${esc(g.position || '')}), as the Drawings do (SB2-DW1). Its dead loads and distribution factors are its own (loads module, cross-section girder G${j + 1}).${ext !== (g.position === 'exterior') ? ` An ${ext ? 'exterior' : 'interior'} girder's b<sub>eff</sub> (and so its composite stiffness) differs: add an ${ext ? 'exterior' : 'interior'} plate girder on the <a href="#" data-goto="gird">Girders &amp; plates tab</a> for its own plates and b<sub>eff</sub>.` : ''}</div>`; }
+      h += `<div class="alert">Girder ${lineName(P, j)} has no plate girder of its own: it takes the plates of plate girder ${pgName(P, pg)} (${esc(g.position || '')}), as the Drawings do (SB2-DW1), and the effective flange width b<sub>eff</sub> = ${f(window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, g, M_lines(P, pg).includes(j) ? j : undefined) : g.beff, 1)} in ${window.SBDModel && window.SBDModel.beffOvOf && window.SBDModel.beffOvOf(P, g) ? '(the type\'s entered value, Override b<sub>eff</sub>)' : M_lines(P, pg).includes(j) ? `(the tributary width of G${j + 1}, 4.6.2.6.1)${window.SBDSub && window.SBDSub.beffLink ? ' ' + window.SBDSub.beffLink(P, pg, j, 'worked') : ''}` : `(the type's b<sub>eff</sub> on its line G${window.SBDModel.designLine(P, g) + 1}: G${j + 1} is not a line of the type)${window.SBDSub && window.SBDSub.beffLink ? ' ' + window.SBDSub.beffLink(P, pg, window.SBDModel.designLine(P, g), 'worked') : ''}`}. Its dead loads and distribution factors are its own (loads module, cross-section girder G${j + 1}).${ext !== (g.position === 'exterior') ? ` An ${ext ? 'exterior' : 'interior'} girder's b<sub>eff</sub> (and so its composite stiffness) differs: add an ${ext ? 'exterior' : 'interior'} plate girder on the <a href="#" data-goto="gird">Girders &amp; plates tab</a> for its own plates and b<sub>eff</sub>.` : ''}</div>`; }
     if (!stale && S.err) h += `<div class="alert err"><b>Analysis error.</b> ${esc(S.err)}</div>`;
     else if (!stale && S.R) {
       const R = S.R, Mo = model(R);

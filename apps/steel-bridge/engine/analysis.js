@@ -312,7 +312,8 @@
     const mod = g.loads && g.df ? null : moduleOf(P, gi);
     const own = window.SBDOwners && P.ownerRules ? window.SBDOwners.loadFactors(P.ownerRules.owner, P.ownerRules.eta, (P.xs || {}).nb) : null;
     const h0 = typeof S.haunchInStiffness === 'boolean' ? !S.haunchInStiffness : !!(own && own.h0);   // OWN8: haunch 0 in the composite stiffness
-    const deckS = { ts: d.ts, haunch: h0 ? 0 : d.haunch, beff: g.beff, rebar: d.rebar };
+    const MD = window.SBDModel, bOf = (q, j) => (MD && MD.beffOf ? MD.beffOf(P, q, j) : q.beff);   // BEFF (2026-11-25): b_eff of the type on a line (calculated, or the override)
+    const deckS = { ts: d.ts, haunch: h0 ? 0 : d.haunch, beff: bOf(g), rebar: d.rebar };
     const segs = g.segments.map(s => { const p = { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }, st = SEC().steelCore(p);
       const c3 = comp ? SEC().composite(p, deckS, n, 3) : null, cn = comp ? SEC().composite(p, deckS, n, 1) : null, cr = SEC().withRebar(p, deckS);
       const Wr = window.SBDRolled ? window.SBDRolled.plf(s) : null;   // ROLL: the tabulated weight of a rolled segment (lb/ft); a plate segment has no Wr / shape field
@@ -360,12 +361,16 @@
        at(x): { x, nb, E, parts: [{ label, n (lines), I }], sumI, Iavg, Iown } }. A type whose plates do not reach a station: this girder's I there. */
     const bridgeEI = () => {
       const x0 = P.xs || (window.SBDModel && window.SBDModel.defaultXs ? window.SBDModel.defaultXs(P) : null), nb = x0 ? Math.round(x0.nb) : 0; if (!(nb > 0)) return null;
-      const by = new Map(); for (let j = 0; j < nb; j++) { const k = plateOfLine(P, j, nb); if (!by.has(k)) by.set(k, []); by.get(k).push(j); }
+      // BEFF (2026-11-25): the lines grouped by plate girder and b_eff: a line of the type its own b_eff (calculated: its tributary width), a
+      // line with no type of its own (it borrows a type's plates, plateOfLine) the type's b_eff on the type's line, as before; one group per type when equal
+      const tl = k => (MD && MD.typeLines ? MD.typeLines(P, k) : []);
+      const by = new Map(), bk = new Map(); for (let j = 0; j < nb; j++) { const k = plateOfLine(P, j, nb), b = tl(k).includes(j) ? bOf(P.girders[k], j) : bOf(P.girders[k]), key = k + '|' + b; if (!by.has(key)) { by.set(key, []); bk.set(key, { k, b }); } by.get(key).push(j); }
       const IAt = (sb, x) => { const q = sb.find(r => x >= r[0] - 1e-9 && x <= r[1] + 1e-9); return q ? q[2] : null; };
-      const types = [...by.entries()].map(([k, lines]) => { const gg = P.girders[k], own = k === gi;
-        const sg = own ? segs : gg.segments.map(t => { const p = { D: t.D, tw: t.tw, topB: t.topB, topT: t.topT, botB: t.botB, botT: t.botT }, dk = { ...deckS, beff: gg.beff }, st0 = SEC().steelCore(p);
+      const split = new Set([...bk.values()].map(q => q.k).filter((k, i, a) => a.indexOf(k) !== i));   // types on lines of different b_eff
+      const types = [...by.entries()].map(([key, lines]) => { const { k, b } = bk.get(key), gg = P.girders[k], own = k === gi && b === deckS.beff;
+        const sg = own ? segs : gg.segments.map(t => { const p = { D: t.D, tw: t.tw, topB: t.topB, topT: t.topT, botB: t.botB, botT: t.botT }, dk = { ...deckS, beff: b }, st0 = SEC().steelCore(p);
           return { x0: t.x0, x1: t.x1, Inu: comp ? SEC().composite(p, dk, n, 1).I : st0.I, Icr: comp ? SEC().withRebar(p, dk).I : st0.I }; });
-        return { gi: k, label: gg.label || gg.id || 'G' + (k + 1), lines, sb: own ? sbN : sbOf(sg, 'Inu', crack) }; });
+        return { gi: k, label: (gg.label || gg.id || 'G' + (k + 1)) + (split.has(k) ? ` (b_eff ${(+b).toFixed(1)} in)` : ''), lines, sb: own ? sbN : sbOf(sg, 'Inu', crack) }; });
       const tOf = []; types.forEach((t, ti) => t.lines.forEach(j => { tOf[j] = ti; }));
       const same = types.length === 1 && types[0].gi === gi, Iof = (t, x) => { const v = IAt(t.sb, x); return v != null ? v : IAt(sbN, x); };
       const at = x => { const xe = Math.min(Math.max(x, 1e-6), Lt - 1e-6), parts = types.map(t => ({ label: t.label, n: t.lines.length, lines: t.lines, I: Iof(t, xe) }));

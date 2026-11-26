@@ -28,6 +28,7 @@ const runAD = (P, settings) => { const it = AD.run(P, { settings, maxIt: 5, trim
 test('Saved data: a project without autodesign.vars round-trips unchanged and reads every variable at its default', () => {
   // as saved before this PR: the Auto design inputs of PR 1 (mode, objective, price list, limits) and an Apply's undo snapshot
   const P = M.defaultProject(); P.autodesign = { mode: 'refine', objective: 'cost', topN: 4, cost: { steel: 2.5 }, limits: { Dmax: 72, tfMax: 2.5 }, nbList: '', change: { nb: '', D: '' } };
+  P.girders.forEach(g => { g.beffOv = false; });   // BEFF (2026-11-25): the flag as the app now saves it (the load writes it on a project saved without it)
   const txt = M.exportJSON(P), R = M.importJSON(txt);
   assert.ok(R.ok, R.error); assert.equal(JSON.stringify(R.project), JSON.stringify(P)); assert.equal(M.exportJSON(R.project), txt);
   const S = AD.settings(R.project);

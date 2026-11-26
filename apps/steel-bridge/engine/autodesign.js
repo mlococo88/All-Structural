@@ -191,8 +191,12 @@
       xs.ohL = r4(L.oh.L); xs.ohR = r4(L.oh.R); xs.bays = new Array((L.nb || xs.nb) - 1).fill(r4((Wd - L.oh.L - L.oh.R) / ((L.nb || xs.nb) - 1))); }
     if (xs && L.nb && (L.nb !== xs.nb || ohCh)) {
       const W = (xs.bays || []).reduce((a, v) => a + +v, 0), S = W / (L.nb - 1);
+      // BEFF-3 (engineer's decision 2026-11-26, CLAUDE.md §4): a type with "Override b_eff" ticked goes back to the calculated width (the
+      // override off, beffOv false) when Auto design changes the girder count or the overhangs, with a note (beffResetNote); the stored
+      // g.beff is rewritten as before. Before: the override stayed ticked and the rewritten value was used on every line of the type.
+      const ovs = Q.girders.map((g, i) => !!(MD().beffOvOf && MD().beffOvOf(P, P.girders[i])));
       xs.nb = L.nb; xs.bays = new Array(L.nb - 1).fill(r4(S)); xs.beamClass = {};
-      Q.girders.forEach(g => { const ext = g.position === 'exterior'; g.beff = r4(12 * (ext ? S / 2 + (+xs.ohL >= +xs.ohR ? +xs.ohL : +xs.ohR) : S)); if (g.line != null && g.line >= L.nb) g.line = L.nb - 1; });
+      Q.girders.forEach((g, i) => { const ext = g.position === 'exterior'; g.beff = r4(12 * (ext ? S / 2 + (+xs.ohL >= +xs.ohR ? +xs.ohL : +xs.ohR) : S)); if (g.line != null && g.line >= L.nb) g.line = L.nb - 1; if (ovs[i]) g.beffOv = false; });
     }
     const segs = segmentsOf(L); Q.girders.forEach(g => { if (!adF(g)) g.segments = clone(segs); });   // SB-2 PR 3: an adFixed girder keeps its plates
     // field splices: into the project's framing; a project without framing (the Framing & bracing tab not set up) keeps none unless the layout has
@@ -200,6 +204,14 @@
     if (Q.framing || L.spl.length) { Q.framing = Q.framing || MD().defaultFraming(); Q.framing.splices = L.spl.slice(); }
     if (L.minLines != null) { Q.splices = Q.splices || MD().defaultSplices(); Q.splices.bolts = { ...(Q.splices.bolts || {}), minLines: L.minLines }; }
     return Q;
+  }
+  /* beffResetNote(P, L) (BEFF-3, 2026-11-26): the note of projectWith's b_eff reset: the types whose "Override b_eff" Auto design turns off
+     because layout L changes the girder count or the overhangs; null when none */
+  function beffResetNote(P, L) {
+    const xs = P && P.xs; if (!xs || !L) return null;
+    const ohCh = !!(L.oh && (Math.abs(L.oh.L - +xs.ohL) > 1e-9 || Math.abs(L.oh.R - +xs.ohR) > 1e-9)); if (!(L.nb && (L.nb !== xs.nb || ohCh))) return null;
+    const T = (P.girders || []).filter(g => MD().beffOvOf && MD().beffOvOf(P, g)); if (!T.length) return null;
+    return `b_eff: Auto design changed the ${L.nb !== xs.nb ? `girder count (${xs.nb} → ${L.nb})` : 'overhangs'}, so "Override b_eff" is turned off for ${T.map(g => `${g.label || g.id} (entered ${(+g.beff).toFixed(1)} in)`).join(', ')}: ${T.length > 1 ? 'they take' : 'it takes'} the calculated width of each line (AASHTO LRFD 10th Ed. Art. 4.6.2.6.1; Girders & plates tab). Tick it again to enter a value.`;
   }
   /* weight and cost (per girder line × the girder count) */
   const lineWeight = L => segmentsOf(L).reduce((a, s) => a + (s.topB * s.topT + s.botB * s.botT + s.D * s.tw) * STEEL * (s.x1 - s.x0), 0);
@@ -296,11 +308,11 @@
       M_FATpos: f.Mpos[i], M_FATneg: f.Mneg[i], V_DC1: Math.abs(st.DC1.VR[i]), V_DC2: Math.abs(st.DC2.VR[i]), V_DW: Math.abs(st.DW.VR[i]),
       V_FATpos: vf(i)[0], V_FATneg: vf(i)[1], ...(q ? { M_PLpos: q.Mpos[i], M_PLneg: q.Mneg[i] } : {}) }));
     const zones = g.segments.map(s => ({ startX: s.x0, endX: s.x1, web: { depth: s.D, thickness: s.tw }, topFlange: { width: s.topB, thickness: s.topT }, botFlange: { width: s.botB, thickness: s.botT } }));
-    const m = P.materials, d = P.deck, h0 = R.h0, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
+    const m = P.materials, d = P.deck, h0 = R.h0, ext = P.girders.find(q => q.position === 'exterior'), beffB = (window.SBDModel && window.SBDModel.beffBridge ? window.SBDModel.beffBridge(P, g) : (ext || g).beff);
     const pl = { _schema: 'sbd2-analysis', pedestrianInLL: !!q, stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
       ownerRules: { owner: (P.ownerRules || {}).owner || 'AASHTO', haunchInProperties: !h0 },
       girderDetail: { label: g.label || g.id, girder: gi + 1, position: g.position, materials: { Fyf: M.GRADES[m.steel.top].Fy, Fyw: M.GRADES[m.steel.web].Fy, fc: m.concrete.fc, wc: m.concrete.wc, gradeFlange: m.steel.top, gradeWeb: m.steel.web },
-        deck: { ts: d.ts, haunch: d.haunch, beff: g.beff, Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
+        deck: { ts: d.ts, haunch: d.haunch, beff: (window.SBDModel && window.SBDModel.beffOf ? window.SBDModel.beffOf(P, g) : g.beff), Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
         skew: { bySupport: ((P.xs || {}).skews || []).slice(), max: Math.max(0, ...((P.xs || {}).skews || []).map(Math.abs)) }, details: {} } };
     const gFI = (v => v > 0 ? v : 1.75)(+((P.fatigue || {}).gam || {}).fI);   // FONE (2026-11-01): pitch sizing with the Fatigue I γ of the inputs (was 1.75)
     const dd = +Q.d, Zr = 7.0 * Math.PI * dd * dd / 4, segAt = x => g.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || g.segments[g.segments.length - 1];
@@ -931,7 +943,8 @@
     const keep = clone(Object.fromEntries(APPLY_KEYS.map(k => [k, P[k]])));
     Object.keys(keep).forEach(k => { if (keep[k] === undefined) keep[k] = null; });   // absent before Apply: put back as absent (null → deleted on Undo)
     const Q = projectWith(P, c.L, c.det); Q.autodesign = { ...(P.autodesign || {}), undo: keep, applied: { at: new Date().toISOString(), nb: c.L.nb, D: c.L.D, w: c.cost.w } };
-    return { project: Q, undo: keep };
+    const bn = beffResetNote(P, c.L);   // BEFF-3 (2026-11-26)
+    return { project: Q, undo: keep, ...(bn ? { notes: [bn] } : {}) };
   }
   function undo(P) { const u = P.autodesign && P.autodesign.undo; if (!u) return null; const Q = clone(P); Object.assign(Q, clone(u)); Object.keys(u).forEach(k => { if (u[k] === null) delete Q[k]; }); delete Q.autodesign.undo; delete Q.autodesign.applied; return Q; }
 
@@ -1039,5 +1052,5 @@
   }
   /* applyJoint(P, J): the girders of the joint run (every type's best plates, J.G) for P, and the girders before for Undo: { girders, undo } */
   function applyJoint(P, J) { const keep = clone(P.girders); return { girders: P.girders.map((g, t) => ({ ...clone(g), segments: clone(J.G[t].segments) })), undo: { girders: keep } }; }
-  window.SBDAutoDesign = { depthGuide, depthFlag, TYPE_LOCK, typeScope, typeProject, typeOpt, detBack, applyType, lockD, jointRun, applyJoint, relayout, splPlan, splCheck, framesOf, DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
+  window.SBDAutoDesign = { beffResetNote, depthGuide, depthFlag, TYPE_LOCK, typeScope, typeProject, typeOpt, detBack, applyType, lockD, jointRun, applyJoint, relayout, splPlan, splCheck, framesOf, DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
 })();

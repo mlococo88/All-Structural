@@ -190,7 +190,7 @@
     else if (S.R && !stale) {
       const R = S.R;
       if (R.errors.length) h += `<div class="alert err">${R.errors.map(esc).join('<br>')}</div>`;
-      h += `<section class="sec"><div class="secHead">Splices of ${esc(g.label || g.id)}</div><div class="secBody"><div class="tscroll"><table class="tbl sp-list"><thead><tr><th class="lft">Splice</th><th>Left / right (top, bottom)</th><th>Plates and bolts</th><th class="lft">Governing</th><th>Ratio</th><th class="lft">Largest strength ratio</th><th>Status</th></tr></thead><tbody>
+      h += `<section class="sec"><div class="secHead">Splices of ${esc(g.label || g.id)}</div><div class="secBody">${window.SBDSub && window.SBDSub.beffNote ? window.SBDSub.beffNote(P, ctx.g || 0) : ''}<div class="tscroll"><table class="tbl sp-list"><thead><tr><th class="lft">Splice</th><th>Left / right (top, bottom)</th><th>Plates and bolts</th><th class="lft">Governing</th><th>Ratio</th><th class="lft">Largest strength ratio</th><th>Status</th></tr></thead><tbody>
         ${R.list.map((s, i) => { const fl = s.R && s.R.fl, gv = s.gov, bad = s.CK ? s.CK.filter(c => c.status === 'fail').length : 0;
           return `<tr data-spsel="${i}" class="${i === S.sel ? 'sp-sel' : ''}"><td class="lft">${esc(s.name)}</td><td>${s.p ? `${fmt(s.p.sec.L.topB, 2)}×${fmt(s.p.sec.L.topT, 3)}, ${fmt(s.p.sec.L.botB, 2)}×${fmt(s.p.sec.L.botT, 3)} / ${fmt(s.p.sec.R.topB, 2)}×${fmt(s.p.sec.R.topT, 3)}, ${fmt(s.p.sec.R.botB, 2)}×${fmt(s.p.sec.R.botT, 3)}` : ''}</td>
             <td>${fl ? `${s.own ? 'entered' : s.design ? 'auto' : 'built-in'}: ${fl.top.n + fl.bot.n + s.R.web.nw} bolts each side` : '—'}</td><td class="lft">${gv ? `${esc(gv.c.id)} ${window.SBDSub.html(gv.it.loc)}` : s.R && s.R.errors.length ? esc(s.R.errors[0]) : ''}</td>
