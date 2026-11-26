@@ -44,7 +44,8 @@ function simple(shape) {
   P.project.name = 'Rolled beam test: 60 ft simple span';
   P.spans = { lengths: [60], continuity: 'simple' };
   P.xs = M.defaultXs(P); P.xs.nb = 5; P.xs.bays = [8, 8, 8, 8]; P.xs.ohL = 3; P.xs.ohR = 3;
-  P.girders = [{ id: 'G1', label: 'G1', position: 'interior', beff: 96, segments: [{ x0: 0, x1: 60, D: 30, tw: 0.5, topB: 12, topT: 0.75, botB: 12, botT: 0.75 }] }];
+  P.girders = [{ id: 'G1', label: 'G1', position: 'interior', beff: 96, beffOv: true, segments: [{ x0: 0, x1: 60, D: 30, tw: 0.5, topB: 12, topT: 0.75, botB: 12, botT: 0.75 }] }];
+  // beffOv true (BEFF, 2026-11-25): the entered 96 in on every line, the rule before BEFF and what the load would write (exterior lines 84 in)
   if (shape) assert.equal(RL.apply(P.girders[0].segments[0], shape), true);
   P.framing.splices = [];
   ['A', 'B'].forEach(k => { P.stiffeners.bearing.types[k].bt = 5.5; });   // bearing stiffeners within the 12 in flange: (12 - 0.6)/2 = 5.7 in

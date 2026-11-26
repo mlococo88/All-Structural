@@ -132,6 +132,13 @@ test('studs, bridge-wide b_eff (as GirderDetail): the first exterior type on G1,
   const O = unequalOh(); O.studs.beffMode = 'bridge'; O.girders[1].beffOv = true; O.girders[1].beff = 90; assert.equal(M.beffBridge(O, O.girders[0]), 90, 'override: the entered value, as before');
 });
 
+test('report: the b_eff rows link to the worked b_eff (Project and owner); without that section no link dangles (Shear connectors keeps sc.beff)', () => {
+  const P = unequalOh(), Bd = W.SBDReportData.compute(P, 1, { src: 'analysis' }), S = W.SharedReport;
+  const Md = W.SBDReportBuild.model(Bd, { detail: 'gov' }), doc = S.build(Md); assert.deepEqual(J(doc.unresolved), []);
+  assert.ok(Md.sections.find(q => q.id === 'proj').subs.some(q => q.id === 'beff'), 'the b_eff subsection');
+  const Md2 = W.SBDReportBuild.model(Bd, { detail: 'gov', include: { proj: false } }), doc2 = S.build(Md2); assert.deepEqual(J(doc2.unresolved), []);
+});
+
 /* every module's result of each unit (a type on a line), as the Summary runs it; functions and the run time left out */
 const SM = W.SBDSummary;
 function hashAll(P) {

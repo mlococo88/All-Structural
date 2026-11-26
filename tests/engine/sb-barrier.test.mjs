@@ -30,7 +30,8 @@ test('Entered (absent bMode): the loads with and without shared/barrier.js are t
     const P2 = J(P); P2.xs.edges.L.bMode = 'entered'; assert.deepEqual(dl(run(W, P2)), dl(run(W, P)), `${method}: bMode 'entered' = absent`);
     P2.xs.edges.L.bShape = 'rect'; P2.xs.edges.L.bDims = { b: 99, h: 99 }; assert.deepEqual(dl(run(W, P2)), dl(run(W, P)), `${method}: a kept shape is not read in Entered`);
   }
-  const M = W.SBDModel, P = M.defaultProject(), txt = M.exportJSON(P), r = M.importJSON(txt);
+  const M = W.SBDModel, P = M.defaultProject(); P.girders.forEach(g => { g.beffOv = false; });   // BEFF (2026-11-25): saved with the flag, as the app saves it (else the load writes it: calculated)
+  const txt = M.exportJSON(P), r = M.importJSON(txt);
   assert.equal(r.ok, true); assert.equal(M.exportJSON(r.project), txt); assert.ok(!/bMode|bShape|bDims|bPts|bGam/.test(txt));
   W.SBDUiLoads.ensure(r.project); assert.equal(M.exportJSON(r.project), txt, 'ensure() adds nothing');
 });
@@ -67,6 +68,7 @@ test('six-point polygon = typed width and weight with the load moved to x̄; han
 
 test('JSON round trip of a Geometry project; the UI handler writes the computed width and weight into bw, bwt', () => {
   const M = W.SBDModel, U = W.SBDUiLoads, P = M.defaultProject(), ch = (path, value) => U.onChange({ dataset: { path, kind: 'x' }, value }, P);
+  P.girders.forEach(g => { g.beffOv = false; });   // BEFF (2026-11-25): saved with the flag, as the app saves it (else the load writes it: calculated)
   assert.equal(ch('xs.edges.L.bMode', 'geom'), true);
   assert.deepEqual(J(P.xs.edges.L.bDims), { b: 18, h: null }); assert.equal(P.xs.edges.L.bShape, 'rect'); assert.equal(P.xs.edges.L.bGam, 0.15);
   assert.equal(P.xs.edges.L.bwt, 0.4, 'nothing computed yet: kept');
