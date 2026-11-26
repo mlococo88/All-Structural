@@ -12054,7 +12054,7 @@ None.
 - **Check case:** built-in project, G1: CF10 Item cell "Intermediate bracing. Recommended: K (bottom)-frame (S/h = 2.19). In use: X-frame. [[cf.type]]".
 - **How verified:** `node tests/engine/run.mjs xf-cf10-depth.test.mjs xf-cf10-notes.test.mjs`: 7 / 7 pass (3 failed on main before).
 
-## 2026-11-26 — PR: claude/ad-tests-fast (ADTF) — Auto design tests: the unread closing full check skipped, one analysis worked once   [tests only]
+## 2026-11-26 — PR: claude/ad-tests-fast (PR #1736: https://github.com/mlococo88/All-Structural/pull/1736) (ADTF) — Auto design tests: the unread closing full check skipped, one analysis worked once   [tests only]
 - **Request (engineer, 2026-11-26, "do whatever you think is best"):** shorten the steel Auto design tests without removing or weakening any assertion.
 - **Where / Before / After:**
   - `tests/engine/autodesign-joint.test.mjs`: `const RO = { settings: { mode: 'refine', topN: 1 }, maxIt: 5, trimTries: 2 };` → `…, trimTries: 2, current: false };` (jointRun's run() options).
