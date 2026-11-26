@@ -321,7 +321,8 @@
         c.comp ? null : note('Noncomposite girder: the steel section alone (6.10.1.1.1a).'),
         gsteps('SBDFlexureUI:sec', sc, (window.SBDRolled ? window.SBDRolled.steps(s) : []).concat(c.steps), { lazy: true, title: 'Worked steps' })])); });   // opened on demand: the flexure and constructibility steps repeat them per location
     { const bn = beffNote(B); if (bn) subs[0].items.unshift(note(bn, true)); }   // SBRF-5
-    return { title: 'Section properties', key: 'sec.props', note: `Plates of ${gName(B.girder)}; y up from the bottom of the steel. As on the [[tab:sec|Section properties tab]]; the flexure and constructibility steps below repeat the properties of each location.`, subs };
+    if (subs[0] && !subs[0].key) subs[0].key = 'sec.props';   // SBRF-7: the link target of the fatigue and stud notes, the first subsection (a § reference names a subsection)
+    return { title: 'Section properties', note: `Plates of ${gName(B.girder)}; y up from the bottom of the steel. As on the [[tab:sec|Section properties tab]]; the flexure and constructibility steps below repeat the properties of each location.`, subs };
   }
 
   const FXC = id => /^GS1[23]$/.test(id) ? 'svc' : /^GS([1-4]|22)$/.test(id) ? 'prop' : 'str';   // report/summary.js FLEX_CLS

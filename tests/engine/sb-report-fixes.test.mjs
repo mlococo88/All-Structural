@@ -13,7 +13,7 @@
 //   8. the construction live load warning names its condition (the option off), not a save date
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { loadShared, test, ROOT } from './harness.mjs';
+import { loadShared, test, ROOT, stepTex } from './harness.mjs';
 
 const E = f => path.join(ROOT, 'apps/steel-bridge', f);
 const FILES = ['units.js', 'steps.js', 'vehicles.js', 'moving-load.js', 'lldf.js', 'report.js'].concat(['engine/model.js', 'engine/sections.js', 'engine/proportions.js', 'engine/flexure.js', 'engine/owners.js',
@@ -58,6 +58,8 @@ const RUN = marked(() => { const out = [];
     m.sections.forEach(s => s.subs.forEach(q => q.items.forEach(it => { if (it && it.type === 'steps') rep.push(...it.steps); })));
     out.push({ key: `${name}/type ${u.gi + 1}/G${u.j + 1}`, steps: ALL.slice().concat(rep) }); }
   return out; });
+// the marked steps are not real step strings: take them out of the steps tex.test.mjs parses with KaTeX (the harness records every step)
+for (const [k, v] of stepTex) if (/[\uE000\uE001]/.test(v.tex)) stepTex.delete(k);
 const clean = t => String(t).replace(/[]/g, '');
 // the bundles of the checks below, computed again without the marks (each a type on its design line)
 for (const [name, P] of Object.entries(DESIGNS)) BUNDLES[name] = units(P).map(u => ({ u, B: W.SBDReportData.compute(u.P, u.gi, { src: 'analysis' }) }));
