@@ -373,7 +373,7 @@ results unchanged).
 ### Other copies
 - None.
 
-## 2026-11-26 — PR: claude/moving-load-speed (MLSP) — vJump's node test worked once per axle position (speed only; no computed result changed)
+## 2026-11-26 — PR: claude/moving-load-speed (PR #1738: https://github.com/mlococo88/All-Structural/pull/1738) (MLSP) — vJump's node test worked once per axle position (speed only; no computed result changed)
 - **Request (engineer, 2026-11-26, approved "Yes, merge once proven" for bit-identical speed changes only).**
 - **Where:** `analyze()`, new `atNodes(xp, lo, N0, N1, a)` (anchor `// MLSP (2026-11-26, speed only;`), right after `vJump`; used in `sweep(cfg)` and `refineAt(cfg, p, dir, list)`.
 - **Before:** in the inner loop over the active effects and the axles, every shear effect called `vJump(cutEl, cutL, f, xp, P)`, which returns null unless `!(Math.abs(xp - x[c]) > 1e-6)` for its cut node `c = cutL ? cutEl : cutEl + 1`:
