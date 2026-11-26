@@ -169,7 +169,7 @@
     // the input differences left (engine inputs of the imported project vs the old inputs)
     // left out: proj (the title block, below), the PS-10 box (new in this app, below) and, when the old design is not made continuous over two
     // or more entered spans, cont.spans / cont.span (the engine reads them only for a continuous unit, contUnit; the one-span case is noted below)
-    const inp = D.inputs(P), dif = diffs(eff, inp, '', [], ['proj', 'opt.hdCheck', 'opt.hdFrac'].concat(contOn && cs.length >= 2 && !xsp ? [] : ['cont.spans', 'cont.span']));
+    const inp = D.inputs(P), dif = diffs(eff, inp, '', [], ['proj', 'opt.hdCheck', 'opt.hdFrac', 'nxDL'].concat(contOn && cs.length >= 2 && !xsp ? [] : ['cont.spans', 'cont.span']));
     // ---- summary
     const when = now || new Date().toISOString();
     const fm = v => isNum(v) ? String(+v.toFixed(4)) : show(v);
@@ -315,7 +315,7 @@
       let Ro, Rn; try { const WL = fn => (window.PSBSections ? window.PSBSections.withLegacy(fn) : fn());   // PS-31: old names with the old entries (as verify)
         Ro = WL(() => computeAll(clone(oldInp))); Rn = WL(() => computeAll(clone(inp))); } catch (e) { c.same = false; c.why = e.message; return; }
       c.same = canon(val(Ro)) === canon(val(Rn));
-      if (!c.same) { const dd = diffs(Object.assign(clone(oldInp), { proj: 0, opt: Object.assign({}, oldInp.opt, { hdCheck: 0, hdFrac: 0 }) }), Object.assign(clone(inp), { proj: 0, opt: Object.assign({}, inp.opt, { hdCheck: 0, hdFrac: 0 }) }), '', [], []);
+      if (!c.same) { const dd = diffs(Object.assign(clone(oldInp), { proj: 0, nxDL: 0, opt: Object.assign({}, oldInp.opt, { hdCheck: 0, hdFrac: 0 }) }), Object.assign(clone(inp), { proj: 0, nxDL: 0, opt: Object.assign({}, inp.opt, { hdCheck: 0, hdFrac: 0 }) }), '', [], []);   // NX-O2: nxDL derived from the bridge, not an old input
         c.why = dd.length ? dd.slice(0, 5).map(d => `${LBL[d.path] || d.path} old ${show(d.old)}, here ${show(d.now)}`).join('; ') : 'the same inputs; ' + firstDiffs(val(Ro), val(Rn), '', [], 3).join(', '); }
     });
     L.restored = out;

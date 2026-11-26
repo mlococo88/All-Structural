@@ -126,11 +126,23 @@
     const P_ = W().PBD, owner = P_ && P_.ownerOf ? P_.ownerOf(inp) : (inp.owner || 'AASHTO'), th = Math.abs(+(inp.loads && inp.loads.skew) || 0);
     return owner === 'RIDOT' && th > RIDOT_SKEW + 1e-9 ? `RIDOT BDM Table 5-1 (Beam Usage Guide): a NEXT Type F beam is recommended for support skews up to ${RIDOT_SKEW}°; this span's support skew is ${th.toFixed(1)}° (Bridge layout tab).` : '';
   }
+  /* nxDeck(i, c): NX-O2: the composite properties c of a NEXT with the deck weight on the stems' tributary width i.nxDL.trib (ft):
+     wdkW = 12 trib, wdkDeck = wdkW t_s,DL / 144 w_c,d,DL (the engine's expression with that width), wdk = wdkDeck + wdkHaunch; nxB = the
+     engine's b_f width kept. A non-NEXT c, or no nxDL: c unchanged. */
+  function nxDeck(i, c) {
+    if (!c || !c.isNext || !i || !i.nxDL || !(+i.nxDL.trib > 0) || !(+c.tsLoad > 0)) return c;   // no deck slab (t_s = 0): nothing to place
+    const Wd = 12 * +i.nxDL.trib, wc = +i.mat.wcdLoad || +i.mat.wcd, deck = (Wd * c.tsLoad / 144) * wc;
+    return Object.assign({}, c, { wdkW: Wd, wdkDeck: deck, wdk: deck + c.wdkHaunch, nxB: c.wdkW });
+  }
   /* run(inp, inner): inner(inp) with the global distFactors giving the per-stem factors for a NEXT F with a deck; the NEXT D / no-deck warning */
   function run(inp, inner) {
-    const w = W(), orig = w.distFactors;
+    const w = W(), orig = w.distFactors, origCP = w.compositeProps;
     w.distFactors = function (i, g, cp) { const df = orig(i, g, cp); return applies(i, g) ? compute(i, g, cp, df) : df; };
-    let R; try { R = inner(inp); } finally { w.distFactors = orig; }
+    // NX-O2 (engineer 2026-11-26, §4): a NEXT beam's deck slab weight on the tributary width of its two stems (inputs.nxDL, engine/design.js
+    // nxTrib) instead of the engine's flange width b_f (compositeProps, NEXT branch: wdkW = beff); the haunch (on the flange) and the section
+    // properties unchanged. No inputs.nxDL (any other girder): the engine's own.
+    if (inp && inp.nxDL && typeof origCP === 'function') w.compositeProps = function (i, g) { return nxDeck(i, origCP(i, g)); };
+    let R; try { R = inner(inp); } finally { w.distFactors = orig; if (origCP) w.compositeProps = origCP; }
     if (R && !R.error && R.g && Array.isArray(R.warns)) { const t = warnText(inp, R.g); if (t) R.warns.push(t);
       const q = R.df && R.df.nx; if (q && q.deLim) R.warns.push(deWarn(q));   // NX-O1 (engineer 2026-11-26)
       const sw = skewWarn(inp, R.g); if (sw) R.warns.push(sw); }   // NX-O3 (engineer 2026-11-26)
@@ -251,5 +263,5 @@
       <div class="tscroll"><table class="tbl" id="nxLines"><thead><tr><th>Span</th><th class="lft">Line</th><th class="lft">Girder type</th><th class="lft">The line's factor (2 stems per beam)</th><th>DF<sub>M</sub></th><th>DF<sub>V</sub></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
       <p class="note">Each NEXT F beam is two type (k) stems at the stem spacing S = S<sub>b</sub> / 2; its factor is the sum of its stems' (NX-1). An exterior line (G1, G${P.xs.nb}) takes its exterior stem's governing candidate plus its interior stem's factor; an interior line twice the interior stem's. DF in lanes per beam, after the skew factors and any distribution option. § opens the worked steps (Loads &amp; LLDF tab) with that type and line.</p></div></section>`;
   }
-  W().PSBLldfNext = { kind, applies, compute, warnText, deWarn, skewWarn, RIDOT_SKEW, run, label, steps, card, xsCard };
+  W().PSBLldfNext = { kind, applies, compute, warnText, deWarn, skewWarn, RIDOT_SKEW, nxDeck, run, label, steps, card, xsCard };
 })();

@@ -133,6 +133,18 @@
     return withDemands(P, T, one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined })));
   }
   /* one(P): the engine inputs of the design girder P.design (PR 2b; unchanged) */
+  /* nxTrib(P, g, inp): NX-O2 (engineer 2026-11-26): the deck tributary widths of the two stems of NEXT beam line g (ft): the stems at the
+     beam line ± c (c = 2.5 ft, half the 60 in stem spacing); each stem's width runs to the midpoints between it and its neighbours (the
+     deck edge beyond the outer stem of an exterior beam); { c, a (left stem), b (right stem), trib = a + b } or null (not a NEXT). The sum
+     is the beam's tributary width: ohL + S_1/2 (G1), (S_{g-1} + S_g)/2 (interior), S_{n-1}/2 + ohR (G_n). */
+  function nxTrib(P, g, inp) {
+    const G_ = typeof GIRDERS !== 'undefined' ? (inp.girder === 'Custom' ? inp.cust : GIRDERS[inp.girder]) : null;
+    if (!G_ || !G_.next) return null;
+    const x = P.xs, B = (x.bays || []).map(Number), nb = x.nb, c = window.PSBBridgeDL ? window.PSBBridgeDL.NX_C : 2.5;
+    if (!(nb >= 2) || B.length !== nb - 1 || !B.every(v => v > 0)) return null;
+    const ta = g === 1 ? +x.ohL : B[g - 2] / 2, tb = g === nb ? +x.ohR : B[g - 1] / 2;   // left stem: the deck edge or the midpoint to the left, to the beam line; right stem: the beam line to the midpoint or the deck edge
+    return { c, a: ta, b: tb, trib: ta + tb };
+  }
   function one(P) {
     const PBD = window.PBD, d = sel(P), b = bridge(P);
     let o = PBD.applyBridge(b, JSON.parse(JSON.stringify(P.base)), d.g, d.s);
@@ -143,6 +155,10 @@
     // 4.6.2.2.2e, engine/lldf-fg.js); equal skews and every other shape: nothing added (inputs as before)
     if (Math.abs(Math.abs(+k[0] || 0) - Math.abs(+k[1] || 0)) > 1e-9 && window.PSBLldfFG && window.PSBLldfFG.isFGInputs(o)) o.loads = Object.assign({}, o.loads, { skewLo: Math.min(Math.abs(+k[0] || 0), Math.abs(+k[1] || 0)) });
     o.deck = Object.assign({}, o.deck, { oh: d.g === P.xs.nb && d.g !== 1 ? +P.xs.ohR : +P.xs.ohL });
+    // NX-O2 (engineer 2026-11-26, §4): a NEXT beam's deck slab weight (DC1) per stem, each stem's tributary width (half the clear distance
+    // to the next stem; the overhang for the outer stem of an exterior beam), the beam taking the sum of its two stems (engine/lldf-next.js
+    // wraps compositeProps with it); any other girder: nothing added
+    { const nx = nxTrib(P, d.g, o); if (nx) o.nxDL = nx; }
     // PR 3a-3 (PS-9, §4): DC2 and DW of this girder line from the Steel Bridge app's distribution (engine/bridge-dl.js) when the project
     // distributes them (P.xs.dl.mode 'distributed'); else the values entered per girder (base.loads.wBar / wDW) as before
     const DL = window.PSBBridgeDL, q = DL ? DL.line(P, d.g) : null;
@@ -185,5 +201,5 @@
       { key: 'cont.on', label: 'Made continuous for composite loads', value: i.cont.on ? 'yes' : 'no', unit: '', where: 'layout' }
     ];
   }
-  window.PSBDesign = { deOf, deDiff, deText, lineS, DRIVEN, sel, isExt, label, bridge, checks, inputs, cellInputs, one, driven };
+  window.PSBDesign = { nxTrib, deOf, deDiff, deText, lineS, DRIVEN, sel, isExt, label, bridge, checks, inputs, cellInputs, one, driven };
 })();

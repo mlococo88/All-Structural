@@ -350,12 +350,65 @@
     const q = P && P.xs && P.xs.dl; if (!q) return null; const sw = q['sw' + s] || {}, f = edgeFace(P, s).f;
     return Math.max(f, +sw.w > 0 && +sw.t >= 12 - 1e-9 ? +sw.w : 0, +sw.w > 0 && isNum(sw.fenceX) && sw.fenceX > 0 ? sw.fenceX : 0);
   }
+  /* NX-O2 (engineer 2026-11-26, "dead loads (DC1, DC2, DW, PL) per STEM for NEXT beams, ALL owners; sum the two stems for the whole-beam
+     design checks"; MassDOT LRFD Bridge Manual 3.5.4.2 as the source of the rule; §4): on a bridge of NEXT beams (the base design and every
+     girder type a NEXT F or D) each stem is a stringer of the distribution. dead() (the Steel Bridge app's, unchanged) is given the 2 N_b
+     stems at the beam lines ± c (c = half the stem spacing, 60 in / 2 = 2.5 ft, the engine's NEXT stemCC), each line load is distributed to
+     the stems by the project's method (MassDOT pile cap, AASHTO equally, RIDOT 60/40 or the two adjacent, or the row's own), and each beam
+     takes the sum of its two stems (fold). Any other bridge (or a mix of NEXT and other girders): per girder line, as before.
+     nxStem(P) -> c (ft) or 0. fold(R, Nb, OL): dead()'s result on the stems, folded to the beams: every per-girder array and each line
+     load's shares the sum of the two stems (the stem values kept as R.stems and L.rSt), the steps of each stem renamed dl.G<b>.st<1|2>.*
+     with the beam's own steps dl.G<b>.* = stem 1 + stem 2 after them. */
+  const NX_C = 30 / 12;
+  function nxStem(P) {
+    if (!P || !P.base || typeof GIRDERS === 'undefined') return 0;
+    const BR = window.PSBBridge, ks = BR && BR.hasTypes(P) ? P.types.map((_, k) => k) : [];
+    const isNx = b => { if (!b) return false; const e = b.girder === 'Custom' ? b.cust : GIRDERS[b.girder]; return !!(e && e.next); };
+    if (!isNx(P.base) && !ks.length) return 0;
+    return (ks.length ? ks.every(k => isNx(BR.effBase(P, k))) : isNx(P.base)) ? NX_C : 0;
+  }
+  function fold(R, Nb, OL) {
+    const sum = a => Array.from({ length: Nb }, (_, b) => (+a[2 * b] || 0) + (+a[2 * b + 1] || 0));
+    const stems = { N: R.N, ub: R.ub, xbar: R.xbar, c: R.c, S2: R.S2, trib: R.trib, deck: R.deck, dc1: R.dc1, dc2: R.dc2, dw: R.dw, pl: R.pl, cls: R.cls, ...(R.ut ? { ut: R.ut, uf: R.uf } : {}) };
+    const bcls = Array.from({ length: Nb }, (_, b) => { const a = R.cls[2 * b], c = R.cls[2 * b + 1], ext = b === 0 ? a : b === Nb - 1 ? c : null;
+      return ext || ([a, c].find(k => k === 'int-sw' || k === 'ext-sw') || ([a, c].includes('first-int') ? 'first-int' : 'interior')); });
+    const ub = Array.from({ length: Nb }, (_, b) => (R.ub[2 * b] + R.ub[2 * b + 1]) / 2);
+    const per = R.per.map(L => Object.assign({}, L, { rSt: L.r.slice(), r: sum(L.r) }));
+    const out = Object.assign({}, R, { N: Nb, ub, c: ub.map(x => x - R.xbar), trib: sum(R.trib), deck: sum(R.deck), haunch: sum(R.haunch), sip: sum(R.sip), dc1: sum(R.dc1), dc2: sum(R.dc2),
+      dw: sum(R.dw), pl: sum(R.pl), ...(R.ut ? { ut: sum(R.ut), uf: sum(R.uf) } : {}), cls: bcls, per, stems, nx: { c: NX_C, Nst: R.N, OL } });
+    out.steps = foldSteps(R, out, Nb);
+    return out;
+  }
+  function foldSteps(R, F, Nb) {
+    const side = (b, j) => (j === 1 ? 'left' : 'right') + (b === 0 && j === 1 || b === Nb - 1 && j === 2 ? ', outer' : '') + ' stem';
+    const ren = s => { const m = /^dl\.G(\d+)\.(.+)$/.exec(s.id); if (!m) {
+        if (s.id === 'dl.xbar') return Object.assign({}, s, { label: 'Centroid of the NEXT stems (each stem a stringer) from the left deck edge', eq: '\\frac{\\sum x_{i}}{N_{st}}' });
+        if (s.id === 'dl.S2') return Object.assign({}, s, { label: 'Sum of the squared stem offsets (pile-cap method, each NEXT stem a stringer)' });
+        return s; }
+      const k = +m[1] - 1, b = Math.floor(k / 2), j = k % 2 + 1;
+      return Object.assign({}, s, { id: `dl.G${b + 1}.st${j}.${m[2]}`, label: String(s.label || '').replace(/^G\d+:/, `G${b + 1}, ${side(b, j)}:`) }); };
+    const st = R.steps.map(ren), top = st.filter(s => !/^dl\.G\d+\./.test(s.id)), out = top.slice();
+    const n4 = v => St().n(v, 4), ref = `${ED} Art. 3.5.1; MassDOT Bridge Manual Part I 3.5.4.2 (each NEXT stem a stringer)`;
+    for (let b = 0; b < Nb; b++) {
+      const G = `dl.G${b + 1}.`; out.push(...st.filter(s => s.id.indexOf(G) === 0));
+      const sy = (sym, j) => (/\}$/.test(sym) ? sym.replace(/\}$/, `,st${j}}`) : `${sym}_{st${j}}`);
+      const two = (id, label, sym, a) => out.push(St().step({ id: G + id, label: `G${b + 1}: ${label} (the sum of its two stems)`, sym, eq: `${sy(sym, 1)} + ${sy(sym, 2)}`, sub: `${n4(a[2 * b])} + ${n4(a[2 * b + 1])}`, value: (+a[2 * b] || 0) + (+a[2 * b + 1] || 0), unit: 'klf', d: 4, ref }));
+      R.per.forEach(L => two(L.id, `share of the ${String(L.desc).toLowerCase()} (${L.cat}, ${DIST[L.dist] || L.dist})`, 'w', L.r));
+      two('DC2', 'DC2 on the long-term composite section', 'w_{DC2}', R.dc2);
+      two('DW', 'DW on the long-term composite section', 'w_{DW}', R.dw);
+      if (R.pl.some(v => v)) two('PL', 'pedestrian live load', 'w_{PL}', R.pl);
+      if (R.ut) { two('UT', 'utilities', 'w_{UT}', R.ut); two('UF', 'future utility allowance on the noncomposite section', 'w_{UF}', R.uf); }
+    }
+    return out;
+  }
   const CACHE = { key: '', R: null };
   function distribute(P) {
     if (!on(P) || checks(P).length || !P.base) return null;
     const x = P.xs, q = x.dl, b = P.base, m = b.mat || {}, wc = +m.wcdLoad || +m.wcd, ts = b.tsSeparate ? +b.tsDL : +b.ts;
-    const key = JSON.stringify([x.nb, x.bays, x.ohL, x.ohR, q, wc, ts]); if (CACHE.key === key) return CACHE.R;
+    const nxc = nxStem(P);   // NX-O2 (engineer 2026-11-26): a NEXT bridge: each stem a stringer (fold, above); 0: per girder line, as before
+    const key = JSON.stringify([x.nb, x.bays, x.ohL, x.ohR, q, wc, ts, nxc]); if (CACHE.key === key) return CACHE.R;
     const N = x.nb, pos = [0]; (x.bays || []).forEach(s => pos.push(pos[pos.length - 1] + s));
+    const posSt = nxc ? pos.flatMap(v => [v - nxc, v + nxc]).map(v => v + nxc) : null;   // the stems from the left stem of G1
     const Wd = deckWidth(P), err = [];
     const sw = s => { const v = q['sw' + s] || {}; return +v.w > 0 ? +v.w : 0; }, swt = s => +((q['sw' + s] || {}).t) || 0;
     // PR 9: the deck edges (barrier, or curb and railing) and the optional cross-section inputs through the steel app's own functions
@@ -363,12 +416,13 @@
     const Ed = EDGE.edgeIn(edgesOf(q), err), xi = EDGE.xsIn(xsInOf(q, sw), err); if (err.length) return null;
     const gx = { L: geoOf(q.barL), R: geoOf(q.barR) }, geo = sd => (gx[sd] && gx[sd].ok ? gx[sd] : null);   // BARG
     const edges = EDGE.edgeLoads(EDGE.bridgeEff({ wc }, Ed), xi.wcA).map(E => (/^bar[LR]$/.test(E.id) && geo(E.side) ? Object.assign({}, E, { x: geo(E.side).xc }) : E)), med = q.med || {};   // BARG: at the centroid x̄
-    const args = (ped, swL, swR) => [{ Nb: N, OL: +x.ohL, ts, fL: Ed.L.f, fR: Ed.R.f }, { pos, Wdeck: Wd },
+    const args = (ped, swL, swR) => [nxc ? { Nb: 2 * N, OL: +x.ohL - nxc, ts, fL: Ed.L.f, fR: Ed.R.f } : { Nb: N, OL: +x.ohL, ts, fL: Ed.L.f, fR: Ed.R.f }, { pos: nxc ? posSt : pos, Wdeck: Wd },
       { method: q.method, ped, swL, swThkL: swt('L'), swR, swThkR: swt('R'), medW: +med.w > 0 ? +med.w : 0, medThk: +med.w > 0 ? +med.t || 0 : 0, medJoint: med.joint ? 'yes' : 'no',
         fws: xi.fws !== null ? xi.fws : +q.fws || 0, uwc: wc, uwcA: xi.wcA, hh: 0, sip: 0, bf: 0,
         fenceL: xi.fenceL, fenceXL: xi.fenceXL, fenceR: xi.fenceR, fenceXR: xi.fenceXR, wsThk: xi.wsThk, wsGam: xi.wsGam,
         edges, extra: (q.extra || []).map((r, i) => ({ desc: r.name || `Added line load ${i + 1}`, cat: steelCat(r.cat), x: +r.x, plf: +r.plf, dist: r.dist || 'auto' })), ovl: xi.ovl, ovr: null, bcls: null }];
-    const R = dead(...args(0, sw('L'), sw('R')));   // the dead loads: the same call as before PL-A (ped 0)
+    const R0 = dead(...args(0, sw('L'), sw('R')));   // the dead loads: the same call as before PL-A (ped 0)
+    const R = nxc ? fold(R0, N, +x.ohL - nxc) : R0;   // NX-O2: the stems' shares summed per beam
     const out = Object.assign({}, R, { wc, ts, Wd, edge: Ed });
     // BARG: a barrier from its geometry: its step dl.load.bar<L|R> (dead()'s "line load as entered") becomes the shared file's worked steps
     // (shoelace / closed form, w = A/144 γ, b_deck, x̄), the weight keeping the id; geo: the shapes (Loads tab, Report)
@@ -391,9 +445,9 @@
     // PL-A: the pedestrian live load, by a second call of the steel app's dead() with ped and only the sidewalks wider than 2.0 ft
     // (3.6.1.6); each line load's shares do not depend on the other loads, so only its pedestrian rows, shares and steps are taken
     const ped = +q.ped > 0 ? +q.ped : 0, pw = s => (sw(s) > PED_MIN + 1e-9 ? sw(s) : 0);
-    if (ped > 0) { const R2 = dead(...args(ped, pw('L'), pw('R'))), per = R2.per.filter(L => L.cat === 'PL');
-      out.ped = { q: ped, per, pl: R2.pl.slice(), narrow: ['L', 'R'].filter(s => sw(s) > 0 && !pw(s)), none: !per.length,
-        steps: R2.steps.filter(s => /^dl\.(load\.ped[LR]|G\d+\.ped[LR]|G\d+\.PL)$/.test(s.id)) }; }
+    if (ped > 0) { const R2a = dead(...args(ped, pw('L'), pw('R'))), R2 = nxc ? fold(R2a, N, +x.ohL - nxc) : R2a, per = R2.per.filter(L => L.cat === 'PL');
+      out.ped = { q: ped, per, pl: R2.pl.slice(), narrow: ['L', 'R'].filter(s => sw(s) > 0 && !pw(s)), none: !per.length, ...(nxc ? { plSt: R2.stems.pl.slice() } : {}),
+        steps: R2.steps.filter(s => /^dl\.(load\.ped[LR]|G\d+\.(st[12]\.)?(ped[LR]|PL))$/.test(s.id)) }; }
     CACHE.key = key; CACHE.R = out; return out;
   }
   /* pl(P) (PL-A): the pedestrian live load of the bridge: { q (psf), per: [the line loads], pl: [klf per girder line], narrow: [sides whose
@@ -457,5 +511,5 @@
     }
     return Wl;
   }
-  window.PSBBridgeDL = { CATN, pl, PED_MIN, edgeFace, llFace, CATS, XDIST, OWNER_METHOD, ownerMethod, onOwner, withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
+  window.PSBBridgeDL = { CATN, NX_C, nxStem, fold, pl, PED_MIN, edgeFace, llFace, CATS, XDIST, OWNER_METHOD, ownerMethod, onOwner, withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
 })();

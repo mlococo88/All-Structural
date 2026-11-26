@@ -207,3 +207,39 @@ test('NX-O3 (engineer 2026-11-26): RIDOT, a NEXT F and a support skew above 15°
   const R = sk(20), w = has(R); assert.equal(w.length, 1); assert.ok(/support skews up to 15°; this span's support skew is 20\.0°/.test(w[0]), w[0]);
   const R0 = cell(W, project(W, Q => { Q.xs.skews = [20, 20]; Q.base.owner = 'AASHTO'; }), 2).R; assert.equal(has(R0).length, 0, 'not RIDOT');
 });
+
+test('NX-O2 (engineer 2026-11-26): dead loads per stem (each NEXT stem a stringer), each beam the sum of its two stems; RIDOT / MassDOT / AASHTO by hand', () => {
+  const P = m => project(W, Q => { Q.xs.dl.method = m; }), D = m => W.PSBBridgeDL.distribute(P(m));
+  // the stems at the beam lines ± 2.5 ft: 2.5, 7.5, …, 37.5 ft from the left deck edge; x̄ = 20 ft; Σc² = 2(17.5² + 12.5² + 7.5² + 2.5²) = 1,050 ft²
+  const R = D('ridot'); assert.deepEqual(J(R.stems.ub), [2.5, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5]); assert.equal(R.stems.N, 8); assert.equal(R.N, 4); near(R.stems.S2, 1050);
+  // RIDOT 60/40 per stem: the left barrier 0.30 klf: 0.6 P to the outer stem of G1, 0.4 P over the 6 stems that are not the outer stems
+  // G1 = 0.18 + 0.02 + (right barrier) 0.02 = 0.22 +  sidewalks (0.5 klf each: 0.30 + 0.0333 + 0.0333) = 0.36667 → DC2 0.58667 (was 0.48); G2 = 4 × 0.02 + 4 × 0.03333 = 0.21333 (was 0.32)
+  near(R.dc2[0], 0.18 + 0.02 + 0.02 + 0.3 + 0.5 * 0.4 / 6 * 2, 1e-12, 'RIDOT G1'); near(R.dc2[1], 4 * 0.02 + 4 * 0.5 * 0.4 / 6, 1e-12, 'RIDOT G2');
+  assert.equal(R.dc2[0].toFixed(4), '0.5867'); assert.equal(R.dc2[1].toFixed(4), '0.2133'); near(R.dc2.reduce((a, v) => a + v, 0), 2 * 0.3 + 2 * 0.5, 1e-12, 'the total kept');
+  R.per.forEach(L => L.r.forEach((v, b) => near(v, L.rSt[2 * b] + L.rSt[2 * b + 1], 1e-15, L.id)));   // each beam = its two stems
+  // MassDOT pile cap per stem: the left sidewalk 0.5 klf at x = 2.5 (e = −17.5): stems 1, 2 of G1: 0.5/8 + 0.5(17.5)(17.5)/1050 = 0.20833, 0.0625 + 0.5(17.5)(12.5)/1050 = 0.16667 → G1 0.375 (was 0.125 + 0.5(17.5)(15)/500 = 0.3875)
+  const M = D('massdot'), sw = M.per.find(L => L.id === 'swL'); near(sw.rSt[0], 0.0625 + 0.5 * 17.5 * 17.5 / 1050, 1e-12); near(sw.rSt[1], 0.0625 + 0.5 * 17.5 * 12.5 / 1050, 1e-12); near(sw.r[0], 0.375, 1e-12);
+  // AASHTO: equally to all stems = P / (2 N_b) per stem, P / N_b per beam: as before
+  const A = D('aashto'); A.dc2.forEach(v => near(v, 0.4, 1e-12, 'AASHTO equal')); A.dw.forEach(v => near(v, 0.75 / 4, 1e-12));
+  // the engine inputs and the Strength I moment: G1 RIDOT ΔM_DC2 = (0.58667 − 0.48)(45²)/8 = 27.0 k-ft, ΔM_u = 1.25(27.0) = 33.75 k-ft
+  const Q = P('ridot'), c1 = cell(W, Q, 1); near(c1.inp.loads.wBar, R.dc2[0], 1e-12); const Md = r => r.diagrams.reduce((b, q) => Math.abs(q.x - 22.5) < Math.abs(b.x - 22.5) ? q : b).M_DC2;
+  near(Md(c1.R), R.dc2[0] * 45 ** 2 / 8, 1e-9, 'M_DC2 at midspan');
+  // the steps: each stem's share, and the beam's = stem 1 + stem 2
+  const st = W.PSBBridgeDL.stepsFor(Q, 1), s = id => st.find(x => x.id === id);
+  ['dl.G1.st1.DC2', 'dl.G1.st2.DC2', 'dl.G1.DC2', 'dl.G1.st1.barL', 'dl.G1.barL'].forEach(id => assert.ok(s(id), id));
+  near(s('dl.G1.DC2').value, s('dl.G1.st1.DC2').value + s('dl.G1.st2.DC2').value, 1e-15); near(s('dl.G1.DC2').value, R.dc2[0], 1e-15);
+  assert.ok(/G1, left, outer stem/.test(s('dl.G1.st1.DC2').label) && /sum of its two stems/.test(s('dl.G1.DC2').label));
+  // any other girder: per girder line, as before (no stems)
+  const B = W.PSBModel.newProject(); B.xs.dl = W.PSBBridgeDL.defaults(B); B.xs.dl.mode = 'distributed'; const RB = W.PSBBridgeDL.distribute(B); assert.ok(RB && !RB.stems && !RB.nx && RB.N === B.xs.nb);
+});
+
+test('NX-O2: the deck slab (DC1) of a NEXT beam on its two stems\' tributary width (was the flange width b_f); interior and a deck edge at the flange edge: unchanged', () => {
+  // overhangs 6 ft: G1 stems: left 6 ft (to the deck edge), right 10/2 = 5 ft: 11 ft = 132 in (b_f = 120 in): w_deck = 132(8)/144(0.150) = 1.100 klf (was 120(8)/144(0.150) = 1.000)
+  const P = project(W, Q => { Q.xs.ohL = 6; Q.xs.ohR = 6; }), e = cell(W, P, 1), i = cell(W, P, 2);
+  assert.deepEqual(J(e.inp.nxDL), { c: 2.5, a: 6, b: 5, trib: 11 }); near(e.R.cp.wdkW, 132, 1e-12); near(e.R.cp.wdkDeck, 132 * 8 / 144 * 0.150, 1e-12); assert.equal(e.R.cp.wdkDeck.toFixed(3), '1.100');
+  near(e.R.cp.nxB, 120, 1e-12, 'the engine\'s b_f kept'); near(e.R.cp.wdk, e.R.cp.wdkDeck + e.R.cp.wdkHaunch, 1e-12);
+  near(i.R.cp.wdkW, 120, 1e-12, 'interior: 5 + 5 ft = 10 ft = b_f'); assert.equal(i.R.cp.wdkDeck.toFixed(3), '1.000');
+  const st = W.PSBWorked.loads(e.inp, e.R).steps.find(x => x.id === 'ld.wdeck'); assert.ok(st && /per stem \(NX-O2/.test(st.note) && Object.is(st.value, e.R.cp.wdkDeck), st && st.note);
+  // the section properties and b_eff unchanged
+  const P5 = project(W), e5 = cell(W, P5, 1); assert.equal(e5.R.cp.Ic, e.R.cp.Ic); assert.equal(e5.R.cp.beff, e.R.cp.beff); near(e5.R.cp.wdkW, 120, 1e-12, 'G1 with 5 ft: 5 + 5 = b_f');
+});

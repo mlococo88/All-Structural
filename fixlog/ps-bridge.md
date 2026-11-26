@@ -10135,3 +10135,70 @@ NX-O3: the NX-1 test project with skews 20°: one warning "… up to 15°; this 
 `tests/engine/psbridge-lldf-next.test.mjs` (new tests NX-O1 and NX-O3: the hand values above, the applicability level, the warning, the steps); the comparison above; `node tests/engine/run.mjs psbridge`; smoke `tests/smoke/ps-bridge-nextlldf.mjs`.
 ### Open items
 I-girders: the same −1.0 ft limit for their e (frozen engine) is not applied (NX-O1b).
+
+## 2026-11-26 — PR: claude/ps-next-lldf (PR #1726) (NX-O2) — dead loads per stem for NEXT beams, all owners: DC1 (deck), DC2, DW, PL and the utility line loads to the stems as stringers, each beam the sum of its two stems (CALCULATION CHANGE, §4) — NOT MERGED, engineer review
+### Request (engineer answer, 2026-11-26)
+"#1726 NX-O2: dead loads (DC1, DC2, DW, PL) per STEM for NEXT beams, ALL owners; sum the two stems for the whole-beam design checks. Further §4 change, engineer review."
+### Where
+- `apps/ps-bridge/engine/bridge-dl.js`: new `NX_C`, `nxStem(P)`, `fold(R, Nb, OL)`, `foldSteps(R, F, Nb)` (before `const CACHE = { key: '', R: null };`); `distribute(P)` (anchors `const nxc = nxStem(P);`, `const args = (ped, swL, swR) =>`, `const R0 = dead(...args(0, sw('L'), sw('R')));`, the PL-A call `const R2a = dead(...args(ped, pw('L'), pw('R')))`). The Steel Bridge app's `dead()` (DEAD-VERBATIM) is not changed: it is given the 2 N_b stems as its girders.
+- `apps/ps-bridge/engine/design.js`: new `nxTrib(P, g, inp)`; `one(P)` (anchor `{ const nx = nxTrib(P, d.g, o); if (nx) o.nxDL = nx; }`): the inputs carry `nxDL = { c, a, b, trib }` (ft) for a NEXT line.
+- `apps/ps-bridge/engine/lldf-next.js`: new `nxDeck(i, c)`; `run` wraps `compositeProps` for the call when `inp.nxDL` (restored after).
+- `apps/ps-bridge/engine/worked.js` loads() (anchor `id: 'wdeck'`): the deck step's note for a NEXT per stem.
+- `apps/ps-bridge/ui/bridgedl.js`: new `stemTable(R, per, g, k)` under the Loads & LLDF tab's distribution card (`#nxStemDL`: every stem's share of each line load, DC2, DW, PL, with § links).
+### Before
+```
+dead({ Nb: N, OL: ohL, … }, { pos: the girder lines, … }, a)      // each line load to the N_b beams by the method
+compositeProps (NEXT): wdkW = beff = b_f; wdkDeck = b_f t_s,DL / 144 w_c,d,DL                 // the deck weight on the flange width
+```
+### After
+```
+NEXT bridge (the base design and every girder type a NEXT F or D):
+  stems at the beam lines ± c, c = 30 in = 2.5 ft (the engine's 60 in stem spacing / 2); N_st = 2 N_b
+  dead({ Nb: 2 N_b, OL: ohL − c, … }, { pos: the stems, … }, a)   // each line load to the stems by the method (MassDOT pile cap, AASHTO equally, RIDOT 60/40 or two adjacent, the row's own)
+  beam b: every share, DC2, DW, PL, UT, UF = stem (2b − 1) + stem (2b)                       // fold
+  deck (DC1): wdkW = 12 (a + b), a, b the two stems' tributary widths: G1 ohL + S_1/2, interior (S_{g−1} + S_g)/2, G_n S_{n−1}/2 + ohR
+              wdkDeck = wdkW t_s,DL / 144 w_c,d,DL; wdk = wdkDeck + wdkHaunch                 // the haunch (on the flange) and the section properties unchanged
+any other bridge: as before
+```
+### Governing provision
+MassDOT LRFD Bridge Manual Part I (Hundredth Anniversary Edition) 3.5.4.2 (DC1, DC2, DW and PL distributed to NEXT beams treating each stem as a stringer, the stems' loads combined for the beam) with 3.5.3.3–3.5.3.6 (the stringer rules: deck by tributary area, superimposed loads by the pile cap analogy or equally, PL); AASHTO LRFD 10th Ed. (2024) Art. 3.5.1, 4.6.2.2.1; RIDOT BDM (April 2026) 3.3.1 (60 % / 40 %). The engineer applies the per-stem rule for every owner (2026-11-26). Verified in the MassDOT manual text (3.5.4.2, cited, not quoted).
+### Check case (by hand), tests/engine/psbridge-lldf-next.test.mjs
+The NX-1 test project: 4 NEXT 24F at 10 ft, overhangs 5 ft (40 ft wide), 45 ft span, 8 in deck, barriers 14 in at 0.30 klf, 5 ft × 8 in sidewalks (0.50 klf each), wearing surface 25 psf (0.75 klf between the curb faces), RIDOT. Stems at 2.5, 7.5, …, 37.5 ft; x̄ = 20 ft; Σc² = 2(17.5² + 12.5² + 7.5² + 2.5²) = 1,050 ft² (per beam: 2(15² + 5²) = 500 ft²).
+| Quantity | Before (per beam) | After (per stem, summed) |
+|---|---|---|
+| RIDOT 60/40, left barrier 0.30 klf to G1 | 0.6(0.30) = 0.1800 | outer stem 0.6(0.30) = 0.1800 + inner stem 0.4(0.30)/6 = 0.0200: 0.2000 |
+| RIDOT, right barrier to G1 | 0 (G1 is not an interior beam) | inner stem 0.0200 |
+| RIDOT, sidewalks to G1 (0.50 klf each) | 0.3000 + 0 | 0.3000 + 0.0333 + 0.0333 = 0.3667 |
+| RIDOT DC2 G1 / G2 | 0.4800 / 0.3200 klf | 0.5867 / 0.2133 klf (the total 1.60 klf kept) |
+| M_DC2 at midspan G1 = w (45)²/8 | 121.50 k-ft | 148.50 k-ft |
+| Strength I M_u G1 (ΔM_u = 1.25 × 27.00) | 2,856.39 k-ft | 2,890.14 k-ft; Flexure 0.9633 → 0.9746 |
+| G2 M_u | 2,754.90 k-ft | 2,721.15 k-ft; Flexure 0.9291 → 0.9179 |
+| MassDOT pile cap, left sidewalk 0.50 klf at 2.5 ft (e = −17.5 ft), G1 | 0.50/4 + 0.50(17.5)(15)/500 = 0.3875 | (0.0625 + 0.50(17.5)(17.5)/1050) + (0.0625 + 0.50(17.5)(12.5)/1050) = 0.20833 + 0.16667 = 0.3750 |
+| MassDOT DC2 G1 / G2 (with the pedestrian load 75 psf: PL G1 0.2897 → 0.2827) | 0.8373 / 0.5457 klf | 0.8164 / 0.5388 klf |
+| AASHTO (equally) | P / N_b | P / (2 N_b) per stem = P / N_b per beam: unchanged |
+| Deck slab, G1 with 6 ft overhangs (b_f = 120 in) | 120(8)/144(0.150) = 1.000 klf | stems 6 + 5 = 11 ft = 132 in: 132(8)/144(0.150) = 1.100 klf |
+| Deck slab, interior G2 (5 + 5 ft = 120 in = b_f) | 1.000 klf | 1.000 klf |
+### Decisions (pending engineer review)
+- NX-O2a. The stems at the beam line ± 2.5 ft (the engine's 60 in stem spacing) for the NEXT F and D (MassDOT NEXT D dwg 11.2.3 has the same stem spacing).
+- NX-O2b. Per stem only when every girder type of the bridge (and the base design) is a NEXT; a bridge that mixes NEXT and other girders keeps the per-line distribution.
+- NX-O2c. RIDOT 60/40 per stem: the "fascia" stringer is the outer stem of each exterior beam (60 %); the 40 % goes to every stem but the two outer ones (the inner stems of the exterior beams included), as the method treats any stringer.
+- NX-O2d. The deck slab weight (DC1) per stem in both modes (DC2 / DW entered or distributed): the tributary width to the deck edge as entered, even where that is inside the flange edge (the tab design "NEXT 36F with a 6 in topping" has 3 ft overhangs on a 10 ft flange: its exterior deck slab weight falls from 0.750 to 0.600 klf, w_DC1 1.100 → 0.950 klf); the haunch stays on the flange width; the section properties and b_eff unchanged.
+- NX-O2e. The utility line loads (composite UT, noncomposite UTN, UF) and the added DC1 line loads go to the stems too (every line load of the distribution).
+- NX-O2f. The MassDOT beam classes (labels only; no distribution reads them): an exterior beam takes its outer stem's class.
+### Designs that change (b26aa983 → this commit; inputs built by each side's own engine/design.js; 825 designs: the tab designs on every line, 38 recorded, 600 seeded, the NX test project at 0° and 35° with the methods RIDOT, MassDOT (+ pedestrian load), AASHTO and 6 ft overhangs)
+The recorded and seeded designs are engine inputs without a bridge cross-section: unchanged. 22 change, all NEXT:
+| Design (line) | DC2 / DC1 change | Verdict | Checks that flip | Largest ratio |
+|---|---|---|---|---|
+| NX test project 0°, MassDOT, G2 / G3 (int) | DC2 0.5457 → 0.5388 | **FAIL → PASS** | Shear FAIL 1.0011 → PASS 0.9994 | 1.0011 → 1.0000 |
+| NX test project 0°, MassDOT, G1 / G4 (ext) | DC2 0.8373 → 0.8164 | FAIL → FAIL | Flexure FAIL 1.0010 → PASS 0.9988 | 1.0616 → 1.0447 |
+| NX test project 35°, 6 ft overhangs, G1 / G4 | deck 1.000 → 1.100 klf | FAIL → FAIL | Srv III tens PASS 0.9214 → FAIL 1.0641 | 1.3073 → 1.3358 |
+| NX test project 0°, 6 ft overhangs, G1 / G4 | deck 1.000 → 1.100 klf | FAIL → FAIL | — | 1.1663 → 1.2046 |
+| tab "NEXT 36F with a 6 in topping", G1 / G5 (ext, 3 ft overhangs) | deck 120(6)/144(0.150) = 0.750 → 96(6)/144(0.150) = 0.600 klf (w_DC1 1.100 → 0.950) | FAIL → FAIL | — | 13.4004 → 12.6831 |
+| NX test project 0°, RIDOT, G1 / G4 | DC2 0.4800 → 0.5867 | PASS → PASS | — | 1.0000 → 1.0000 (Flexure 0.9633 → 0.9746, Shear 0.9477 → 0.9732, Srv III 0.7712 → 0.8579) |
+| NX test project 0°, RIDOT, G2 / G3 | DC2 0.3200 → 0.2133 | PASS → PASS | — | 1.0000 → 1.0000 (Flexure 0.9291 → 0.9179, Shear 0.9454 → 0.9194) |
+| NX test project 35°, RIDOT, G1 / G4 | DC2 0.4800 → 0.5867 | FAIL → FAIL | — | 1.0595 → 1.0874 |
+| NX test project 35°, RIDOT, G2 / G3 | DC2 0.3200 → 0.2133 | FAIL → FAIL | — | 1.0631 → 1.0343 |
+| NX test project 35°, MassDOT, G1 / G4 and G2 / G3 | as at 0° | FAIL → FAIL | — | 1.1538 → 1.1483; 1.1244 → 1.1225 |
+The NX test project with AASHTO (equally; its default method) at 5 ft overhangs: unchanged (per stem P/(2N_b), per beam P/N_b; the deck 5 + 5 = 10 ft = b_f). Every per-check ratio before → after: the PR comment.
+### How verified
+`tests/engine/psbridge-lldf-next.test.mjs` (two new tests: the RIDOT, MassDOT and AASHTO shares by hand, the fold, M_DC2, the steps; the deck per stem, the section unchanged); the comparison above; `node tests/engine/run.mjs psbridge`; smoke `tests/smoke/ps-bridge-nextlldf.mjs`.
