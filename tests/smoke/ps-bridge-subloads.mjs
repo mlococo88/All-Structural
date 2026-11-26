@@ -6,7 +6,7 @@
 //     every girder type × line); the one-line "Send reactions" button still sends the old app's payload (no allGirders).
 //   Receiver (PS as the sender): Pull geometry -> the picker preselects the project of the same name; the review; the "Also update the
 //     live-load distribution girder data" box is disabled for the concrete section; Apply -> P.br spans, bays, overhangs, depth 72, bf 42,
-//     tf 6, tw 6 as sent, P.geoSrc producer PS-Beam. Pull reactions -> the picker, then the dialog defaults to "each girder to the girder
+//     tf 6, tw 6 as sent, the haunch at the CL bearings (deck.haunchBrg; HHO 2026-11-25), P.geoSrc producer PS-Beam. Pull reactions -> the picker, then the dialog defaults to "each girder to the girder
 //     with the same number"; Apply -> P.rx.data DC1 / DC2 / DW of every girder at both abutments = the payload. 0 console errors.
 //   node tests/smoke/ps-bridge-subloads.mjs [--shots <dir>]
 import path from 'path';
@@ -61,7 +61,10 @@ try {
   await q.click('#gxg-apply'); await q.waitForTimeout(500);
   const br = await q.evaluate(() => JSON.parse(JSON.stringify({ br: P.br, src: P.geoSrc, units: P.units.map(u => u.name) })));
   assert.deepEqual(br.br.spans, sg.spans); assert.deepEqual(br.br.bays, sg.girders.spacings); assert.equal(br.br.ohL, sg.girders.ohL);
-  assert.deepEqual([br.br.d, br.br.bf, br.br.tf, br.br.tw, br.br.ts, br.br.haunch], [72, 42, 6, 6, sg.deck.ts, sg.deck.haunch]);
+  // HHO (2026-11-25): the haunch at the CL bearings (deck.haunchBrg, t_h + Δ_deck) when sent; deck.haunch keeps t_h
+  assert.ok(sg.deck.haunchBrg > sg.deck.haunch, JSON.stringify(sg.deck)); assert.equal(br.src.haunchBrg.v, sg.deck.haunchBrg); assert.equal(br.src.haunchBrg.min, sg.deck.haunch);
+  assert.deepEqual([br.br.d, br.br.bf, br.br.tf, br.br.tw, br.br.ts, br.br.haunch], [72, 42, 6, 6, sg.deck.ts, sg.deck.haunchBrg]);
+  assert.match(tx, /Haunch \(at the CL bearings: deck\.haunchBrg; sent th 2\.00 in is the minimum at midspan\)/);
   assert.deepEqual(br.units, ['Abut. 1', 'Abut. 2']); assert.equal(br.src.producer, 'PS-Beam'); assert.equal(br.src.pid, PID); assert.equal(br.src.lldf, false);
   ok(`receiver: geometry applied (spans ${br.br.spans}, ${br.br.bays.length + 1} girders, d 72 in, bf 42, tf 6, tw 6; K_g option off for concrete)`);
   await q.click('.itab[data-pane="project"]'); await q.waitForSelector('#slHo #rx-pull'); await q.click('#rx-pull'); await q.waitForSelector('#gxp-modal tr[data-gxp-row]');

@@ -3266,3 +3266,32 @@ function listTables() {
 - **Effect:** a Steel Bridge app payload with a pedestrian load (UT / UF top-level, `separate { PL, PLmin }`) is read: DC1, DC2, DW, UT, UF exactly as before; PL shown only (dialog column "PL (info)", the source record), as for the PS Bridge app (SRP). The factored results of a Steel hand-off do not change (PL is not applied).
 - **Governing provision:** none changed. **Check case:** the default steel bridge with a 6 ft sidewalk (PL 75 psf) and UT / UF rows: `check()` of the payload and of the same payload with the items removed give the same dc1, dc2, dw, ut, uf for every support and girder (tests/engine/steel-bearing.test.mjs); a girder with UT both top-level and in `separate`: refused as before.
 - **Saved data:** none changed. **Other copies:** none.
+
+## 2026-11-25 — PR: claude/ps-haunch-handoff (PR #1723: https://github.com/mlococo88/All-Structural/pull/1723) (HHO) — geometry pull: the haunch at the CL bearings when the sender gives it (cross-tool with the PS Bridge app; §4) — NOT MERGED, engineer review
+### Request (engineer, 2026-11-25)
+"The haunch that gets passed to other apps should get fixed to include the full thickness." The PS Bridge app now sends the optional `deck.haunchBrg` (t_h + Δ_deck, the haunch at the CL bearings) and `deck.haunchMid` beside `deck.haunch` (t_h, its minimum at midspan, unchanged).
+### Where (patchGeoHandoff)
+- New helper `haunchIn(p)` before the anchor `/* plan(): the new P.br values and the review rows`.
+- `plan()`: anchor `ts: r4(p.deck.ts), haunch: r4(...)`; the review row `row('Deck thickness', …); …'Haunch'…`.
+- `applyGeo()`: `P.geoSrc` gets the optional `haunchBrg: { v, min, mid }`.
+- `srcLine()`: the haunch's source in the Bridge tab line and the report's "Bridge geometry" row. The block's header comment and the `br.haunch` field help.
+### Before
+```
+ts: r4(p.deck.ts), haunch: r4(p.deck.haunch), d: r4(depthOf(D, p)), …
+row('Deck thickness', L(b.ts), L(nu.ts), 'in'); row('Haunch', L(b.haunch), L(nu.haunch), 'in');
+```
+### After
+```
+const haunchIn = p => { const d = (p && p.deck) || {}, hb = d.haunchBrg, ok = typeof hb === 'number' && isFinite(hb) && hb >= 0;
+  return ok ? { v: hb, brg: true, mid: …, min: num(d.haunch) } : { v: num(d.haunch), brg: false }; };
+ts: r4(p.deck.ts), haunch: r4(haunchIn(p).v), d: r4(depthOf(D, p)), …
+row(hi.brg ? `Haunch (at the CL bearings: deck.haunchBrg; sent t<sub>h</sub> … in is the minimum at midspan)` : 'Haunch', …)
+```
+### Effect (§4)
+`br.haunch` feeds `d_sup = (t_s + haunch + d)/12`, so the bottom of girder, the bearing seats, the bridge seat, the cap and stem tops, the stem height (and through them the unit self-weight and the force arms), the drawings and the wind exposed depth all change. Check case (PS NEXT 24F 45 ft, t_h 2 in, Δ_deck 3.3458 in, on SubLoads' default project): br.haunch 2.0000 → 5.3458 in; d_sup 2.8333 → 3.1121 ft; Abut. 1 G1 seat 121.792 → 121.513 ft; Abut. 1 stem height 13.292 → 13.013 ft; Abut. 2 stem height 14.392 → 14.113 ft; wind exposed depth 6.3333 → 6.6121 ft; Strength III wind on the superstructure 0.3567 → 0.3724 klf. Older payloads and the Steel Bridge app (no haunchBrg): as before.
+### Governing provision
+Geometry. RIDOT BDM (April 2026) 5.6.1 (the haunch at the supports set from camber and dead-load deflection), 9.4.6; AASHTO LRFD 10th Ed. 3.8.1.2 (wind on the exposed depth).
+### How verified
+`tests/engine/psbridge-haunch-handoff.test.mjs` (the receiver's `haunchIn`, `check` and `dSup` cut from this file at their anchors); smokes `tests/smoke/ps-bridge-haunch-handoff.mjs`, `tests/smoke/ps-bridge-subloads.mjs`.
+### Decided by the engineer 2026-11-26
+The wind depth takes the bearing haunch: one haunch (the bearing haunch) for the seats and the wind (as built). One haunch for every support: the largest single value (as built). A sagging sender girder sends a bearing haunch thinner than t_h (`deck.haunchBrg` = max(t_h + Δ_deck, 0.5), fixlog/ps-bridge.md HHO-SAG); this tool takes it as any `deck.haunchBrg` ≥ 0 (no change here).
