@@ -10,7 +10,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'compare'].map(n => path.join(APP, `engine/${n}.js`)),
+const W = loadShared('steps.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'compare'].map(n => path.join(APP, `engine/${n}.js`)),
   ...['vizkit', 'vizalong', 'outkit', 'strands', 'compare'].map(n => path.join(APP, `ui/${n}.js`)));
 const plain = o => JSON.parse(JSON.stringify(o));
 const base = () => { const P = W.PSBModel.defaultProject(); P.base.opt.hdCheck = false; return P; };
@@ -25,6 +25,7 @@ test('G4: the presets are the old tab\'s (span L ± 10, ± 20; every library gir
 
 test('G4: where the app\'s engine additions do not apply, run() = sweepDesign (span, spacing; girder for the I-girder sections)', () => {
   const inp = W.PSBDesign.inputs(base()), C = W.PSBCompare;
+  inp.opt.relBondedReinf = false;   // EZX (2026-11-25): with the bonded release steel the app's T is the exact sum (engine/reltension.js), an addition
   for (const mode of ['span', 'spacing']) {
     const v = C.presets(inp, mode), a = plain(C.run(inp, mode, v)), b = plain(W.sweepDesign(inp, mode, v));
     assert.deepEqual(a.map(({ gov, fails, ...r }) => r), b, mode);
