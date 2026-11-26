@@ -10,7 +10,9 @@ const W = loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-l
   'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/constructibility.js', 'engine/splices.js',
   'engine/rating.js', 'engine/welds.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'engine/splplace.js', 'engine/autodesign.js'].map(E));
 const AD = W.SBDAutoDesign, M = W.SBDModel, J = o => JSON.parse(JSON.stringify(o)); W.setTimeout = setTimeout;   // runChunked yields with setTimeout (a page global)
-const RO = { settings: { mode: 'refine', topN: 1 }, maxIt: 5, trimTries: 2 };
+const RO = { settings: { mode: 'refine', topN: 1 }, maxIt: 5, trimTries: 2, current: false };   // current: false (test time, ad-tests-fast): no closing full check of each run's
+// current design (R.current.full, not read here; jointRun does not read it); the candidates, rejected and blocked lists are the same (run() works the
+// current design's full check on its own when a finalist needs it, curKeys)
 
 test('lockD: the type\'s copies at D_c, the D variable locked, the other types kept', () => {
   const P = M.newProject(); P.girders[1].segments.forEach(s => { s.D = 54; }); const Q = AD.lockD(AD.typeProject(P, 1), 60);
