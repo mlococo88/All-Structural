@@ -39,7 +39,7 @@
       ['Srv III top tens (pier, 5.12.3.3.5)', 'st.pier.s3TopN'], ['Top tens. steel (pier, 5.12.3.3.5)', 'st.pier.AsTop'], ['Srv comp (bot, −M, 5.12.3.3.5)', 'st.pier.fBot']] },
     { id: 'fat', name: 'Fatigue I', tab: 'str', checks: [['Fatigue I (strand)', 'st.fat.dfs'], ['Fatigue I (concrete, 5.5.3.1)', 'st.fat.cTop']] },
     { id: 'flex', name: 'Flexure', tab: 'flex', checks: [['Flexure', 'fx.gov'], ['Min reinf', 'fx.min.r'], ['Neg flexure (pier)', 'fx.pier.r'], ['Pos. moment connection (5.12.3.3.8)', 'fx.conn.r']] },
-    { id: 'shear', name: 'Shear', tab: 'shear', checks: [['Shear', 'sh.gov'], ['Long. reinf (5.7.3.5)', 'sh.Tr'], ['Interface shear (5.7.4)', 'sh.ifr']] },
+    { id: 'shear', name: 'Shear', tab: 'shear', checks: [['Shear', 'sh.gov'], ['Stirrup spacing (5.7.2.5, 5.7.2.6)', 'sh.spr'], ['Long. reinf (5.7.3.5)', 'sh.Tr'], ['Interface shear (5.7.4)', 'sh.ifr']] },   // SH-SP (2026-11-25): the spacing check
     { id: 'end', name: 'End zone & hold-down', tab: 'end', checks: [['Splitting steel (5.9.4.4)', 'ez.dc'], ['Confinement steel (5.9.4.4.2)', 'ez.conf.gov'], ['Release tens. steel (5.9.2.3.1b)', 'ez.rel.dc'],
       ['Hold-down force (MassDOT 3.7.2.2)', 'ez.hd.r'], ['Hold-down force (CTDOT 5.9.1.6)', 'ez.hd.r'], ['Hold-down force (PS-10)', 'ez.hd.r'], ['Debonded strands (CTDOT 5.9.4.3.3)', 'ez.db.r']] },
     // AP-B (2026-11-23): the line-girder analysis' applicability (engine/applicability.js): the check exists only when a computed
@@ -75,6 +75,8 @@
   /* PR 3a-2: the girder type and line of an entry (several cells only) */
   const on = z => z && z.cell && D.many ? ` — ${z.cell.label} on G${z.cell.g}` : '';
   const fx = (v, d) => typeof v === 'number' && isFinite(v) ? v.toFixed(d) : v === Infinity ? '∞' : '—';
+  // SH-SP (2026-11-25): a failing check that says why (the stirrup spacing check: "NG — stirrup spacing 18 in > 9.47 in at x = …")
+  const why = c => (!c.pass && c.why ? ` (${esc(c.why)})` : '');
   /* the checks of a group in R (those the engine made for this design) and the governing one (largest ratio). PR 3a-2: with the results of
      every girder type × line (A = PSBBridge.results), one entry per type and check, its worst line (SB-5: one count per type per check),
      each naming its type and line (cell) */
@@ -120,13 +122,13 @@
       if (gp.pr) return `<div class="sdChip sd-notrun"><span></span><a href="#" class="sdMain" data-sdtab="${gp.tab}" title="Not built yet: comes in PR ${gp.pr} (docs/ps-bridge-plan.md §5)"><span class="sdName">${esc(gp.name)}</span><span class="sdVal">not run</span><span class="sdSt">PR ${gp.pr}</span></a></div>`;
       if (q.st === 'na') return gp.off ? `<div class="sdChip sd-notrun" data-sdgrp="${gp.id}"><span></span><a href="#" class="sdMain" data-sdin="${gp.off}" title="Off for this design: turn it on on its input tab"><span class="sdName">${esc(gp.name)}</span><span class="sdVal">off</span><span class="sdSt">input</span></a></div>` : '';
       const op = D.open.has(gp.id), g = q.gov;
-      const rows = q.all.map(z => `<li><a href="#" ${go(gp, z.st, z.cell)} class="sd-${stC(z.c)}">${esc(z.c.n + on(z))}: ${fx(z.c.r, 3)}</a></li>`).join('');
+      const rows = q.all.map(z => `<li><a href="#" ${go(gp, z.st, z.cell)} class="sd-${stC(z.c)}">${esc(z.c.n + on(z))}: ${fx(z.c.r, 3)}${why(z.c)}</a></li>`).join('');
       return `<div class="sdChip sd-${q.st}${q.st === 'pass' && fin(g.c.r) && g.c.r >= 0.9 ? ' sd-hi' : ''}" data-sdgrp="${gp.id}"><button type="button" class="sdX" data-sdx="${gp.id}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each check">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" ${go(gp, g.st, g.cell)} title="${esc(`${g.c.n}${on(g)}: ${fx(g.c.v, 3)} vs ${fx(g.c.lim, 3)} ${g.c.u}${gp.input ? ' (Owner rules tab)' : ` at x = ${fx(g.c.loc, 2)} ft`}`)}">
         <span class="sdName">${esc(gp.name)}</span><span class="sdVal">${fx(g.c.r, 3)}</span><span class="sdSt">${LBL[q.st]}</span></a>${op ? `<ul class="sdList">${rows}</ul>` : ''}</div>`;
     }).join('') + rtChip(R, A);
     const verd = nF ? 'fail' : nR ? 'review' : 'pass';
     o.el.innerHTML = head(cnt)
-      + `<div class="sdVerd"><b class="sd-${verd}">${LBL[verd]}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" ${go(top.gp, top.st, top.cell)}>${esc(top.c.n + on(top))}: ${fx(top.c.r, 3)}</a></div>` : ''}
+      + `<div class="sdVerd"><b class="sd-${verd}">${LBL[verd]}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" ${go(top.gp, top.st, top.cell)}>${esc(top.c.n + on(top))}: ${fx(top.c.r, 3)}${why(top.c)}</a></div>` : ''}
         <div class="sdRun">${A ? `${A.types.length} girder type${A.types.length === 1 ? '' : 's'} on ${A.n} line${A.n === 1 ? '' : 's'} (every span); each counted once per check, its worst line.` : runTxt(o)}</div>`
       + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing ratio of its checks${A && A.n > 1 ? ' over every girder type and line (the type and line named)' : ''} (demand / capacity, OK ≤ 1.0; amber 0.90 to 1.00), the engine's value. Click: its tab with that type and line, and the worked step of the value. Summary tab: every type and line.</p>`;
   }

@@ -10022,3 +10022,89 @@ See the PR description: every NEXT design tried (library and MassDOT NEXT F and 
 - The change table of PR #1721 (the NEXT reductions; a NEXT verdict can change NG → OK) approved by the engineer 2026-11-25 with the merge.
 ### Saved data
 None.
+
+## 2026-11-25 — PR: claude/ps-shear-spacing (SH-SP) — Shear: the stirrup spacing check counted in the verdict; β by Eq. 5.7.3.4.2-2 where A_v < A_v,min (§4 calculation change, approved by the engineer 2026-11-25)
+### Request (engineer, 2026-11-25, found while reviewing a real project)
+1. The station table of the Shear tab marked the stirrup spacing FAIL (18 in provided against 9.47 in at two runs of stations) while the Shear check, the check summary and the overall verdict said PASS 0.540: the engine's `spOK` never reached `checks`.
+2. Where the section has less than A_v,min, β must come from Eq. 5.7.3.4.2-2 (with s_xe), not Eq. 5.7.3.4.2-1 (on that project 0.540 → 0.636 and 0.563 → 0.663).
+### Code basis (verified in the 10th Ed. text; articles and equation numbers as given, plus Eq. 5.7.3.4.2-7 for s_xe)
+AASHTO LRFD 10th Ed. (2024): Art. 5.7.2.3, Eq. 5.7.2.3-1 (transverse reinforcement required where V_u > 0.5 φ (V_c + V_p); slabs and footings excepted); Art. 5.7.2.5, Eq. 5.7.2.5-1 (where required, A_v ≥ 0.0316 λ √f′c b_v s / f_y); Art. 5.7.2.6, Eq. 5.7.2.6-1 / -2 (s_max = 0.8 d_v ≤ 24 in, or 0.4 d_v ≤ 12 in when v_u ≥ 0.125 f′c); Art. 5.7.3.4.2: Eq. 5.7.3.4.2-1 (β for a section with at least A_v,min), Eq. 5.7.3.4.2-2 (β for a section with less: Eq. -1 times 51/(39 + s_xe)), Eq. 5.7.3.4.2-3 (θ, both cases), Eq. 5.7.3.4.2-7 (s_xe = s_x · 1.38/(a_g + 0.63), 12.0 in ≤ s_xe ≤ 80.0 in; s_x the lesser of d_v and the spacing of the layers of longitudinal crack control reinforcement; a_g the maximum aggregate size).
+### Where (the frozen `engine/pbd-*.js` untouched)
+- NEW `apps/ps-bridge/engine/shear-sp.js` (`window.PSBShearSp`): a copy of `computeAll` made at run time from the engine's own text with 4 edits (each anchor found exactly once, else an error), the pattern of `engine/pl.js` and `engine/ut.js`. Why a copy: β feeds V_c, V_n, the governing station (`R.wShear`), the 5.7.2.3 test (`stirReq`, so `spOK`), the shear diagram (`R.shearDiag`, which the rating along the span reads) and the engine's shear rating (`R.shrRating`, whose V_DC / V_DW come from shear functions local to `computeAll`): a result cannot be corrected from outside without repeating the engine's arithmetic.
+- `apps/ps-bridge/engine/holddown.js` `compute0`: the engine call runs inside `PSBShearSp.run` (innermost, so the copies of `pl.js` / `ut.js` are copied too). `apps/ps-bridge/index.html`: loads `engine/shear-sp.js` before `engine/holddown.js`.
+- `apps/ps-bridge/engine/worked-strength.js` `shear()`, `apps/ps-bridge/ui/shear.js`, `apps/ps-bridge/ui/dash.js` (GROUPS, `why`), `apps/ps-bridge/report/builders.js` `summary()`: display (below).
+### Before / After (the engine text, pbd-compute.js `computeAll`, and the copy)
+1. Station β, anchor `const beta=4.8/(1+750*es), theta=29+3500*es;`
+   - Before: `const beta=4.8/(1+750*es), theta=29+3500*es;`
+   - After: `const bq=window.PSBShearSp.beta(es,dv,(Math.min(x,L-x)<=inp.opt.endZoneLen*L)?+inp.opt.sEnd:+inp.opt.sInt,Av,fy,m.fc,g.bw);` then `const beta=bq.beta, theta=29+3500*es;` where `beta()` returns β1 = 4.8/(1 + 750 ε_s) when s ≤ s_Av,min + 0.001 in (A_v ≥ A_v,min, s_Av,min = A_v f_y/(0.0316 √f′c b_v), the engine's own `sMinR` expression), else β1 × 51/(39 + s_xe), s_xe = clamp(s_x × 1.38/(a_g + 0.63), 12, 80), s_x = d_v, a_g = 0.75 in.
+2. Station row, anchor `Tdem,Tcap,fpsAvail,TsMild,longOK,cot,phiVn:phiV*Vn,stirReq,sMaxGov,spOK,` → `…spOK,bq,` (the record: eq 1 | 2, beta1, AvMin, sMinR, s, sx, sxe, ag, f).
+3. Diagram β, anchor `const beta=4.8/(1+750*es), theta=29+3500*es, cot=1/Math.tan(theta*Math.PI/180);` → the same rule with `xm` (R.shearDiag: φV_n, φ(V_c + V_p)).
+4. Checks, anchor `{n:'Shear',v:wShear.Vu,lim:phiV*wShear.Vn,r:wShear.dc,loc:wShear.x,u:'kip'},` → followed by `window.PSBShearSp.check(shear),`: `{ n: 'Stirrup spacing (5.7.2.5, 5.7.2.6)', v: s_prov, lim: s_max,gov, r: s_prov/s_max,gov, loc: x, u: 'in', why, runs }` at the station with the largest s_prov/s_max,gov among the design stations (bearing row excluded) where `stirReq`; none required: r = 0. `why` = "NG — stirrup spacing 18 in > 9.47 in at x = 11.3–18.0 and 27.0–33.7 ft" (each run of consecutive stations with `spOK` false). PASS / FAIL by the engine's `r ≤ 1.0001`.
+   θ (Eq. -3), ε_s, V_s, V_u, M_u, the longitudinal tie and interface shear are unchanged (none depends on β).
+### Display
+- Check summary column (ui/dash.js): the Shear group lists "Stirrup spacing (5.7.2.5, 5.7.2.6)" (step `sh.spr`); a failing check with a reason shows it in its row and on the "Governing:" line, e.g. "Stirrup spacing (5.7.2.5, 5.7.2.6): 1.900 (NG — stirrup spacing 18 in > 9.47 in at x = 11.3–18.0 and 27.0–33.7 ft)"; the Shear check keeps its strength ratio ("Shear: 0.531").
+- Shear tab: the governing-values card has the spacing row (ratio, x, "FAIL: <reason>", § to `sh.spr`) and the Shear row says "strength; stirrup spacing: NG §"; the section table marks β of Eq. -2 with † (note with the § to `sh.beta`).
+- Worked steps (Shear tab and Report): the steps now work the station where V_u/φV_n governs (`sh.xg`; the critical section stays as `sh.x`); new `sh.AvMin` (Eq. 5.7.2.5-1 at the spacing there, with "A_v < A_v,min: Eq. 5.7.3.4.2-2" or "≥: Eq. -1"); where A_v < A_v,min `sh.sx`, `sh.sxe` (Eq. 5.7.3.4.2-7) and `sh.beta` by Eq. 5.7.3.4.2-2 (its note: why, and the Eq. -1 value); `sh.gov` notes the spacing check (§sh.spr); the spacing topic ("Stirrup spacing check") works v_u, s_max, s_Av,min, s_max,gov at the station where the spacing governs, then `sh.stReq` (Eq. 5.7.2.3-1, values) and `sh.spr` (s / s_max,gov, OK / NG, the reason). M_u of the station worked: the nearest grid row (a display intermediate when it is not the critical section).
+- Report: the summary of checks has the new row and, for a failing check with a reason, a note "Stirrup spacing (5.7.2.5, 5.7.2.6): NG — … , see §"; the Shear section reads the tab (cards and steps).
+### Check case (by hand): the made-up NEXT 24F of tests/engine/psbridge-shearsp.test.mjs
+5 NEXT 24F at 8 ft, one 45 ft span, 6 in deck, f′c = 8.5 ksi, 22 strands 0.6 in (10 at 2 in and 10 at 4 in, two of each debonded 6 ft; 2 at 6 in), A_v = 0.40 in² (2 legs), f_y = 60 ksi, 6 in over 0.25 L at each end, 18 in between; b_v = 27.5 in (two stems), λ = 1.0. Governing station x = 13.50 ft: d_v = 24.908 in, V_u = 118.73 kip, V_p = 0, |M_u| = 20,700 kip-in, ε_s = 0.349077 × 10⁻³ (unchanged).
+| Quantity | Before | After |
+|---|---|---|
+| A_v,min = 0.0316(1.0)√8.5 (27.5)(18)/60 | not checked | 0.760 in² > A_v = 0.40: Eq. -2 |
+| s_Av,min = 0.40(60)/(0.0316 √8.5 (27.5)) | 9.473 in | 9.473 in |
+| v_u = 118.73/(0.9 × 27.5 × 24.908); s_max | 0.193 ksi < 1.063; 19.93 in | same |
+| s_max,gov = min(19.93, 9.473) | 9.473 in | 9.473 in |
+| s_x = d_v; s_xe = 24.908 × 1.38/(0.75 + 0.63) | — | 24.908 in; 24.908 in |
+| β | Eq. -1: 4.8/(1 + 750 × 0.000349077) = 3.804 | Eq. -2: 3.804 × 51/(39 + 24.908) = 3.036 |
+| θ = 29 + 3500 ε_s | 30.22° | 30.22° |
+| V_c = 0.0316 β √8.5 (27.5)(24.908) | 240.06 kip | 191.57 kip |
+| V_s = 0.40(60)(24.908)(1.7167)/18 | 57.01 kip | 57.01 kip |
+| V_n = min(V_c + V_s + V_p, 0.25(8.5)(27.5)(24.908) = 1455.6) | 297.08 kip | 248.59 kip |
+| φV_n (φ = 0.90) | 267.37 kip | 223.73 kip |
+| V_u/φV_n ("Shear") | 0.444 PASS | 0.531 PASS |
+| 0.5φ(V_c + V_p) vs V_u = 118.73 (5.7.2.3) | 108.03: required | 86.21: required |
+| Stirrup spacing 18/9.473 | FAIL in the table only; not a check | 1.900 FAIL (new check) |
+| Overall | PASS | FAIL: "NG — stirrup spacing 18 in > 9.47 in at x = 11.3–18.0 and 27.0–33.7 ft" |
+At x = 11.26 ft (first station past the end zone, s = 18 in): V_c 305.97 → 243.97 kip, so 0.5φV_c = 137.69 → 109.79 kip against V_u = 132.27 kip: stirrups were not required by 5.7.2.3 before and are now, so that station joins the spacing FAIL (the table: 13.5, 18, 27, 31.5 ft before; 11.26 to 18.0 and 27.0 to 33.74 ft after). Shear rating at the governing section: RF_inv 2.650 → 2.165 (φV_n 267.37 → 223.73 kip).
+### Designs whose Shear verdict, ratio, β or θ changes (verdict flips first)
+Before = the app without engine/shear-sp.js (app designs: the 19 tab designs of tests/engine/psbridge-tab-cases.mjs and the made-up NEXT 24F, `PSBHoldDown.compute`) or `computeAll` (the recorded old-app designs of tests/projects/ps); After = with it. θ changes in none. Ratio, β and θ at the governing station.
+| Design | Overall | Shear V_u/φV_n | β (gov.) | θ | Eq. -2 stations | Spacing check (new) | Shear RF inv |
+|---|---|---|---|---|---|---|---|
+| made-up NEXT 24F, 45 ft, A_v 0.40 in² at 18 in (**flip**) | PASS → FAIL | 0.444 → 0.531 PASS | 3.804 → 3.036 | 30.22 | 7/17 | 1.900 FAIL | 2.650 → 2.165 |
+| tab: NEXT 36F with a 6 in topping, no draped strands | FAIL → FAIL | 2.660 → 3.366 FAIL | 0.873 → 0.592 | 50.00 | 7/17 | 1.797 FAIL | −0.097 → −0.235 |
+| tab: solid deck slab 18×48 with a 5 in topping, 40 ft | FAIL → FAIL | 0.199 → 0.218 PASS | 5.097 → 4.509 | 28.73 | 17/17 | 0 PASS (none required) | 6.953 → 6.305 |
+| recorded: next_skew | FAIL → FAIL | 1.327 → 1.692 FAIL | 0.994 → 0.667 | 46.87 | 7/17 | 1.797 FAIL | 0.651 → 0.421 |
+| recorded: shape_Deck_slab_12_48_solid | FAIL → FAIL | 0.203 → 0.206 PASS | 5.239 → 5.144 | 28.61 | 17/17 | 0 PASS | 6.095 → 6.007 |
+| recorded: shape_Deck_slab_18_48_solid | FAIL → FAIL | 0.182 (x 27.97) → 0.199 (x 2.03) PASS | 5.463 → 4.860 | 28.43 | 17/17 | 0 PASS | 7.641 → 6.954 |
+| recorded: shape_NEXT_24F | FAIL → FAIL | 0.390 → 0.468 PASS | 3.995 → 3.181 | 29.94 | 7/17 | 1.900 FAIL | 2.988 → 2.447 |
+| recorded: shape_NEXT_28F | FAIL → FAIL | 0.716 → 0.875 PASS | 1.932 → 1.448 | 35.93 | 7/17 | 1.866 FAIL | 1.526 → 1.190 |
+| recorded: shape_NEXT_32F | FAIL → FAIL | 1.006 → 1.254 FAIL | 1.286 → 0.910 | 41.76 | 7/17 | 1.831 FAIL | 0.992 → 0.719 |
+| recorded: shape_NEXT_36F | FAIL → FAIL | 1.297 → 1.653 FAIL | 0.963 → 0.646 | 47.60 | 7/17 | 1.797 FAIL | 0.669 → 0.428 |
+Unchanged (Shear ratio, β, θ, verdict; the new check PASS): the other 17 tab designs (default BT-72 and the rest, box beams included), the made-up NEXT 24F with 9 in between, and the other 25 recorded designs that compute. Seeded parity cases (600 + edge, 507 that compute): 133 change; the Shear (strength) check flips PASS → FAIL in 4 (seed026 next_skew 0.789 → 1.027, seed381 Deck slab 18×48 0.986 → 1.072, seed456 NEXT 36F 0.827 → 1.071, seed521 next_skew 0.775 → 1.011), all already FAIL overall; the new spacing check FAILs in 103; no seeded design goes from PASS to FAIL overall.
+### How verified
+`tests/engine/psbridge-shearsp.test.mjs` (new): the 4 anchors once; on the 411 parity cases with at least A_v,min at both spacings the copy gives `computeAll`'s result at tolerance 0 plus the check (13 of them FAIL it on s > s_max of 5.7.2.6, exactly where the engine's own table already said FAIL); on the 128 with less, ε_s, θ, V_s, V_u unchanged and β × 51/(39 + s_xe) exactly at the stations with A_v < A_v,min; the made-up NEXT 24F (the hand check above), the same with 9 in (unchanged), the worked steps (values = the engine's; Eq. -2 shown with A_v,min, s_x, s_xe; the reason), with the copies of pl.js / ut.js. `node tests/engine/run.mjs psbridge`, the full engine suite, `node tests/check-syntax.mjs`; browser `tests/smoke/ps-bridge-shearsp.mjs` (check summary column, Shear tab, § link, Report, psb2.* keys, 0 console errors) and the PS smokes.
+### Saved data
+None: no key or format changed; no new input (a_g and s_x are fixed, see the decisions).
+### Decisions (pending engineer review)
+- SH-SP-1. The spacing check is its own check, "Stirrup spacing (5.7.2.5, 5.7.2.6)", in the Shear group, ratio = s_prov / s_max,gov (s_max,gov = min of 5.7.2.6 and the A_v,min spacing of 5.7.2.5) at the station where it is largest among the design stations where 5.7.2.3 requires stirrups (bearing row excluded, as the Shear check); no station requires stirrups: ratio 0, PASS. The Shear check keeps the strength ratio V_u/φV_n; the verdict says the failure is from the spacing.
+- SH-SP-2. a_g = 0.75 in (maximum aggregate size, Eq. 5.7.3.4.2-7) for every design; not an input (an input would change the saved format). With a_g = 0.75 in, 1.38/(a_g + 0.63) = 1.0, so s_xe = s_x.
+- SH-SP-3. s_x = d_v: no longitudinal crack control layers are counted (the lesser of d_v and the layer spacing of 5.7.3.4.2).
+- SH-SP-4. A_v < A_v,min is tested as s > s_Av,min + 0.001 in (the engine's spacing tolerance), at the spacing provided at the station; λ = 1.0 (normal-weight, as the engine).
+- SH-SP-5. The shear worked steps now work the station where V_u/φV_n governs (was the critical section; the critical section's location stays the first step).
+### Open items (raised, not changed: CLAUDE.md §4)
+- SH-SP-6. Slabs: 5.7.2.3 excepts members that meet the Art. 5.2 definition of a slab from the transverse reinforcement requirement; the engine applies 5.7.2.3 to deck slabs and box beams as to girders. With this change deck slabs (no A_v,min) take β by Eq. -2; their spacing check passed in every design tried (5.7.2.3 never required stirrups). **Decided by the engineer 2026-11-26: deck slab beams are NOT slabs under 5.7.2.3; they are treated as beams (the PR as built, no change).**
+- SH-SP-7. `engine/legacy.js` ("From the old app") compares the old app's result with this app's using the bare `computeAll` on both sides (a like-for-like parity of the import, not a design check); not changed. (The capacity hand-off that also called it was removed by PR #1716 before this merge.)
+- SH-SP-8. The old single-file app (`Prestressed Bridge Design.html`, frozen) has the same two issues.
+
+## 2026-11-26 — PR: claude/ps-shear-spacing (PR #1728) — engineer decisions recorded (no code change)
+### Request (engineer answers, 2026-11-26)
+- SH-SP-6 (#1728): "deck slab beams are NOT slabs under 5.7.2.3; treat them as beams (keep the PR as built)". The SH-SP entry above now reads decided; no code or result changes.
+- PS splitting resistance (AASHTO LRFD 10th Ed. (2024) Art. 5.9.4.4.1; raised by the review of a real NEXT F project, question 7 of that review): "use the force AFTER transfer (as now)". The app's splitting demand stays P_r = 0.04 P_i with P_i the prestressing force just after transfer (after the elastic shortening loss), as the moved engine computes it (`splitDem`, End zone tab, steps `ez.Pi`, `ez.Pr`). No code or result changes.
+### Where
+`fixlog/ps-bridge.md` only (this record and the SH-SP-6 line above).
+### Before / After
+No code change. Before: SH-SP-6 open; the splitting force an open question. After: both decided by the engineer as built.
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 5.7.2.3 (with the Art. 5.2 definition of a slab) and Art. 5.9.4.4.1 (splitting resistance: at least 4 % of the total prestressing force at transfer).
+### Check case
+None needed: no value changes (the SH-SP check case above is unchanged; the splitting check of any design is unchanged).
