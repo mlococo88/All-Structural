@@ -24,7 +24,7 @@ M.setLines(P, 0, [1, 2, 3, 4, 5, 6, 7, 8]); M.setLines(P, 1, [0, 9]); P.girders[
 
 const t0 = Date.now();
 const { b, p, errs, blocked } = await openPage(path.join(REPO, 'apps/steel-bridge/index.html'), { vw: 1400, vh: 1000, timeout: 120000,
-  ls: { 'sbd2.project.current': JSON.stringify(J(P)), 'sbd2.ui': JSON.stringify({ otab: 'rpt', g: 0, rpt: { scope: 'girder' } }) } });
+  ls: { 'sbd2.project.current': JSON.stringify(J(P)), 'sbd2.ui': JSON.stringify({ otab: 'rpt', g: 0, rpt: { scope: 'girder', full: true } }) } });   // full: SBGL (2026-11-26), the report of the design line G6 (the box "Work the line chosen above the tab")
 try {
   await p.waitForSelector('#rp_build', { timeout: 120000 });
   const bar = await p.evaluate(() => { const g = document.getElementById('gBar'); return g && !g.hidden && getComputedStyle(g).display !== 'none' ? g.innerText.replace(/\s+/g, ' ') : ''; });
