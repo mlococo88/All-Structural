@@ -10003,7 +10003,7 @@ Only designs that sag at deck placement (Δ_deck < 0) on a section with a haunch
 ### Open items
 Camber tolerance (± % of the predicted camber, a Settings input): the follow-up PR (claude/ps-haunch-camber-tol). Cross slope: not now.
 
-## 2026-11-26 — PR: claude/ps-haunch-camber-tol (HCT) — the camber tolerance: the haunch at midspan and at the bearings for high and low camber (§4 review; a reported value only, no check, load or ratio) — NOT MERGED, engineer review; based on PR #1722
+## 2026-11-26 — PR: claude/ps-haunch-camber-tol (PR #1739: https://github.com/mlococo88/All-Structural/pull/1739) (HCT) — the camber tolerance: the haunch at midspan and at the bearings for high and low camber (§4 review; a reported value only, no check, load or ratio) — NOT MERGED, engineer review; based on PR #1722
 ### Request (engineer answers, 2026-11-26)
 "#1722 camber tolerance: YES, as a Settings input (± % of predicted camber), showing haunch at bearings and midspan for high and low camber. Follow-up PR, §4 review."
 ### Where
@@ -10023,10 +10023,10 @@ high / low:  Δ_deck ± δ_C
 ### Decisions (pending engineer review)
 - HCT-1. The tolerance is on the predicted erection camber Δ_erect (what the fabricator controls), not on the deck deflection; Δ_deck shifts by the same δ_C.
 - HCT-2. Two readings are shown for each case: the midspan haunch with the seats and bearing haunch set for the predicted camber (what the plans give), and the bearing haunch that would keep t_h at midspan.
-- HCT-3. Default: none (blank). No owner value was found (RIDOT BDM 5.6.1 and 9.4.6 ask that the haunch at the supports allow for the camber with its tolerance, without a number).
+- HCT-3. Default: none (blank). No owner value was found: RIDOT BDM 5.6.1 asks that the haunch at the supports be set considering the estimated camber with its tolerance, and 9.4.6 that the camber be considered for the nominal haunch, without a number.
 - HCT-4. Display only: no warning is added when the high-camber midspan haunch is below 0 or below t_h (the card says so in red when below 0).
 ### Governing provision
-Geometry. AASHTO LRFD 10th Ed. (2024) Art. 5.6.3.5.2 (camber); RIDOT BDM (April 2026) 5.6.1 and 9.4.6 (the haunch at the supports set with the estimated camber and its tolerance; cited, not quoted).
+Geometry. AASHTO LRFD 10th Ed. (2024) Art. 5.6.3.5.2 (camber); RIDOT BDM (April 2026) 5.6.1 (the haunch at the supports set considering the estimated camber with its tolerance) and 9.4.6 (the camber considered for the nominal haunch); cited, not quoted.
 ### Check case (by hand), tests/engine/psbridge-camtol.test.mjs
 NEXT 24F, L 45 ft, flange 120 in, t_s 8 in, t_h 2 in, strands 16 / 16 / 12 straight, w_NC 0, w_DC2 0.5, w_DW 0.3 klf; p = 10 %: Δ_erect = 3.748 in, δ_C = 0.1(3.748) = 0.375 in; Δ_deck = 3.346 in.
 | Camber | Δ_deck (in) | Haunch at midspan (in) | Haunch at the bearings to keep t_h (in) |
