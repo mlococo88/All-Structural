@@ -9956,6 +9956,7 @@ Node, the branch before vs after on 58 designs (19 tab designs, 10 girder varian
 None (no key, no format; R.relT is a computed result only).
 ### Other copies
 Engine test file lists: `'reltension'` added next to `'holddown'` in every test that loads it (61 files), so the tests run the app's chain.
+Merge of main with PR #1725 (2026-11-26): its new `tests/engine/psbridge-report-governing.test.mjs` loads `holddown` and `worked-end` without `reltension`, so the End zone steps threw "Cannot read properties of undefined (reading 'parts')" in that test only (the app loads `engine/reltension.js` in index.html). `'reltension'` added after `'lldf-fg'` in its list, as in the other 61 files; RG 1–6 pass. Before: `['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', …]`; after: `['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', …]`. No computed result of the app changes.
 ### Decisions
 - EZX-a (approved by the engineer 2026-11-25): the exact sum applies to every engine result inside the app's engine call (`holddown.js` `compute0`), after `computeAll`; the frozen engine keeps its strip function, and its strip values stay in `R.relT.strip`.
 - EZX-b (approved by the engineer 2026-11-25): the frozen optimizer (`pbd-optimize.js`) stays on the strip sum; the app does not call it.
