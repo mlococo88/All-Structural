@@ -17,7 +17,7 @@ import { MIDAS_CASES, midasFixtures } from './psbridge-midas-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', 'dxf.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'haunch', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'handoffs', 'rating-along', 'demands'].map(n => path.join(APP, `engine/${n}.js`)),
+const W = loadShared('steps.js', 'dxf.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'haunch', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'handoffs', 'rating-along', 'demands'].map(n => path.join(APP, `engine/${n}.js`)),
   ...['vizkit', 'strands', 'view3d', 'xsfig', 'plan', 'dash', 'summary', 'sheets'].map(n => path.join(APP, `ui/${n}.js`)));
 W.PSBSections.install();
 const X = W.SharedDxf, SH = W.PSBSheets, BR = W.PSBBridge, J = v => JSON.parse(JSON.stringify(v));
