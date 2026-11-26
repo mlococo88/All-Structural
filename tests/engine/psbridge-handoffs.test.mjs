@@ -19,7 +19,7 @@ import { oldEngine, pinText } from './psbridge-source.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'handoffs'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'handoffs'].map(n => path.join(APP, `engine/${n}.js`)));
 const M = W.PSBModel, D = W.PSBDesign, BR = W.PSBBridge, H = W.PSBHandoffs;
 const O = oldEngine();
 const J = v => JSON.parse(JSON.stringify(v));

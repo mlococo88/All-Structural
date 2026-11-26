@@ -277,7 +277,7 @@
   body dialog.spLib,#hdrBtns button.spChip[data-sp]{font-family:var(--font-ui);}
   #toast{position:fixed;right:14px;top:84px;max-width:min(520px,calc(100vw - 28px));max-height:60vh;overflow:auto;z-index:50;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:8px 12px;font-family:var(--font-ui);font-size:9.5pt;}
   #toast[hidden]{display:none;} #toast.err{border-left-color:var(--fail);} #toast ul{margin:4px 0 6px;padding-left:18px;} #toast .tBtns{display:flex;gap:6px;justify-content:flex-end;margin-top:4px;} #toast .tFld{font-weight:600;} #toast .tArr{color:#475569;}
-  @media print{ #hdrBtns,#toast,#libDlg,.inTabs,#tabBar,#autoBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
+  @media print{ #hdrBtns,#toast,#libDlg,.inTabs,#tabBar,#autoBar,#gBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
     .steps li{break-inside:avoid;} .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line,.katex .overline-line,.katex .underline-line{border-bottom-color:#000!important;min-height:1px;} .katex-display{overflow:visible;} }
   /* DASH (2026-11-09): the left check summary column (ui/dash.js), as the other apps' (RW/SF/LP #984/#988/#991, GirderDetail #1196): at the far
      left from 1200 px, 240 px (280 px from 1500 px), 42 px when shrunk; the input panel keeps a third of the rest. Not shown below 1200 px, not printed. */

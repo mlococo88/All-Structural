@@ -13,7 +13,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', 'list-input.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'view3d', 'plan'].map(n => path.join(APP, `ui/${n}.js`)));
+const W = loadShared('steps.js', 'list-input.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'view3d', 'plan'].map(n => path.join(APP, `ui/${n}.js`)));
 const J = v => JSON.parse(JSON.stringify(v));
 const close = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) <= tol * Math.max(1, Math.abs(b)), `${msg}: ${a} vs ${b}`);
 const HTML = fs.readFileSync(path.join(APP, 'index.html'), 'utf8');

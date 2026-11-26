@@ -23,7 +23,7 @@ import { MIDAS_CASES, midasFixtures } from './psbridge-midas-cases.mjs';
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
 const W = loadShared('steps.js', 'report.js', 'handoff-stale.js', ...PBDF,
-  ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr', 'handoffs', 'hostale', 'bearing'].map(n => path.join(APP, `engine/${n}.js`)),
+  ...['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr', 'handoffs', 'hostale', 'bearing'].map(n => path.join(APP, `engine/${n}.js`)),
   ...['inputs', 'vizkit', 'vizalong', 'outkit', 'types', 'demands', 'handoffs', 'section', 'loads', 'analysis', 'strands', 'losses', 'stresses', 'flexure', 'shear', 'endzone', 'camber', 'handling', 'deck', 'rating', 'dash', 'summary', 'bridgedl'].map(n => path.join(APP, `ui/${n}.js`)),
   ...['fromtab', 'data', 'builders'].map(n => path.join(APP, `report/${n}.js`)));
 const M = W.PSBModel, D = W.PSBDesign, DM = W.PSBDemands, B = W.PSBBridge, H = W.PSBHandoffs, S = W.PSBHoStale, RB = W.PSBReportBuild, SR = W.SharedReport;

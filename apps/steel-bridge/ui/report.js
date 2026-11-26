@@ -166,7 +166,7 @@
     const step = k => {
       if (run !== S.run) return;
       if (k >= n) { S.A = list; S.aKey = allKey(ctx); S.busy = false; S.prog = ''; S.secs = (Date.now() - t0) / 1000; render(host, ctx); return; }
-      const { gi, j, P } = US[k], g = P.girders[gi], many = US.filter(q => q.gi === gi).length > 1, lab = (g.label || g.id || `G${gi + 1}`) + (many ? ` on G${j + 1}` : '');
+      const { gi, j, P } = US[k], g = P.girders[gi], many = US.filter(q => q.gi === gi).length > 1, lab = `Type: ${g.label || g.id || gi + 1}` + (many ? ` on G${j + 1}` : '');   // SBRF-6 (2026-11-25): a girder type is "Type: <label>" (its id read as a line name)
       try {
         let e = S.rows.get(rowKey(P, gi));
         if (!e) { const B = window.SBDReportData.compute(P, gi, { src: 'analysis' }), r = window.SBDReportBuild.govRows(B); e = { rows: r.rows, err: r.err, sum: r.sum, bom: r.bom }; S.rows.set(rowKey(P, gi), e); }

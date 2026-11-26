@@ -21,7 +21,10 @@ const saved = p => p.evaluate(() => JSON.parse(localStorage.getItem('sbd2.projec
 const setv = async (p, dp, v) => { const s = `#inPanes [data-path="${dp}"]`; await p.fill(s, String(v)); await p.dispatchEvent(s, 'change'); await p.waitForTimeout(200); };
 const tabText = async (p, k) => { await p.click(`#tabBar [data-otab="${k}"]`);
   if (k === 'rpt') { await p.click('#rp_build'); await p.waitForSelector('.rp-doc .rp-tbl', { timeout: 600000 }); return p.evaluate(() => document.querySelector('.rp-doc').textContent); }
-  await settle(p); await p.waitForTimeout(300); return p.evaluate(() => document.getElementById('out').innerText); };
+  await settle(p); await p.waitForTimeout(300);
+  // the Analysis tab draws its factored diagrams after the tab (SBFD, "Calculating the factored diagrams…" until then): wait for them
+  if (k === 'an') await p.waitForFunction(() => { const t = document.getElementById('out').innerText; return /Strength I moment envelope/.test(t) && !/Calculating the factored diagrams/.test(t); }, null, { timeout: 240000 });
+  return p.evaluate(() => document.getElementById('out').innerText); };
 const OUT = ['loads', 'an', 'flex', 'cf'];
 const allErrs = [];
 
