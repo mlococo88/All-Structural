@@ -68,6 +68,10 @@ node tests/smoke/steel-bridge-rating-vehicles.mjs [--shots <dir>]
 # and steps, the stud edition note, the live load deflection on the bridge stiffness (2.5.2.6.2); 0 console errors
 node tests/smoke/steel-bridge-skewv-defl.mjs
 
+# Steel Bridge Settings window (SET, 2026-11-26): the gear button, moved rows hidden on their tabs, edit / Save / Undo / Redo / Cancel / Esc,
+# focus trap, Auto design and owner fields, links from the output tabs and the error banner to the window, phone width, 0 console errors
+node tests/smoke/steel-bridge-settings.mjs [<dir for sb-settings.png, sb-settings-phone.png>]
+
 # Steel Bridge rolled-beam (AISC W-shape) girder segments (ROLL, 2026-11-23): the "Section type" card (search, grouped list, read-only plate
 # fields, Undo, back to Plate girder), a 60 ft simple span of W36X135 (Section properties names the shape and works the three plates; Welds
 # "not applicable"; Summary, Report, Nomenclature, drawings name the shape; Auto design says it sizes plates only), an unknown shape name

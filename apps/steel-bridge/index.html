@@ -124,7 +124,8 @@
     'ui/view3d.js',
     'ui/detail3d.js',
     'ui/splitter.js',   // SBW (2026-11-09): the splitter between the input and output panels (display only)
-    'ui/tips.js'   // TIP (2026-11-24): help tooltips on the key inputs (display only; nothing saved)
+    'ui/tips.js',   // TIP (2026-11-24): help tooltips on the key inputs (display only; nothing saved)
+    'ui/settings.js'   // SET (2026-11-26): the Settings window (gear button): the moved inputs' rows, copied from their tabs (display and layout only)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -549,14 +550,14 @@
       layout: card('Spans', `${sel('spans.continuity', 'Continuity', [['continuous', 'Continuous'], ['simple', 'Simple spans']])}
         <div class="fRow"><label for="i_spans">Span lengths</label><input type="text" id="i_spans" data-kind="spans" value="${esc(P.spans.lengths.join(', '))}" style="width:180px"><span class="unit"></span></div>
         <p class="note">One span per row (Enter adds a row). Total ${U.fmt(P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), 2)} ft. The last plate segment of each girder must end there.</p>`)
-        + card('Support skews', `${xsp.skews}<p class="note">Left to right: abutment, piers, abutment. The cross-frame orientation and the flange lateral bending from skew: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>.</p>`)
+        + card('Support skews', `${xsp.skews}<p class="note">Left to right: abutment, piers, abutment. The cross-frame orientation: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>; the flange lateral bending from skew: <a href="#" data-sbset="det">Settings › Detailing standards</a>.</p>`)
         + card('Plan', window.SBDFramingUI.layoutPlan(P)),   // the framing plan of the Framing & bracing tab (ui/framing.js plan), for a look at the skews and spans
       xsec: xsp.girders + lineTypeCard()   // SB-2: the girder type of each line
         + card('Deck', `${sel('deck.composite', 'Composite', [['true', 'Yes'], ['false', 'No (noncomposite)']])}${num('deck.ts', 'Structural slab t<sub>s</sub>', 'in')}${num('deck.tdeck', 'Total deck thickness', 'in')}${num('deck.haunch', 'Haunch', 'in')}
           ${num('deck.rebar.top.A', 'Top layer A<sub>rt</sub> (per girder)', 'in²')}${num('deck.rebar.top.c', 'Top layer, centroid below top of slab', 'in')}
           ${num('deck.rebar.bot.A', 'Bottom layer A<sub>rb</sub> (per girder)', 'in²')}${num('deck.rebar.bot.c', 'Bottom layer, centroid above bottom of slab', 'in')}
           ${sel('deck.rebarInPositiveMp', 'Deck rebar in positive M<sub>p</sub>', [['false', 'Exclude (default)'], ['true', 'Include (App. D6.1)']])}
-          <p class="note">The total deck thickness above the structural slab is dead load only. Deck concrete f′<sub>c</sub>, w<sub>c</sub> and the rebar F<sub>yr</sub>: <a href="#" data-itgo="mat">Materials tab</a>.</p>`)
+          <p class="note">The total deck thickness above the structural slab is dead load only. Deck concrete f′<sub>c</sub>: <a href="#" data-itgo="mat">Materials tab</a>; w<sub>c</sub> and the rebar F<sub>yr</sub>: <a href="#" data-sbset="mat">Settings › Concrete and reinforcement</a>.</p>`)
         + (window.SBDDeckUI ? window.SBDDeckUI.inputs(P) : '')   // DK (2026-11-23): the optional transverse deck design (P.deckDesign; ui/deck.js)
         + xsp.edges + xsp.sidewalks,
       mat: card('Steel (ASTM A709)', `${sel('materials.steel.top', 'Top flange', grades)}${sel('materials.steel.bot', 'Bottom flange', grades)}${sel('materials.steel.web', 'Web', grades)}${num('materials.Es', 'E<sub>s</sub>', 'ksi')}`)
@@ -574,7 +575,7 @@
       stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
       fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui),
       spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui),
-      ad: ui.itab === 'ad' ? window.SBDAutoDesignUI.inputs(P, ui.g) : ''   // drawn when open (P.autodesign; no data-path inputs: data-ad / data-adv, ui/autodesign.js wire)
+      ad: ui.itab === 'ad' || setOpen() ? window.SBDAutoDesignUI.inputs(P, ui.g) : ''   // drawn when open (SET: also while the Settings window is open, which shows some of them) (P.autodesign; no data-path inputs: data-ad / data-adv, ui/autodesign.js wire)
     };
   }
   function drawInputs() {
@@ -583,7 +584,7 @@
     const p = panes();
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
     if (pb) pb.mount($('pbHost'));   // STDS-B
-    if (ui.itab === 'ad') window.SBDAutoDesignUI.wire(document.querySelector('#inPanes [data-pane="ad"]'), { P, changed: r => changed(r),
+    if (ui.itab === 'ad' || setOpen()) window.SBDAutoDesignUI.wire(document.querySelector('#inPanes [data-pane="ad"]'), { P, changed: r => changed(r),
       showOut: () => { ui.otab = 'ad'; saveUi(); drawOut(); }, done: () => { drawInputs(); if (ui.otab === 'ad') drawOut(); } });   // ADIN
     markErrors();
   }
@@ -591,21 +592,25 @@
      the blocking input errors (engine/inputcheck.js collect: the model checks, the loads module's input checks and those of the other
      engines on the entered values) mark their fields (ui/inputcheck.js) and count on their input tab; while one exists no output tab shows
      results (drawOut0). Its warnings are the model's, as before. */
-  const IC = () => window.SBDInputCheck, ICU = () => window.SBDInputCheckUI, icO = () => ({ P, ui, tabOf });
+  /* SET (2026-11-26): an input moved to the Settings window (ui/settings.js has) is counted and named there, not on the tab it was drawn on */
+  const SET = () => window.SBDSettings, setOpen = () => !!(SET() && SET().isOpen()), tabOfS = p => (SET() && SET().has(p) ? 'Settings' : tabOf(p));
+  const IC = () => window.SBDInputCheck, ICU = () => window.SBDInputCheckUI, icO = () => ({ P, ui, tabOf: tabOfS });
   let icErr = [];   // the errors listed now (the banner's links are their indices)
   function markErrors() {
     const v = IC().collect(P); icErr = v.errors;
     ICU().mark(v.errors, icO());
-    const cnt = {}; v.errors.forEach(e => { if (e.host) return; const t = tabOf(e.path); cnt[t] = (cnt[t] || 0) + 1; });
+    const cnt = {}; v.errors.forEach(e => { if (e.host) return; const t = tabOfS(e.path); cnt[t] = (cnt[t] || 0) + 1; });
     document.querySelectorAll('#inTabs [data-itab]').forEach(b => { const n = cnt[b.dataset.itab] || 0, d = b.querySelector('.inDot');
       b.classList.toggle('has-err', n > 0); if (d) d.textContent = n ? String(n) : '';
       if (n) b.title = `${n} input${n > 1 ? 's' : ''} to fix on this tab`; else b.removeAttribute('title'); });
+    if (SET()) SET().sync(v.errors);   // SET: the moved rows hidden on their tabs, copied into the open window
     return v;
   }
   /* gotoErr(e): a banner link: the field's input tab (its girder and segment when the field is one girder's), scrolled to and focused; a
      field on an output tab (e.host): that tab */
   function gotoErr(e) {
     if (!e) return;
+    if (SET() && SET().goErr(e)) return;   // SET: a moved input: the Settings window at its row
     if (e.host) { ui.otab = e.host; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; setTimeout(() => ICU().focus(e, icO()), 0); return; }
     const m = e.path.match(/^girders\.(\d+)(?:\.segments\.(\d+))?/), gi = m ? +m[1] : null;
     if (gi != null && P.girders[gi] && gi !== ui.g) { ui.g = gi; ui.seg = m[2] != null ? Math.min(+m[2], P.girders[gi].segments.length - 1) : 0; stale = true; }
@@ -995,6 +1000,12 @@
     loadAs(r.project, null, null); window.SBDLegacyUI.show(r.summary); });
   if (window.SBDLgaUI) window.SBDLgaUI.init({ getP: () => P, dirty: () => pb.dirty(), loadNew: q => loadAs(q, null, null), replace: q => { P = q; ui.g = Math.min(ui.g, P.girders.length - 1); ui.seg = 0; changed(true); }, calc: () => calc() });   // LGA (2026-11-19): MIDAS .lga import / export (ui/lga.js)
 
+  /* SET (2026-11-26): the Settings window. mark(): the undo state when it opens; revert(m): Cancel puts the project back to it (the undo steps
+     made since then dropped, as if never made; if Undo went further back meanwhile, one undoable step instead) */
+  if (SET()) SET().init({ redraw: () => drawInputs(), mark: () => ({ n: undoS.length, snap, redo: redoS.slice() }),
+    revert: m => { if (JSON.stringify(P) === m.snap) return; const exact = undoS.length > m.n && undoS[m.n] === m.snap;
+      P = M.carryRec(P, JSON.parse(m.snap)); ui.g = Math.min(ui.g, P.girders.length - 1); ui.seg = Math.min(ui.seg, P.girders[ui.g].segments.length - 1);
+      if (exact) { undoS.length = m.n; redoS = m.redo; snap = m.snap; closeToast(); changed(true, true); } else changed(true); } });
   drawInputs(); calc();
   if (window.SBDDashUI) window.SBDDashUI.init({ el: $('sbDashCol'), store, getP: () => P, ui: () => ui, goto: gotoOut, fix: i => gotoErr(icErr[i]), errUi: icO,
     tabBusy: () => autoBusy || autoPend || !!$('autoMsg').querySelector('.spin') });   // DASH (2026-11-09); SBAR (2026-11-24): the auto-refresh lets the open tab's own run go first
