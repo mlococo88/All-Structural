@@ -53,7 +53,8 @@ test('EDGE-VERBATIM: the steel app\'s lines 30-114 at the pin, byte for byte', (
 
 test('saved before (no new field): every line\'s engine inputs byte-identical to before PR 9 (19 harness B designs; distributed in 3 methods, sidewalks, added loads)', () => {
   let n = 0;
-  const same = (P, tag) => { const A = J(P), B = J(P); W.PSBBridge.cells(A).forEach(c => { assert.equal(JSON.stringify(D.cellInputs(A, c.k, c.g)), JSON.stringify(W0.PSBDesign.cellInputs(B, c.k, c.g)), `${tag} G${c.g}/S${c.s}`); n++; }); };
+  const same = (P, tag) => { const A = J(P), B = J(P); if (W.PSBBridgeDL.nxStem(A)) return;   // NX-O2 (engineer 2026-11-26): a NEXT bridge's dead loads per stem (psbridge-lldf-next.test.mjs), not the per-line distribution of PR 9
+    W.PSBBridge.cells(A).forEach(c => { assert.equal(JSON.stringify(D.cellInputs(A, c.k, c.g)), JSON.stringify(W0.PSBDesign.cellInputs(B, c.k, c.g)), `${tag} G${c.g}/S${c.s}`); n++; }); };
   for (const [name, P0] of Object.entries(TAB_CASES(() => M.defaultProject()))) {
     const P = M.importJSON(M.exportJSON(P0)).project; W.PSBBridge.fill(P); same(P, name);
     const Q = J(P); Q.xs.dl = DL.defaults(Q); same(Q, name + ' distributed');
