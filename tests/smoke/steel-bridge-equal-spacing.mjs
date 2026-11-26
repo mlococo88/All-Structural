@@ -16,7 +16,7 @@ import { openPage, REPO } from '../lib.mjs';
 
 const shotDir = process.argv[2] || '';
 const FILE = path.join(REPO, 'apps/steel-bridge/index.html');
-const settle = (p, t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || '') && !/Calculating the factored diagrams/.test((document.getElementById('out') || {}).innerText || ''), null, { timeout: t });   // the Analysis tab's factored diagrams are drawn after the tab (SBFD)
+const settle = (p, t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || ''), null, { timeout: t });
 const saved = p => p.evaluate(() => JSON.parse(localStorage.getItem('sbd2.project.current') || '{}'));
 const setv = async (p, dp, v) => { const s = `#inPanes [data-path="${dp}"]`; await p.fill(s, String(v)); await p.dispatchEvent(s, 'change'); await p.waitForTimeout(200); };
 const tabText = async (p, k) => { await p.click(`#tabBar [data-otab="${k}"]`);
