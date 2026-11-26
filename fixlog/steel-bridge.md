@@ -12053,3 +12053,14 @@ None.
 - **Governing provision:** none changed (no tool code changed).
 - **Check case:** built-in project, G1: CF10 Item cell "Intermediate bracing. Recommended: K (bottom)-frame (S/h = 2.19). In use: X-frame. [[cf.type]]".
 - **How verified:** `node tests/engine/run.mjs xf-cf10-depth.test.mjs xf-cf10-notes.test.mjs`: 7 / 7 pass (3 failed on main before).
+
+## 2026-11-26 — PR: claude/ad-tests-fast (ADTF) — Auto design tests: the unread closing full check skipped, one analysis worked once   [tests only]
+- **Request (engineer, 2026-11-26, "do whatever you think is best"):** shorten the steel Auto design tests without removing or weakening any assertion.
+- **Where / Before / After:**
+  - `tests/engine/autodesign-joint.test.mjs`: `const RO = { settings: { mode: 'refine', topN: 1 }, maxIt: 5, trimTries: 2 };` → `…, trimTries: 2, current: false };` (jointRun's run() options).
+  - `tests/engine/autodesign-warn.test.mjs`, ADWN example: `AD.run(P, {})` → `AD.run(P, { current: false })`.
+  - `tests/engine/autodesign-vars.test.mjs`: `runAD(P, settings)` → `runAD(P, settings, opt)` (opt spread into run's options); "A lock no design can meet": `runAD(P, { … }, { current: false })`.
+  - `tests/engine/autodesign-types.test.mjs`, "the run project works each line…": the analysis of `(Q, 2)` (Exterior on G5) is kept in `kQ[2]` from the first comparison and reused in the `notEqual` (before: worked twice, the same call on the same project).
+- **Why it is the same test:** `current: false` is run()'s existing option; it drops only the closing full check of the current design (`R.current.full`), which these tests never read. Whether a finalist is "blocked" uses the current design's full check worked on its own when needed (`curKeys`), so `cands`, `blocked`, `rejected` and `note` are unchanged. Checked: the ADWN example's candidate with and without the option has the same layout, cost, ratio and details (one hash).
+- **Not changed:** every test that asserts "every candidate passes every module" or a recorded parity (autodesign.test.mjs, autodesign-splices, autodesign-types Refine, autodesign-vars Locks / Apply / recorded projects, psbridge-autodesign) keeps its search as it was.
+- **Governing provision:** none (no tool code changed).
