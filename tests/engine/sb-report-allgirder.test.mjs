@@ -63,7 +63,7 @@ test('EXA: the verdict, the counts, the governing D/C and every row are the Summ
     if (z.q.st === 'na' || z.q.st === 'notrun') { assert.equal(row[4], '—'); return; }
     assert.ok(Object.is(c.rf ? a.q.rf : a.q.r, c.rf ? z.q.rf : z.q.r), `${c.id}: ${a.q.r} ${z.q.r}`);
     assert.equal(a.G.label, z.G.label); assert.equal(a.q.ln, z.q.ln); assert.equal(a.q.loc, z.q.loc);
-    assert.equal(row[2], `${z.G.label}${z.q.ln != null ? ` on G${z.q.ln + 1}` : ''}`); assert.equal(row[3], z.q.loc);
+    assert.equal(row[2], `Type: ${z.G.label}${z.q.ln != null ? ` on G${z.q.ln + 1}` : ''}`);   // SBRF-6 (2026-11-25): "Type: <label>" assert.equal(row[3], z.q.loc);
     assert.equal(row[4].t, c.rf ? `RF ${W.SharedUnits.fmt(z.q.rf, 2)}` : W.SharedUnits.fmt(z.q.r, 3));
     assert.equal(row[5], { pass: 'PASS', fail: 'FAIL', review: 'REVIEW' }[z.q.st]);
     // each value links to that girder's governing checks in this report (§3.k) and names the tab that works it (in-app link)
@@ -108,7 +108,7 @@ test('BOM2: stiffeners, connection plates, bearing stiffeners: counts from the m
   assert.deepEqual(J(it.brg.map(q => [q.b, q.t, q.L, q.n])), [[7, 0.875, 60, 4], [8, 1, 60, 8]]);   // abutments 1 pair × 2, piers 2 pairs × 2
   // intermediate stiffener: 6(0.5)(60)(490/1728) = 51.04 lb; × 62 = 3.165 kip.  Pier bearing stiffener: 8(1)(60)(490/1728) = 136.11 lb; × 8 = 1.089 kip
   near(6 * 0.5 * 60 * PCI, 51.04, 0.005); near(62 * 51.0417 / 1000, 3.165, 0.0005); near(8 * 60 * PCI * 8 / 1000, 1.089, 0.0005);
-  const t = txt.slice(txt.indexOf('Stiffeners and connection plates, girder G1'));
+  const t = txt.slice(txt.indexOf('Stiffeners and connection plates, girder Type: G1'));
   assert.match(t, /Intermediate stiffener \(type A: intermediate transverse stiffener\) \| 6\.000 × 0\.5000 \| 62 \(62 locations × 1, one side of the web\) \| 60\.000 \| 51\.0 \| 3\.165/);
   assert.match(t, /Connection plate \(type B: connection plate\) \| 6\.000 × 0\.5000 \| 15 \([^)]*\) \| 60\.000 \| 51\.0 \| 0\.766/);
   assert.match(t, /Bearing stiffener, Abutment \(type A\) \| 7\.000 × 0\.8750 \| 4 \(2 supports × 2, 1 pair\) \| 60\.000 \| 104\.2 \| 0\.417/);
@@ -129,7 +129,7 @@ test('BOM2: field splice plates: sizes and lengths of the splice design, web pla
   const rows = it.spl[0].rows; assert.deepEqual(J(rows.map(q => [q.b, q.t, q.L, q.n])), [[16, 0.4375, 19.5, 1], [6.75, 0.5625, 19.5, 2], [16, 0.625, 25.5, 1], [6.75, 0.75, 25.5, 2], [57, 0.4375, 13.5, 2]]);
   // top outer plate: 16(0.4375)(19.5)(490/1728) = 38.71 lb; web plates: 57(0.4375)(13.5)(490/1728) = 95.46 lb each; splice: 38.71 + 2(20.99) + 72.31 + 2(36.61) + 2(95.46) = 416.6 lb
   near(16 * 0.4375 * 19.5 * PCI, 38.71, 0.005); near(57 * 0.4375 * 13.5 * PCI, 95.46, 0.005);
-  const t = txt.slice(txt.indexOf('Field splice plates, girder G1'));
+  const t = txt.slice(txt.indexOf('Field splice plates, girder Type: G1'));
   assert.match(t, /FS1 at 82\.00 ft \| Top flange, outer plate \| 16\.000 × 0\.4375 \| 1 \| 19\.500 \| 38\.7 \| 0\.039/); assert.match(t, /Web plates \| 57\.000 × 0\.4375 \| 2 \| 13\.500 \| 95\.5 \| 0\.191/);
   assert.match(t, /Subtotal FS1 at 82\.00 ft \|[ |]*0\.417/); assert.match(t, /Subtotal: field splice plates \|[ |]*1\.669/);
   // bolts: counted, no weight: 2(12 + 16 + 22) = 100 per splice
@@ -154,7 +154,7 @@ test('BOM2: cross-frames: each frame the weight the analysis puts in DC1; the to
 test('BOM2: girder and bridge totals; what is not known is listed as not included', () => {
   const { B, Md, txt, P } = getOne(), t = txt.slice(txt.indexOf('Girder and bridge totals'));
   // girder: plates 87.077 + stiffeners 3.930 + bearing stiffeners 1.506 + splice plates 1.669 = 94.182 kip; bridge: + cross-frames 36.645 = 130.826 kip
-  assert.match(t, /Girder G1 \| 87\.077 \| 3\.930 \| 1\.506 \| 1\.669 \| 94\.182 \| 1 \| 94\.182/); assert.match(t, /Cross-frames \(bridge\) \|[ |]*68 \| 36\.645/); assert.match(t, /Bridge total \|[ |]*130\.826/);
+  assert.match(t, /Type: G1 \| 87\.077 \| 3\.930 \| 1\.506 \| 1\.669 \| 94\.182 \| 1 \| 94\.182/); assert.match(t, /Cross-frames \(bridge\) \|[ |]*68 \| 36\.645/); assert.match(t, /Bridge total \|[ |]*130\.826/);
   near(87.077 + 3.930 + 1.506 + 1.669, 94.182, 0.0015); near(94.182 + 36.645, 130.826, 0.0015);
   assert.match(t, /Not included: shear studs; field splice bolts \(counted above, no weight\) and fill plates;/);
   // the plate girder table of before is unchanged (first segment 19.090 kip, girder 87.077 kip)
@@ -162,7 +162,7 @@ test('BOM2: girder and bridge totals; what is not known is listed as not include
   // the cross-frame weight switched off (made-up): no cross-frame rows, listed as not included; a module that did not run: its items listed as not included
   const B2 = { ...B, frm: { ...B.frm, XF: null } }, i2 = RB.bomItems(B2); assert.equal(i2.xf, null); assert.ok(i2.miss.some(q => /^cross-frames or diaphragms/.test(q)));
   const M2 = RB.model({ ...B2, shear: null, err: { ...B.err, shear: 'made-up: not calculated' } }, { detail: 'gov', include: { exec: false, sum: false } }), b2 = SR.text(SR.build(M2));
-  assert.match(b2, /Not included: [^\n]*transverse stiffeners and connection plates of G1 \(made-up: not calculated\); bearing stiffeners of G1 \(made-up: not calculated\); cross-frames or diaphragms/);
+  assert.match(b2, /Not included: [^\n]*transverse stiffeners and connection plates of Type: G1 \(made-up: not calculated\); bearing stiffeners of Type: G1 \(made-up: not calculated\); cross-frames or diaphragms/);
   assert.ok(!/Cross-frames \(bridge\)/.test(b2.slice(b2.indexOf('Steel bill of materials'))));
   // a section left out: the bill of materials says so instead of linking into it
   const M3 = RB.model(B, { detail: 'gov', include: { shear: false } }), d3 = SR.build(M3); assert.deepEqual(J(d3.unresolved), []); assert.match(SR.text(d3), /the Shear & stiffeners section is not in this report/);

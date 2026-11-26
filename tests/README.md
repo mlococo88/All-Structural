@@ -52,6 +52,11 @@ node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # 
 # Steel Bridge (apps/steel-bridge) Report tab: browser smoke test with print emulation (0 console errors, 0 KaTeX errors, links, print)
 node tests/smoke/steel-bridge-report.mjs
 
+# Steel Bridge Report fixes (SBRF, 2026-11-25): a made-up 10-girder bridge with a mountable sidewalk and two girder types; the girder-type
+# bar on the screen and not printed, "Type: <label> on line G6", the b_eff note, bracketed substitutions, Z_r once; 0 console / KaTeX
+# errors, 0 unresolved § links. Engine test: node tests/engine/run.mjs sb-report-fixes (every worked step's substitution scanned)
+node tests/smoke/steel-bridge-report-fixes.mjs
+
 # shared/report.js: a § link ends with its target at the top of the reading area although the report above it is still being laid out
 # (content-visibility, a figure that grows late), in the window and in a scroll container; a key pressed meanwhile stops it (RGS)
 node tests/smoke/report-go-scroll.mjs [--dir <folder with a shared/ folder, e.g. an origin/main checkout>]
