@@ -374,7 +374,7 @@
     if (!open) return;
     clearTimeout(tBuild); open = false;
     const app = document.getElementById('app'); if (app) app.inert = false;
-    root.hidden = true; document.getElementById('sbSetVeil').hidden = true; MAP.clear();
+    root.hidden = true; document.getElementById('sbSetVeil').hidden = true; MAP.clear(); root.querySelector('#sbSetPane').innerHTML = ''; root.querySelector('#sbSetOwner').innerHTML = '';   // no copies left while closed (one input per path on the page)
     if (!keep && mk) api.revert(mk);
     mk = null; api.redraw();
     const g = document.getElementById('sbGear'); if (g) g.focus();
