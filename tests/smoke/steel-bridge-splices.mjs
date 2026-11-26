@@ -53,12 +53,14 @@ try {
     'splices.code', 'splices.gP', 'splices.prs', 'splices.bolts.d', 'splices.bolts.gr', 'splices.bolts.thr', 'splices.bolts.cls', 'splices.bolts.prep', 'splices.bolts.gap', 'splices.bolts.minLines', 'splices.clr.cw', 'splices.clr.cv'];
   const done = [];
   for (const dp of paths) {
-    const s = `#inPanes [data-path="${dp}"]`, el = await p.$(s); assert.ok(el, `input ${dp} drawn`);
+    // SET (2026-11-26): an input moved to the Settings window is edited there (its copy edits the same input); the window opened at it
+    const set = await p.evaluate(dp => window.SBDSettings.has(dp), dp); if (set) { await p.evaluate(dp => window.SBDSettings.open(dp), dp); await p.waitForTimeout(300); }
+    const s = `${set ? '#sbSet' : '#inPanes'} [data-path="${dp}"]`, el = await p.$(s); assert.ok(el, `input ${dp} drawn`);
     const tag = await el.evaluate(e => e.tagName);
     let nv;
     if (tag === 'SELECT') { nv = await el.evaluate(e => { const o = [...e.options].find(q => !q.selected && q.value !== ''); return o.value; }); await p.selectOption(s, nv); }
     else { const v0 = +(await p.inputValue(s)); nv = /\.(nl|nr|nc)$|minLines$/.test(dp) ? v0 + 1 : /clr\./.test(dp) ? v0 + 0.5 : /gap$/.test(dp) ? v0 + 0.25 : +(v0 * 1.25 + 0.125).toFixed(4); await p.fill(s, String(nv)); await p.dispatchEvent(s, 'change'); }
-    await p.waitForTimeout(700); await settle();
+    await p.waitForTimeout(700); if (set) await p.click('#sbSetSave'); await settle();
     const now = await fs1();
     assert.notEqual(now, prev, `${dp} → ${nv}: the FS1 result did not change`);
     const sv = dp.split('.').reduce((a, k) => (a == null ? a : a[k]), await saved());

@@ -34,7 +34,7 @@ const rowBtn = (txt, a) => p.click(`#sbdLibDlg tbody tr:has-text("${txt}") [data
 try {
   await p.waitForSelector('[data-sp=chip]'); await p.waitForTimeout(500);
   assert.equal(await state(), 'not saved');
-  assert.equal(await p.evaluate(() => [...document.querySelectorAll('#hdrBtns button')].map(b => b.textContent.replace(/Ctrl\+S/, '').trim()).join('|').replace(/^Project:.*?\|/, 'chip|')), 'chip|Undo|Redo', 'header: chip · Undo · Redo (HDRS: Save / Saved projects… in the card only)');
+  assert.equal(await p.evaluate(() => [...document.querySelectorAll('#hdrBtns button')].map(b => b.textContent.replace(/Ctrl\+S/, '').trim()).join('|').replace(/^Project:.*?\|/, 'chip|')), 'chip|Undo|Redo|', 'header: chip · Undo · Redo · the Settings gear (SET, 2026-11-26; an icon, no text) (HDRS: Save / Saved projects… in the card only)');
   await p.evaluate(() => { const t = document.querySelector('[data-itab="spans"]'); t && t.click(); }); await p.click('[data-sp=chip]');
   assert.equal(await p.evaluate(() => { const t = document.querySelector('#inTabs [aria-selected=true]'); const c = document.querySelector('[data-sp=card]'); return (t && t.dataset.itab) + '|' + !!(c && c.offsetParent); }), 'proj|true', 'HDRS: the chip opens the Project tab with the card');
   assert.equal(await p.evaluate(() => [...document.querySelectorAll('[data-pane=proj] .sec')][0].querySelector('.secHead').textContent), 'Save and open');
