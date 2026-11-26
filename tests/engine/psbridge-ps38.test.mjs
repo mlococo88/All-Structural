@@ -48,7 +48,7 @@ test('PS-38 §4 check case: NEXT 28F, S = 12 ft (w = 144 in), 6 in topping: I, S
   const R1 = W.PSBHoldDown.compute(J(inp(12))), R0 = S.withLegacy(() => W.PSBHoldDown.compute(J(inp(12))));
   assert.equal(R0.g.I, 88218); assert.equal(R1.g.I, 92836); near(R0.g.Sb, 88218 / 18.55); near(R1.g.Sb, 92836 / 18.55); near(R0.g.St, 88218 / 9.45); near(R1.g.St, 92836 / 9.45);   // 4,755.7 → 5,004.6; 9,335.2 → 9,823.9
   console.log(`    PS-38 check: NEXT 28F w 144 in, t_s 6 in: I 88,218 → 92,836 in⁴, S_b ${R0.g.Sb.toFixed(1)} → ${R1.g.Sb.toFixed(1)}, S_t ${R0.g.St.toFixed(1)} → ${R1.g.St.toFixed(1)} in³, I_c ${R0.cp.Ic.toFixed(0)} → ${R1.cp.Ic.toFixed(0)} in⁴`);
-  const a = W.PSBHoldDown.compute(J(inp(8))), b = S.withLegacy(() => W.PSBHoldDown.compute(J(inp(8))));
+  const a = W.PSBHoldDown.compute(J(inp(8))), b = S.withLegacy(() => { G['NEXT 28F'].flangeT = 4; return W.PSBHoldDown.compute(J(inp(8))); });   // NF-4: withLegacy also gives the old 8 in flange back; kept at 4 here to isolate PS-38 (restored to 4 by withLegacy)
   assert.deepEqual(J(a), J(b), 'at 96 in nothing changes');
 });
 

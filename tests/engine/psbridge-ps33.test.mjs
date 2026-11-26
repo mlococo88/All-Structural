@@ -91,10 +91,10 @@ test('PS-34: the pier block against the family thickness: box bottom slab, voide
   // SIV-48: the lowest void bottom 10.5 − 6 = 4.5 in; SIII-36: 9 − 5 = 4 in
   ({ R } = run(cont('AASHTO SIV-48 (21in)', 16))); assert.equal(R.ps34.t, 4.5); assert.equal(R.ps34.what, 'the concrete below the voids');
   ({ R } = run(cont('AASHTO SIII-36 (18in)', 16))); assert.equal(R.ps34.t, 4);
-  // solid slab: h; NEXT 36F: 36 − 8 = 28 in (the engine: the 8 in top flange)
+  // solid slab: h; NEXT 36F: 36 − 4 = 32 in (NF-4, engineer 2026-11-26: the NEXT F flange 4 in; was 36 − 8 = 28 in)
   ({ R } = run(cont('Deck slab 18×48 (solid)', 16))); assert.equal(R.ps34.t, 18); assert.equal(R.ps34.what, 'the slab depth h');
   ({ R, R0 } = run(cont('NEXT 36F', 16)));
-  assert.equal(R.ps34.t, 28); assert.equal(R.ps34.engT, 8); assert.equal(R.ps34.what, 'the stem depth h − t_f'); assert.deepEqual(strip(R), strip(R0));
+  assert.equal(R.ps34.t, 32); assert.equal(R.ps34.engT, 4); assert.equal(R.ps34.what, 'the stem depth h − t_f'); assert.deepEqual(strip(R), strip(R0));
   // I-girder / bulb tee: unchanged (no ps34; the engine's own warning, if any)
   ({ R, R0 } = run(cont('PCI BT-72', 16))); assert.equal(R.ps34, undefined); assert.deepEqual(J(R), J(R0));
   ({ R, R0 } = run(cont('AASHTO Type III', 40))); assert.equal(R.ps34, undefined); assert.deepEqual(J(R.warns), J(R0.warns));

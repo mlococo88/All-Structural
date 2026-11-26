@@ -87,7 +87,7 @@ test('PS-37 (1): the MassDOT library = the sheets; NEDBT 80 y_b 46.40 (misprint 
   const before = Object.keys(G).filter(k => !S.MD[k]);
   assert.equal(before[before.length - 1], 'Custom'); assert.deepEqual(J(Object.keys(G).slice(before.length - 1, -1)), J(S.ORDER_MD));
   before.forEach(k => assert.ok(!(k in S.MD), k));
-  Object.keys(G0).filter(k => k in G).forEach(k => { if (k !== 'NEXT 28F') assert.deepEqual(J(G[k]), J(G0[k]), k + ' unchanged'); });
+  Object.keys(G0).filter(k => k in G).forEach(k => { if (k !== 'NEXT 28F') assert.deepEqual(J(G[k]), J(S.NEXT_FT.some(f => f.name === k) ? Object.assign({}, G0[k], { flangeT: 4 }) : G0[k]), k + ' unchanged'); });   // NF-4 (2026-11-26): the NEXT F flange 4 in
 });
 
 test('PS-37 (2): the drawn outline against the sheets (listed in the PR): NEBT, NEXT within 1 %; NEDBT A −1.2 %; boxes and deck beams: keys / chamfers not drawn', () => {
@@ -158,5 +158,6 @@ test('PS-37 (5): every existing shape: girderGross, the outline and the voids by
   Object.values(C).forEach(P => { const inp = W.PSBDesign.inputs(P), g = W.girderGross(J(inp)), g1 = W1.girderGross(J(inp)); assert.equal(g.std, undefined);
     assert.deepEqual(J(g), J(g1)); assert.deepEqual(J(W.halfPolygon(g)), J(W1.halfPolygon(g1))); assert.deepEqual(J(W.sectionVoids(g)), J(W1.sectionVoids(g1))); });
   Object.keys(G).filter(k => !S.MD[k] && k !== 'Custom').forEach(k => { const i = inpOf(k), g = W.girderGross(i); assert.equal(g.std, undefined, k);
-    if (k in G0) { assert.deepEqual(J(W.halfPolygon(g)), J(W0.halfPolygon(W0.girderGross(i))), k); assert.deepEqual(J(W.sectionVoids(g)), J(W0.sectionVoids(W0.girderGross(i))), k); } });
+    if (k in G0 && !S.NEXT_FT.some(f => f.name === k)) { assert.deepEqual(J(W.halfPolygon(g)), J(W0.halfPolygon(W0.girderGross(i))), k);   // NF-4: the NEXT F outline has its 4 in flange (psbridge-next-flange.test.mjs)
+      assert.deepEqual(J(W.sectionVoids(g)), J(W0.sectionVoids(W0.girderGross(i))), k); } });
 });

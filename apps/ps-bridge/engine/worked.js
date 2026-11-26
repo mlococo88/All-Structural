@@ -131,14 +131,14 @@
       add({ id: 'wk.J', label: 'St-Venant torsion constant (the solid w × h rectangle)', sym: 'J', eq: rjEq('a', 'b'), sub: rjSub(w, h), value: wj.J, unit: 'in^{4}', d: 0,
         note: rjNote + ' The engine takes the outer rectangle (no void deducted), as the old app. Not used by any check of this app; it is sent with the section properties (psSection) to LL & DL; the distribution factors of types (f) / (g) use their own J of the outline (Loads & LLDF tab, §ld.J).' }, rJ(w, h));
     } else if (G.isNext) {
-      const B = (G.next && +G.next.B) || 10, cc = (G.next && +G.next.stemCC) || 60, w = +G.btf || +G.w, h = +G.h, hs = Math.max(1, h - 8);
-      add({ id: 'wk.hs', label: 'Weak axis: stem depth (the flange taken 8 in)', sym: 'h_{s}', eq: 'h - 8', sub: `${n(h, 2)} - 8`, value: hs, unit: 'in', d: 2 }, Math.max(1, h - 8));
-      add({ id: 'wk.Iy', label: 'Weak-axis moment of inertia (two stems at ± c/c ÷ 2, plus the flange)', sym: 'I_{y}', eq: '2\\left[\\frac{B\\,h_{s}^{3}}{12} + B\\,h_{s}\\left(\\frac{c}{2}\\right)^{2}\\right] + \\frac{8\\,b_{f}^{3}}{12}',
-        sub: `2\\left[\\frac{${n(B, 2)}(${n(hs, 2)})^{3}}{12} + ${n(B, 2)}(${n(hs, 2)})\\left(\\frac{${n(cc, 1)}}{2}\\right)^{2}\\right] + \\frac{8(${n(w, 2)})^{3}}{12}`, value: wj.Iweak, unit: 'in^{4}', d: 0,
-        note: bare + ' B: the stem width, c: the stem spacing (c/c), b_f: the flange width; the engine\'s approximation, as the old app.' }, 2 * (B * Math.pow(hs, 3) / 12 + B * hs * Math.pow(cc / 2, 2)) + 8 * Math.pow(w, 3) / 12);
-      const Js = rJ(B, hs), Jf = rJ(w, 8);
+      const B = (G.next && +G.next.B) || 10, cc = (G.next && +G.next.stemCC) || 60, w = +G.btf || +G.w, h = +G.h, ft0 = G.next ? +G.next.ft : NaN, ft = ft0 > 0 ? ft0 : 8, hs = Math.max(1, h - ft);   // NF-4 (2026-11-26): the flange g.next.ft (NEXT F 4 in, NEXT D 8 in; the engine's 8 in when not given)
+      add({ id: 'wk.hs', label: `Weak axis: stem depth (the flange t_f = ${n(ft, 0)} in)`, sym: 'h_{s}', eq: 'h - t_{f}', sub: `${n(h, 2)} - ${n(ft, 2)}`, value: hs, unit: 'in', d: 2 }, Math.max(1, h - ft));
+      add({ id: 'wk.Iy', label: 'Weak-axis moment of inertia (two stems at ± c/c ÷ 2, plus the flange)', sym: 'I_{y}', eq: '2\\left[\\frac{B\\,h_{s}^{3}}{12} + B\\,h_{s}\\left(\\frac{c}{2}\\right)^{2}\\right] + \\frac{t_{f}\\,b_{f}^{3}}{12}',
+        sub: `2\\left[\\frac{${n(B, 2)}(${n(hs, 2)})^{3}}{12} + ${n(B, 2)}(${n(hs, 2)})\\left(\\frac{${n(cc, 1)}}{2}\\right)^{2}\\right] + \\frac{${n(ft, 2)}(${n(w, 2)})^{3}}{12}`, value: wj.Iweak, unit: 'in^{4}', d: 0,
+        note: bare + ' B: the stem width, c: the stem spacing (c/c), b_f: the flange width, t_f: the flange thickness (NEXT F 4 in, NEXT D 8 in); the engine\'s approximation, as the old app (which took the flange 8 in).' }, 2 * (B * Math.pow(hs, 3) / 12 + B * hs * Math.pow(cc / 2, 2)) + ft * Math.pow(w, 3) / 12);
+      const Js = rJ(B, hs), Jf = rJ(w, ft);
       add({ id: 'wk.Js', label: 'Torsion: one stem (B × h_s)', sym: 'J_{s}', eq: rjEq('a', 'b'), sub: rjSub(B, hs), value: Js, unit: 'in^{4}', d: 0, note: rjNote }, Js);
-      add({ id: 'wk.Jf', label: 'Torsion: the flange (b_f × 8 in)', sym: 'J_{f}', eq: rjEq('a', 'b'), sub: rjSub(w, 8), value: Jf, unit: 'in^{4}', d: 0 }, Jf);
+      add({ id: 'wk.Jf', label: `Torsion: the flange (b_f × ${n(ft, 0)} in)`, sym: 'J_{f}', eq: rjEq('a', 'b'), sub: rjSub(w, ft), value: Jf, unit: 'in^{4}', d: 0 }, Jf);
       add({ id: 'wk.J', label: 'St-Venant torsion constant (open section: the sum of its parts)', sym: 'J', eq: '2\\,J_{s} + J_{f}', sub: `2(${g(Js, 0)}) + ${g(Jf, 0)}`, value: wj.J, unit: 'in^{4}', d: 0, note: JN }, 2 * Js + Jf);
     } else {
       const d = G.d || [6, 3, 6, 6], ttf = (+d[0] || 0) + (+d[1] || 0), tbf = (+d[2] || 0) + (+d[3] || 0), hw = Math.max(1, G.h - ttf - tbf);

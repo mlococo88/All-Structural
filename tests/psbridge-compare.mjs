@@ -55,6 +55,7 @@
 //   PS-34 (2026-11-14): the pier block's family thickness of a NEXT / box / slab (ps34.t, engine/pierblock.js; the old app's t_bf is the
 //   I-girder bottom flange) is compared with the thickness worked here from the old app's girder (NEXT h − t_f, box the bottom slab, voided
 //   slab (h − D)/2, solid slab h); every other value with the old app, as before.
+//   NF-4 (2026-11-26): the old library's NEXT F flange 4 in (was 8): the old page computes with flangeT 4 and I_y, J with that flange.
 //   PS-35 (2026-11-14): a box beam / voided slab design gets the type (f) / (g) distribution factors (engine/lldf-fg.js): the old page computes
 //   with that module wrapping its own distFactors (the module file added to the old page), so every value downstream is compared as before;
 //   the (f) / (g) factors are checked by hand in tests/engine/psbridge-lldf-fg.test.mjs; the old app's type (k) factors logged (before / after).
@@ -251,6 +252,13 @@ for (const name of names) {
     if (std) { GIRDERS[i.girder] = std.entry;   // PS-30 / PS-31: the plate's entry (see above)
       if (std.leg) { const Rb = computeAll(Object.assign({}, i, { girder: std.leg })), Ra = computeAll(i), pick = R => ({ h: R.g.h, A: R.g.A, I: R.g.I, yb: R.g.yb, Sb: R.g.Sb, St: R.g.St, phiMn: R.fMid.phiMn / 12, MuMid: R.MuMid / 12,
         checks: R.checks.map(c => [c.n, c.r, c.pass]) }); before = { old: pick(Rb), now: pick(Ra) }; } }
+    // NF-4 (engineer 2026-11-26): the old library's NEXT F flange 4 in (engine/sections.js NEXT_FT, applied at install; the old app has 8 in).
+    // The intended difference: the old page computes with flangeT 4 and its weak-axis I_y, J with the flange ft for its 8 in (the same
+    // expressions as its own NEXT branch), so every value downstream is compared as before; the change itself is checked by hand in
+    // tests/engine/psbridge-next-flange.test.mjs
+    if (['NEXT 24F', 'NEXT 28F', 'NEXT 32F', 'NEXT 36F'].includes(i.girder) && GIRDERS[i.girder] && GIRDERS[i.girder].flangeT === 8) { GIRDERS[i.girder].flangeT = 4;
+      const wj0 = window.weakAxisAndJ; window.weakAxisAndJ = g => { if (!(g && g.isNext && g.next && +g.next.ft === 4)) return wj0(g); const ft = 4, B = (+g.next.B) || 10, cc = (+g.next.stemCC) || 60, w = +g.btf || +g.w, hs = Math.max(1, +g.h - ft);
+        const Iy = 2 * (B * hs ** 3 / 12 + B * hs * (cc / 2) ** 2) + ft * w ** 3 / 12, bMax = Math.max(+g.btf || 0, +g.bbf || 0, +g.w || 0); return { Iweak: Iy, J: 2 * rectTorsionJ(B, hs) + rectTorsionJ(w, ft), Sy: bMax > 0 ? Iy / (bMax / 2) : 0, bMax }; }; }
     let fg0 = null; if (fgNew) { const R0 = computeAll(i); fg0 = { dfm: R0.dfm, dfv: R0.dfv }; }   // PS-35: the old app's own type (k) factors (before)
     const R = fgNew ? window.PSBLldfFG.run(i, computeAll) : computeAll(i), at = (o, p) => p.split('.').reduce((q, k) => q == null ? q : q[k], o), vals = {};
     // E1-D4 / E1-D5 (see above): before / after of the rating values the apply changes
