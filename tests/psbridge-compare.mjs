@@ -57,6 +57,8 @@
 //   slab (h − D)/2, solid slab h); every other value with the old app, as before.
 //   HP (2026-11-25): the haunch along the girder (haunch.<i>.buildup, engine/haunch.js: t_h the minimum at midspan) is compared with the profile
 //   worked here from the old app's own Δ_deck and ψ, max(t_h + Δ_deck(1 − ψ), 0.5) (Δ_deck < 0 too: engineer 2026-11-26); every other value with the old app, as before.
+//   HDC (2026-11-25): DC1 from the average haunch (engine/haunch.js run): the old app's engine computes through the same run (the module put
+//   in the old page; two passes with its compositeProps wrapped), so every value downstream of w_DC1 is compared with the old app as before.
 //   PS-35 (2026-11-14): a box beam / voided slab design gets the type (f) / (g) distribution factors (engine/lldf-fg.js): the old page computes
 //   with that module wrapping its own distFactors (the module file added to the old page), so every value downstream is compared as before;
 //   the (f) / (g) factors are checked by hand in tests/engine/psbridge-lldf-fg.test.mjs; the old app's type (k) factors logged (before / after).
@@ -241,6 +243,7 @@ for (const name of names) {
   // apply (the module file put in the old page), so every rating value is compared as before; the rule itself is checked by hand in
   // tests/engine/psbridge-rating-along.test.mjs. The rating values the apply changes are logged (before / after).
   await old.p.addScriptTag({ path: path.join(path.dirname(NEW), 'engine/rating-along.js') });
+  await old.p.addScriptTag({ path: path.join(path.dirname(NEW), 'engine/haunch.js') });   // HDC (see the old page's run below)
   const isPS10 = p => /^ps10\./.test(p) || (k10 >= 0 && new RegExp(`^checks\\.${k10}\\.`).test(p));
   // PS-34 (engineer decision 2026-11-14): the pier block's thickness of a NEXT / box / slab (ps34.*, engine/pierblock.js) has no counterpart
   // in the old app (its t_bf is the I-girder bottom flange): compared with the family thickness worked here from the old app's own girder
@@ -254,7 +257,11 @@ for (const name of names) {
       if (std.leg) { const Rb = computeAll(Object.assign({}, i, { girder: std.leg })), Ra = computeAll(i), pick = R => ({ h: R.g.h, A: R.g.A, I: R.g.I, yb: R.g.yb, Sb: R.g.Sb, St: R.g.St, phiMn: R.fMid.phiMn / 12, MuMid: R.MuMid / 12,
         checks: R.checks.map(c => [c.n, c.r, c.pass]) }); before = { old: pick(Rb), now: pick(Ra) }; } }
     let fg0 = null; if (fgNew) { const R0 = computeAll(i); fg0 = { dfm: R0.dfm, dfv: R0.dfv }; }   // PS-35: the old app's own type (k) factors (before)
-    const R = fgNew ? window.PSBLldfFG.run(i, computeAll) : computeAll(i), at = (o, p) => p.split('.').reduce((q, k) => q == null ? q : q[k], o), vals = {};
+    // HDC (engineer decision 2026-11-25): DC1 from the average haunch (engine/haunch.js run, two passes with the engine's compositeProps
+    // wrapped): the old app's engine computes through the same run (the module file put in the old page), so every value downstream of
+    // w_DC1 is compared as before; the rule itself is checked by hand in tests/engine/psbridge-haunch.test.mjs
+    const eng = x => (fgNew ? window.PSBLldfFG.run(x, computeAll) : computeAll(x));
+    const R = window.PSBHaunch.run(i, eng), at = (o, p) => p.split('.').reduce((q, k) => q == null ? q : q[k], o), vals = {};
     // E1-D4 / E1-D5 (see above): before / after of the rating values the apply changes
     const rt0 = JSON.stringify({ r: R.rating, s: R.shrRating, v: R.vehRatings }); window.PSBRatingAlong.apply(i, R);
     const e1 = (() => { const b = JSON.parse(rt0), d = [], cmp = (o, n, pfx) => Object.keys(o || {}).forEach(k => { if (o[k] && typeof o[k] === 'object') cmp(o[k], n && n[k], pfx + k + '.'); else if (typeof o[k] === 'number' && n && !Object.is(o[k], n[k])) d.push(`${pfx}${k} ${o[k]} -> ${n[k]}`); });
