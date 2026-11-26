@@ -66,3 +66,17 @@ test('round trip: the receiver takes deck.haunchBrg; an older payload (as from t
   const a = J(p), b = J(p0); delete a.deck.haunchBrg; delete a.deck.haunchMid; a.notes = a.notes.slice(0, -1); ['producedAt', 'contentHash'].forEach(k => { delete a[k]; delete b[k]; });
   assert.deepEqual(a, b, 'every other field as before');
 });
+
+test('sag (engineer 2026-11-26, the #1722 midspan rule): deck.haunchBrg = max(t_h + Δ_deck, 0.5), less than t_h; the note and the sag cells', () => {
+  const P = project(W); P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }];
+  const cells = cellsOf(W, P), r = W.PSBHandoffs.sgPayload(P, cells); assert.ok(r.ok, r.error);
+  const p = r.payload, d = cells[0].R.hp.d; assert.ok(d < 0, 'sags: ' + d);
+  // by hand: Δ_deck = −0.323 in; bearings max(2 − 0.323, 0.5) = 1.677 in (< t_h = 2), midspan 2
+  assert.equal(d.toFixed(3), '-0.323'); assert.equal(p.deck.haunch, 2); assert.equal(p.deck.haunchBrg, Math.round(Math.max(2 + d, 0.5) * 1e4) / 1e4);
+  assert.equal(p.deck.haunchBrg.toFixed(2), '1.68'); assert.ok(p.deck.haunchBrg < p.deck.haunch); assert.equal(p.deck.haunchMid, 2);
+  assert.ok(p.notes.some(n => /deck\.haunchBrg = 1\.68, the haunch at the CL bearings, max\(t_h \+ Δ_deck, 0\.5\) = max\(2\.00 \+ \(-0\.32\), 0\.5\): the girder sags/.test(n)), p.notes.join(' | '));
+  const h = W.PSBHandoffs.haunchSent(cells); assert.equal(h.sag.length, cells.length, 'every line sags'); assert.ok(W.SharedHandoffStore.checkGeometry(p).ok);
+  assert.equal(RCV.haunchIn(J(p)).v, p.deck.haunchBrg, 'the receiver takes it');
+  // the 0.5 in floor: t_h = 0.5 in
+  const Q = project(W); Q.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; Q.base.th = 0.5; const q = W.PSBHandoffs.sgPayload(Q, cellsOf(W, Q)).payload; assert.equal(q.deck.haunchBrg, 0.5);
+});

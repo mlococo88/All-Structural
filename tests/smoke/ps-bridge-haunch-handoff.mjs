@@ -65,6 +65,16 @@ try {
   console.log(process.env.TABLE ? ['| Receiver value | Before (t_h) | After (haunch at the bearings) | Change |', '|---|---|---|---|'].concat(rows.map(([l, a, c, d]) => `| ${l} | ${f(a, d)} | ${f(c, d)} | ${f(c - a, d)} |`)).join('\n')
     : rows.map(([l, a, c, d]) => `    ${l}: ${f(a, d)} -> ${f(c, d)}`).join('\n'));
   ok('receiver values before / after printed');
+  // sag (engineer 2026-11-26): with 6 strands the girder sags at deck placement: deck.haunchBrg = t_h + Δ_deck = 1.68 in, the card warns
+  await p.evaluate(nm => { const P = PSBModel.newProject(); P.project.name = nm; P.base.girder = 'NEXT 24F'; P.spans.lengths = [45]; P.xs.bays = P.xs.bays.map(() => 10);
+    P.base.ts = 8; P.base.th = 2; P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; P.base.harp.n = 0;
+    P.base.loads.wNC = 0; P.base.loads.wBar = 0.5; P.base.loads.wDW = 0.3; PSBBridge.syncSpans(P); localStorage.setItem('psb2.project.current', PSBModel.exportJSON(P)); }, NAME);
+  await p.reload(); await p.waitForFunction(() => window.PSBHandoffUI && document.getElementById('out').innerText.length > 50, null, { timeout: 120000 });
+  await p.click('#inTabs [data-itab="proj"]'); await p.waitForSelector('#psbHo [data-ho="subSend"]');
+  await p.waitForFunction(() => !!document.getElementById('hoSag'), null, { timeout: 120000 }).catch(async () => { await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(800); await p.click('#inTabs [data-itab="proj"]'); await p.waitForSelector('#hoSag', { timeout: 120000 }); });
+  const sline = await p.evaluate(() => document.getElementById('hoHaunch').innerText.replace(/\s+/g, ' '));
+  assert.match(sline, /= max\(th \+ Δdeck, 0\.5\) = max\(2\.00 \+ \(-0\.32\), 0\.5\) = 1\.68 in, thinner than th/, sline); assert.match(sline, /sag at deck placement|sags at deck placement/, sline);
+  ok('sag: the card sends 1.68 in at the bearings (< t_h) and warns');
   assert.deepEqual(errs, []); assert.deepEqual(errs2, []); ok('0 console errors in both pages');
   console.log(`\n${n} passed`);
 } finally { await b.close(); }

@@ -173,10 +173,10 @@ test('H3 camber and haunch: the curves and the tenth-point table = R.haunch; the
       [['PRESTRESS', R.cam.dPS], ['SELF-WEIGHT', R.cam.dSW], ['DECK + HAUNCH', R.cam.dDK], ['DC2 + DW', R.cam.dSD], ['LL + IM', R.cam.dLL], ['LL LIMIT', R.cam.llLim]].forEach(([a, v]) => assert.ok(R6.some(q => q[0] === a && q[1] === f3(v)), `${lab} ${a}`));
       const T = texts(B, s).map(e => e.s).join(' ').replace(/\s+/g, ' ');
       assert.ok(T.includes(`AT THE CL BEARINGS ${Hn[0].buildup.toFixed(2)} AND ${Hn[Hn.length - 1].buildup.toFixed(2)} IN, AT MIDSPAN ${Hn[5].buildup.toFixed(2)} IN`), lab + ' haunch at the supports and midspan');
-      // HP (2026-11-25, engine/haunch.js): t_h is the minimum haunch at midspan; toward the bearings t_h + Δ_deck (Δ_deck < 0: t_h at the bearings)
+      // HP (2026-11-25, engine/haunch.js): t_h is the minimum haunch at midspan; toward the bearings t_h + Δ_deck (Δ_deck < 0 too, engineer 2026-11-26)
       const th = +t.inp.th, dd = R.cam.afterDeck; assert.ok(R.hp, lab + ' HP applied');
-      close(Hn[5].buildup, Math.max(dd >= 0 ? th : th - dd, 0.5), lab + ' midspan haunch'); close(Hn[0].buildup, Math.max(dd >= 0 ? th + dd : th, 0.5), lab + ' bearing haunch');
-      assert.ok(T.includes(dd >= 0 ? 'IS THE MINIMUM, AT MIDSPAN AT THE GIRDER CENTRELINE' : 'IS THE MINIMUM, AT THE BEARINGS'), lab + ' haunch note');
+      close(Hn[5].buildup, Math.max(th, 0.5), lab + ' midspan haunch'); close(Hn[0].buildup, Math.max(th + dd, 0.5), lab + ' bearing haunch');
+      assert.ok(T.includes('IS THE MINIMUM, AT MIDSPAN AT THE GIRDER CENTRELINE'), lab + ' haunch note');
     });
   }
 });

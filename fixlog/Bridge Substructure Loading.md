@@ -3293,5 +3293,5 @@ row(hi.brg ? `Haunch (at the CL bearings: deck.haunchBrg; sent t<sub>h</sub> …
 Geometry. RIDOT BDM (April 2026) 5.6.1 (the haunch at the supports set from camber and dead-load deflection), 9.4.6; AASHTO LRFD 10th Ed. 3.8.1.2 (wind on the exposed depth).
 ### How verified
 `tests/engine/psbridge-haunch-handoff.test.mjs` (the receiver's `haunchIn`, `check` and `dSup` cut from this file at their anchors); smokes `tests/smoke/ps-bridge-haunch-handoff.mjs`, `tests/smoke/ps-bridge-subloads.mjs`.
-### Open items
-The wind depth now takes the bearing haunch (conservative): a separate wind haunch (midspan or average) needs the engineer's decision. One haunch for every support.
+### Decided by the engineer 2026-11-26
+The wind depth takes the bearing haunch: one haunch (the bearing haunch) for the seats and the wind (as built). One haunch for every support: the largest single value (as built). A sagging sender girder sends a bearing haunch thinner than t_h (`deck.haunchBrg` = max(t_h + Δ_deck, 0.5), fixlog/ps-bridge.md HHO-SAG); this tool takes it as any `deck.haunchBrg` ≥ 0 (no change here).

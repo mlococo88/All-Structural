@@ -351,14 +351,15 @@
      girder type on its lines; the deepest at each support and in each span), section.material 'prestressed concrete' (optional, §4.14).
      → { ok, payload, sum } or { error } */
   /* HHO (2026-11-25, engineer: "The haunch that gets passed to other apps should get fixed to include the full thickness"): the haunch at the
-     CL bearings and at midspan of each girder type x line from the corrected profile (engine/haunch.js, R.hp: t_h the minimum at midspan,
-     t_h + Δ_deck at the bearings), the largest of each over the cells; null when a cell has no profile (the module not loaded, an error).
-     → { brg, mid, th, d, at: the cell of the largest bearing haunch } | null */
+     CL bearings and at midspan of each girder type x line from the corrected profile (engine/haunch.js, R.hp: t_h at midspan,
+     max(t_h + Δ_deck, 0.5) at the bearings, for either sign of Δ_deck: engineer 2026-11-26, so a sagging girder sends less than t_h), the
+     largest of each over the cells; sag: the cells that sag at deck placement (R.hp.sag); null when a cell has no profile (the module not loaded, an error).
+     → { brg, mid, th, d, at: the cell of the largest bearing haunch, sag: [cells with R.hp.sag] } | null */
   function haunchSent(cells) {
     const cs = (cells || []).filter(c => c && c.inp);
     if (!cs.length || !cs.every(c => c.R && !c.R.error && c.R.hp)) return null;
     const top = cs.reduce((b, c) => (c.R.hp.brg > b.R.hp.brg ? c : b), cs[0]);
-    return { brg: top.R.hp.brg, mid: Math.max(...cs.map(c => c.R.hp.mid)), th: top.R.hp.th, d: top.R.hp.d, at: top };
+    return { brg: top.R.hp.brg, mid: Math.max(...cs.map(c => c.R.hp.mid)), th: top.R.hp.th, d: top.R.hp.d, at: top, sag: cs.filter(c => c.R.hp.sag) };
   }
   function sgPayload(P, cells) {
     const errs = [], spans = ((P && P.spans && P.spans.lengths) || []).map(Number), ns = spans.length, xs = (P && P.xs) || {}, nb = Math.round(+xs.nb);
@@ -406,7 +407,7 @@
         'Skew: as entered here, + when the right end of the support line (looking ahead station) is ahead station.',
         `Supports: ${cont ? 'continuous for composite loads over the piers (5.12.3.3)' : 'simple spans (an expansion joint at each pier)'}; the abutments are deck ends. Bearing fixity is not defined in this app and is not sent. Elevations and the substructure are not carried.`,
         'Barrier height: not an input of this app (not sent). Curb height and the railing load point are sent for a curb edge.'].concat(hS ? [
-        `Haunch (in): deck.haunch = t_h = ${f2(th.v)}, the entered minimum haunch, at midspan at the girder centreline; deck.haunchBrg = ${f2(hS.brg)}, the haunch at the CL bearings, ${hS.d >= 0 ? `t_h + Δ_deck (the camber at deck placement) = ${f2(hS.th)} + ${f2(hS.d)}` : `t_h (the girder sags at deck placement, Δ_deck = ${f2(hS.d)}: the thinnest haunch is at the bearings)`} (girder type ${hS.at.label || hS.at.inp.girder} on G${hS.at.g}, span ${hS.at.s}; the largest over every girder type and line); deck.haunchMid = ${f2(hS.mid)}, at midspan. Straight grade, no vertical curve or cross slope.`] : []) };
+        `Haunch (in): deck.haunch = t_h = ${f2(th.v)}, the entered minimum haunch, at midspan at the girder centreline; deck.haunchBrg = ${f2(hS.brg)}, the haunch at the CL bearings, ${hS.d >= 0 ? `t_h + Δ_deck (the camber at deck placement) = ${f2(hS.th)} + ${f2(hS.d)}` : `max(t_h + Δ_deck, 0.5) = max(${f2(hS.th)} + (${f2(hS.d)}), 0.5): the girder sags at deck placement (Δ_deck < 0), so the haunch at the bearings is thinner than t_h (t_h stays at midspan; the design warning of the PS Bridge app)`} (girder type ${hS.at.label || hS.at.inp.girder} on G${hS.at.g}, span ${hS.at.s}; the largest over every girder type and line); deck.haunchMid = ${f2(hS.mid)}, at midspan. Straight grade, no vertical curve or cross slope.`] : []) };
     const HS = W.SharedHandoffStore;
     if (HS) payload.contentHash = HS.geometryHash(payload);
     const chk = HS ? HS.checkGeometry(payload) : { ok: true, errors: [] };

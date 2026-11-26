@@ -9952,8 +9952,8 @@ R.haunch.forEach(r => { r.buildup0 = r.buildup; r.buildup = profile(th, d, r.par
 Steps: `cb.haunch` = max(t_h + Δ_deck(1 − ψ), 0.5) at ψ = 1 (midspan), `cb.haunchBrg` at ψ = 0 (bearings); Δ_deck < 0: max(t_h + |Δ_deck| ψ, 0.5).
 ### Problem
 The engine added the camber at midspan; the haunch is thickest at the bearings. Not a design-check issue (no check reads it), but the shown haunch (and the DXF sheet) was wrong for detailing.
-### Decision (pending engineer review)
-Δ_deck < 0 (the girder sags at deck placement): t_h is kept at the thinnest point, the bearings (never thinner than t_h anywhere).
+### Decision (engineer, 2026-11-26; replaces the pending choice below)
+Δ_deck < 0 (the girder sags at deck placement): **t_h stays at MIDSPAN always**, so the haunch at the bearings is max(t_h + Δ_deck(1 − ψ), 0.5) at ψ = 0 = max(t_h + Δ_deck, 0.5), thinner than t_h; and a warning is shown when the girder sags ("I don't want this sag case"). Was (pending review, superseded): t_h kept at the bearings, t_h + |Δ_deck|ψ. See the 2026-11-26 entry below (HP-SAG).
 ### Governing provision
 Geometry. AASHTO LRFD 10th Ed. 5.6.3.5.2 (camber); RIDOT BDM (April 2026) 9.4.6 (minimum nominal haunch at the girder centreline; a haunch thicker than 4 in to be reinforced), the warning for owner RIDOT. Other owners reported, not added: MassDOT Part I 3.5.1.2, 3.7.1.3; CTDOT BDM 8.1.2.4.
 ### Check case
@@ -9985,5 +9985,68 @@ deck: Object.assign({ ts: ts.v, total: tot.v, haunch: th.v }, hS ? { haunchBrg: 
 NEXT 24F, 45 ft, flange 120 in, t_s 8, t_h 2 in, strands 16/16/12 straight, w_NC 0, w_DC2 0.5, w_DW 0.3 klf: Δ_deck 3.3458 in; deck = { ts 8, total 8, haunch 2, haunchBrg 5.3458, haunchMid 2 }. The card: "haunch at the CL bearings (deck.haunchBrg) = t_h + Δ_deck = 2.00 + 3.35 = 5.35 in … §".
 ### How verified
 `tests/engine/psbridge-haunch-handoff.test.mjs` (sender, shared and receiver checks, JSON round trip through the receiver's own code, older payloads, without the profile the payload as before); smokes `tests/smoke/ps-bridge-haunch-handoff.mjs` (card, send, SubLoads pull and apply, before / after values) and `tests/smoke/ps-bridge-subloads.mjs` (updated: br.haunch = deck.haunchBrg).
+### Decided by the engineer 2026-11-26
+Wind: one haunch (the bearing haunch) for the seats and the wind (as built). Per support: the largest single value (as built). lldfGeom e_g: keeps t_h (as built). Sag: the #1722 midspan rule (HHO-SAG below).
+
+## 2026-11-26 — PR: claude/ps-haunch-profile (PR #1722) (HP-SAG) — engineer decisions on PR #1722: the sag case keeps t_h at midspan, with a sag warning (§4; a reported value and a warning only, no check, load or ratio changes) — NOT MERGED, engineer review
+### Request (engineer answers, 2026-11-26)
+- Δ_deck < 0 (sag): "t_h stays at MIDSPAN always (haunch at bearings = max(t_h + Δ_deck(1 − ψ), 0.5)), AND show a pop-up warning indicator when the girder sags at deck placement ('I don't want this sag case')."
+- Cross slope across the flange: not now (no change).
+- Camber tolerance: yes, as a Settings input, in a follow-up PR (not in this PR).
+### Where
+- `apps/ps-bridge/engine/haunch.js`: `profile` (anchor `const profile = (th, d, psi) =>`); `apply` (anchor `const xMax = H[vals.indexOf(max)].x;`: the RIDOT text for the sag case, new `sag` warning, `R.hp.sag`); export `SAG_RE`.
+- `apps/ps-bridge/engine/worked-end.js` camber() (anchor `if (R.hp && window.PSBHaunch) {`): one expression for both signs; notes.
+- `apps/ps-bridge/ui/camber.js` (tenth-point note, the sag warning in red, chart limit label), `apps/ps-bridge/ui/sheets.js` camber() note.
+- `apps/ps-bridge/index.html`: new `sagNotice(rc)` (anchor `function sagNotice(rc)`), called in `drawOut` after `const ok = rc && !rc.R.error;`: a red banner (the PS-22 notice style, `#sagNotice`, role="alert") above the content of every output tab while the girder type and line shown, or any computed type × line of the cached Summary results, sags at deck placement; it names each line (Δ_deck, the haunch at the bearings, t_h) and links to the Camber & deflection tab. Not dismissible (it goes when the design no longer sags). The same text is a design warning of the engine, so the Summary's warnings list and the Report list it per girder type and line.
+### Before
+```
+const profile = (th, d, psi) => Math.max(th + Math.max(d, 0) * (1 - psi) + Math.max(-d, 0) * psi, 0.5);   // Δ_deck < 0: t_h at the bearings
+```
+### After
+```
+const profile = (th, d, psi) => Math.max(th + d * (1 - psi), 0.5);   // t_h at midspan for every Δ_deck
+const brg = H[0].buildup, sag = hasH && d < 0 ? `Girder sags at deck placement: Δ_deck = … in (the camber at deck placement is downward). t_h stays the haunch at midspan, so the haunch at the bearings is t_h + Δ_deck = … in, thinner than the entered t_h = … in. Review the prestress, the camber and the haunch (Camber & deflection tab).` : null;
+R.hp = { …, brg, …, sag }; if (sag) R.warns.push(sag);
+```
+(With the 0.5 in floor binding the text reads "the haunch at the bearings is the 0.5 in floor (t_h + Δ_deck = … in)".)
+### Governing provision
+Geometry (no AASHTO provision sets the haunch profile); AASHTO LRFD 10th Ed. (2024) Art. 5.6.3.5.2 for the camber; the decision is the engineer's (2026-11-26).
+### Check case (by hand), tests/engine/psbridge-haunch.test.mjs
+NEXT 24F, L = 45 ft, flange 120 in, t_s 8 in, t_h 2 in, 6 straight strands at 2.875 in, w_NC 0, w_DC2 0.5, w_DW 0.3 klf: Δ_deck = −0.323 in (the girder sags at deck placement).
+| x | ψ | Before (pending rule) max(t_h − Δψ, 0.5) | After max(t_h + Δ(1 − ψ), 0.5) |
+|---|---|---|---|
+| 0 (bearings) | 0 | 2.00 | 2 − 0.323 = **1.68** |
+| 4.5 ft (0.1L) | 0.36 | 2 + 0.323(0.36) = 2.12 | 2 − 0.323(0.64) = **1.79** |
+| 22.5 ft (midspan) | 1 | 2 + 0.323 = 2.32 | **2.00** |
+Warning (after): "Girder sags at deck placement: Δ_deck = -0.32 in … the haunch at the bearings is t_h + Δ_deck = 1.68 in, thinner than the entered t_h = 2.00 in …"; none before. With t_h = 0.5 in the bearings are at the 0.5 in floor and the warning says so. Δ_deck ≥ 0: unchanged (the HP check case 5.35 / 4.14 / 2.00 in).
+### Designs that change
+Only designs that sag at deck placement (Δ_deck < 0) on a section with a haunch (I-girders, NEXT beams); no check, load or ratio changes (R.haunch is read by none). Of the 19 tab designs (tests/engine/psbridge-tab-cases.mjs): "NEXT 36F with a 6 in topping, no draped strands", Δ_deck = −8.427 in: midspan 10.43 → 2.00 in, bearings 2.00 → 0.50 in (the floor), plus the sag warning. (The box BIII-36 without topping, Δ_deck = −4.80 in, carries no haunch in this engine: its tabulated values change the same way, no warning.) The other 17 tab designs have Δ_deck ≥ 0: unchanged.
+### How verified
+`tests/engine/psbridge-haunch.test.mjs` (the sag test rewritten: the profile at every tenth point, the warning text, the 0.5 in floor, no warning without sag; every tab case: only the haunch values and the RIDOT / sag warnings differ from the page without the module); `psbridge-drawings-h` (bearing haunch max(t_h + Δ_deck, 0.5)); harness B (`tests/psbridge-compare.mjs`, the profile worked from the old app's Δ_deck of either sign); smoke `tests/smoke/ps-bridge-haunch.mjs` (the banner on a sagging design, none otherwise).
 ### Open items
-Wind depth with the bearing haunch (conservative); one haunch for every support; the lldfGeom hand-off keeps t_h.
+Camber tolerance (± % of the predicted camber, a Settings input): the follow-up PR (claude/ps-haunch-camber-tol). Cross slope: not now.
+
+## 2026-11-26 — PR: claude/ps-haunch-handoff (PR #1723) (HHO-SAG) — engineer decisions on PR #1723: the haunch at the bearings sent follows the #1722 midspan rule when the girder sags (cross-tool; §4) — NOT MERGED, engineer review; PR #1722's HP-SAG merged in
+### Request (engineer answers, 2026-11-26)
+- "#1723 sag: follows the #1722 midspan rule: deck.haunchBrg = max(t_h + Δ_deck, 0.5) (may be < t_h), with the sag warning."
+- "#1723 wind: one haunch (bearing haunch) for seats and wind (as built)"; "per support: largest single value (as built)"; "lldfGeom e_g: keep t_h (as built)": recorded, no change.
+### Where
+- The value: `R.hp.brg` of `engine/haunch.js` (HP-SAG, merged from claude/ps-haunch-profile) is now max(t_h + Δ_deck, 0.5) for either sign, so `haunchSent` sends it as before; no expression in `engine/handoffs.js` changes.
+- `apps/ps-bridge/engine/handoffs.js`: `haunchSent` also returns `sag` (the cells with `R.hp.sag`; anchor `return { brg: top.R.hp.brg,`); the payload note for Δ_deck < 0 (anchor `Haunch (in): deck.haunch = t_h =`).
+- `apps/ps-bridge/ui/handoffs.js` `card()`: the `#hoHaunch` line for Δ_deck < 0 and the red `#hoSag` warning naming the lines that sag.
+- `HANDOFF.md` §4.14 (the haunch at the bearings item): the Δ_deck < 0 rule.
+- The receiver (Bridge Substructure Loading) is not changed: it takes any `deck.haunchBrg` ≥ 0.
+### Before
+```
+deck.haunchBrg (Δ_deck < 0) = t_h                           // note: "t_h (the girder sags at deck placement …: the thinnest haunch is at the bearings)"
+```
+### After
+```
+deck.haunchBrg = max(t_h + Δ_deck, 0.5) for every Δ_deck   // note: "max(t_h + Δ_deck, 0.5) = max(2.00 + (-0.32), 0.5): the girder sags at deck placement (Δ_deck < 0), so the haunch at the bearings is thinner than t_h …"
+```
+### Governing provision
+Geometry (the haunch profile, HP); HANDOFF.md §4.14 (superGeometry, optional field `deck.haunchBrg`). The rule is the engineer's (2026-11-26).
+### Check case (by hand), tests/engine/psbridge-haunch-handoff.test.mjs
+NEXT 24F, 45 ft, flange 120 in, t_s 8, t_h 2 in, 6 straight strands at 2.875 in, w_NC 0, w_DC2 0.5, w_DW 0.3 klf: Δ_deck = −0.323 in. Before: deck.haunchBrg = 2.0000 (t_h). After: max(2 − 0.323, 0.5) = 1.6770 in (< t_h), deck.haunch = 2, deck.haunchMid = 2; the receiver's d_sup = (8 + 1.677 + 24)/12 = 2.8064 ft (before (8 + 2 + 24)/12 = 2.8333 ft). With t_h = 0.5 in: 0.5 (the floor). Δ_deck ≥ 0: unchanged (5.3458 in).
+### How verified
+`tests/engine/psbridge-haunch-handoff.test.mjs` (new sag test: the payload, the note, the sag cells, the receiver, the floor); smoke `tests/smoke/ps-bridge-haunch-handoff.mjs` (the sag card: 1.68 in and the warning).
