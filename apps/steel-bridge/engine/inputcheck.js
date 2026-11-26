@@ -38,6 +38,7 @@
     const xs = P.xs || {}, opt = v => (v == null || v === '' || (typeof v === 'number' && isNaN(v))) ? null : pd(v);
     let m;
     if (/^Appurtenance concrete unit weight/.test(msg)) return 'xs.wcA';
+    if (/^Mountable sidewalk curb height/.test(msg)) return 'xs.sidewalks.mountH';   // Q1 (sb-ridot-curb, 2026-11-26)
     if ((m = msg.match(/^(Left|Right) sidewalk railing or fence: the weight/))) return `xs.sidewalks.${SIDE[m[1]]}.fence`;
     if ((m = msg.match(/^(Left|Right) sidewalk railing or fence: its position/))) return `xs.sidewalks.${SIDE[m[1]]}.fenceX`;
     if (/^Wearing surface by thickness/.test(msg)) { const w = xs.ws || {}; return opt(w.thk) > 0 ? 'xs.ws.gam' : 'xs.ws.thk'; }

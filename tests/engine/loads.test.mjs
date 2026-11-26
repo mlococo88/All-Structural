@@ -92,7 +92,11 @@ function compare(name, o, g, acc) {
     else if (a !== b) acc.diffs.push(`${name} ${k}: ${a} vs ${b}`);
   }
 }
-export const ours = df => LD.compute(df.bridge, df);
+// GirderDetail's mountable rule: a sidewalk thinner than 12 in. Owner RIDOT judges Automatic by the project's mountable curb height (engineer's
+// answer 2026-11-26, #1730 Q1: default 8 in, xs.sidewalks.mountH); the parity runs set GirderDetail's rule (a height just under 12 in; dl.mountH is
+// read for RIDOT only), and the test below checks the departure with the default.
+const GD_MOUNT_H = 12 - 1e-6;
+export const ours = df => LD.compute(df.bridge, { ...df, dl: { ...df.dl, mountH: GD_MOUNT_H } });
 
 /* ---------- variations of the recorded inputs (branch coverage) ---------- */
 export function variants() {
@@ -159,6 +163,13 @@ test('parity with GirderDetail LLDF and DLs (GM.df.compute): 20 recorded inputs 
   for (const c of cases) compare(c.name, ours(c.df), G.run(c.df), acc);
   console.log(`       ${cases.length} module inputs (${fixtures.length} recorded, ${cases.length - fixtures.length} variations), ${acc.n} values compared; ${acc.diffs.length} differ; largest relative difference ${acc.worst.rel}`);
   assert.deepEqual(acc.diffs.slice(0, 20), []);
+});
+
+test('RIDOT, the default mountable curb height (8 in; #1730 Q1, 2026-11-26): xsA\'s 9 in right sidewalk is not mountable (its curb face bounds the lanes), unlike GirderDetail', () => {
+  const fx = fixtures.find(f => f.project === 'xsA' && f.owner === 'RIDOT'); if (!fx) return;
+  const R = LD.compute(fx.df.bridge, fx.df), G = ours(fx.df); assert.deepEqual([...R.errors], []);
+  assert.equal(fx.df.dl.swThkR, 9); assert.equal(G.ll.R.r, 4.5, 'GirderDetail rule: the fence face (the 9 in sidewalk mountable)'); assert.equal(R.ll.R.r, 5, 'default: the 9 in curb face (9 in > 8 in)');
+  assert.equal(R.ll.L.r, G.ll.L.r, 'the 8 in left sidewalk: mountable either way');
 });
 
 /* ---------- payloads ---------- */

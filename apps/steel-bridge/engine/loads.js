@@ -111,16 +111,21 @@
   /* live-load traffic face each side (GirderDetail dfLLFace): the innermost non-mountable element: the deck-edge face, a sidewalk
      12 in or thicker (its curb face), or a railing or fence on the sidewalk; a sidewalk thinner than 12 in is mountable and ignored.
      RCURB (sb-ridot-curb PR, 2026-11-25): dl.mountL / dl.mountR ('yes' | 'no'; xs.sidewalks.<side>.mount) set it as entered; absent or 'auto':
-     the 12 in rule, as before. dl.mcaseL / dl.mcaseR (set by cases() below only): the curb face of case 2 of RIDOT BDM 3.4.1.1.1. */
+     the 12 in rule, as before. dl.mcaseL / dl.mcaseR (set by cases() below only): the curb face of case 2 of RIDOT BDM 3.4.1.1.1.
+     Engineer's answers 2026-11-26 (#1730 Q1, Q2; CLAUDE.md §4): dl.mountH (in; set by compute() for an owner of CURB2 only): Automatic is then
+     "mountable when the sidewalk is no thicker than dl.mountH" (the project setting xs.sidewalks.mountH, default MOUNT_H = 8 in) in place of the
+     12 in rule; other owners keep the 12 in rule. dl.nofenceL / dl.nofenceR (set by cases() only, case 1): a railing or fence on that sidewalk
+     does not bound the roadway (its weight stays in the dead loads). */
   function llFaces(b, dl, xs, fL, fR) {
     const o = {};
     ['L', 'R'].forEach(sd => { const f = sd === 'L' ? fL : fR, sw = nm(dl['sw' + sd]) > 0 ? nm(dl['sw' + sd]) : 0, t = nm(dl['swThk' + sd]), curb = !!(b.edge && b.edge[sd] && b.edge[sd].mode === 'curb');
       const mo = dl['mount' + sd], how = dl['mcase' + sd] ? 'case 2 of RIDOT BDM 3.4.1.1.1: the curb-to-curb roadway' : mo === 'yes' || mo === 'no' ? 'entered' : '';
-      const mount = sw > 0 && (mo === 'yes' ? true : mo === 'no' ? false : !(t >= 12 - 1e-9)), c = [{ x: f, by: b.edge && b.edge[sd] && b.edge[sd].fby ? b.edge[sd].fby : curb ? 'curb and railing traffic face' : 'barrier face' }];
-      if (sw > 0 && !mount) c.push({ x: sw, by: how ? `sidewalk curb face (${f2(t)} in sidewalk, not mountable: ${how})` : `sidewalk curb face (${f2(t)} in ≥ 12 in)` });
-      const fx = xs && xs['fenceX' + sd]; if (sw > 0 && fx > 0) c.push({ x: fx, by: 'railing or fence on the sidewalk' });
+      const mH = nm(dl.mountH) > 0 ? nm(dl.mountH) : null, auto = mH ? t <= mH + 1e-9 : !(t >= 12 - 1e-9);   // Q1 (2026-11-26): the owner's mountable height
+      const mount = sw > 0 && (mo === 'yes' ? true : mo === 'no' ? false : auto), c = [{ x: f, by: b.edge && b.edge[sd] && b.edge[sd].fby ? b.edge[sd].fby : curb ? 'curb and railing traffic face' : 'barrier face' }];
+      if (sw > 0 && !mount) c.push({ x: sw, by: how ? `sidewalk curb face (${f2(t)} in sidewalk, not mountable: ${how})` : mH ? `sidewalk curb face (${f2(t)} in > ${f2(mH)} in, the mountable curb height)` : `sidewalk curb face (${f2(t)} in ≥ 12 in)` });
+      const fx = xs && xs['fenceX' + sd]; if (sw > 0 && fx > 0 && !dl['nofence' + sd]) c.push({ x: fx, by: 'railing or fence on the sidewalk' });   // Q2: not in case 1
       const g = c.reduce((a, q) => q.x > a.x + 1e-9 ? q : a);
-      o[sd] = { r: g.x, by: g.by, mount, sw, t, rOld: Math.max(f, sw), ...(how ? { how } : {}) }; });
+      o[sd] = { r: g.x, by: g.by, mount, sw, t, rOld: Math.max(f, sw), ...(how ? { how } : mH && mount && mo !== 'yes' ? { how: `≤ ${f2(mH)} in, the mountable curb height` } : {}), ...(mH ? { mH } : {}), ...(sw > 0 && fx > 0 && dl['nofence' + sd] ? { fenceIgn: fx } : {}) }; });
     return o;
   }
 
@@ -259,6 +264,7 @@
     const errors = []; if (!(nm(p.gap) >= 4)) errors.push('Gap between adjacent trucks must be at least 4 ft.');
     const extra = numRows(p.extra, ROW_EXTRA, 'Added load', errors);
     ['swL', 'swThkL', 'swR', 'swThkR', 'medW', 'medThk', 'ped'].forEach(k => { if (!(nm(p.dl[k]) >= 0)) errors.push(`Dead load "${k}" must be zero or positive.`); });
+    if (p.dl.mountH != null && p.dl.mountH !== '' && !(nm(p.dl.mountH) > 0)) errors.push('Mountable sidewalk curb height must be positive (blank = 8 in).');   // Q1 (2026-11-26)
     const xs = xsIn(p, errors);
     const Ed = edgeIn(p.edges, errors);
     if (errors.length) return { errors };
@@ -266,9 +272,11 @@
     const lf = b.lf && +b.lf.m > 0 && +b.lf.eta > 0 && +b.lf.etaN > 0 ? b.lf : window.SBDOwners.LF_ONE, hP = lf.h0 ? 0 : b.haunch;   // GirderDetail gdLF, gdHP (OWN8)
     const MR = window.SBDSections.modularRatio(b.fc, b.wcE > 0 ? b.wcE : b.wc, 1.0, 'exact'), Nb = b.nb, spacings = b.bays && b.bays.length === Nb - 1 ? b.bays.slice() : new Array(Nb - 1).fill(b.S);   // OWN17: w_c for E_c
     const fL = b.faceL != null ? b.faceL : b.barrier, fR = b.faceR != null ? b.faceR : b.barrier;
-    const ll = llFaces(b, p.dl, xs, fL, fR);
+    // Q1 (engineer's answer 2026-11-26, #1730): an owner of CURB2 (RIDOT) judges Automatic by the mountable curb height (default MOUNT_H); others: the 12 in rule
+    const mH = CURB2[lf.o || b.owner] ? (nm(p.dl.mountH) > 0 ? nm(p.dl.mountH) : MOUNT_H) : null;
+    const ll = llFaces(b, mH ? { ...p.dl, mountH: mH } : { ...p.dl, mountH: null }, xs, fL, fR);
     const base = { Nb, spacings, OL: b.ohL, OR: b.ohR, rL: ll.L.r, rR: ll.R.r, fL, fR, ts: b.tsDeck, gap: nm(p.gap), simple: p.kg === 'simple' };
-    const DF = window.SBDLldf.compute({ ...base, haunchP: hP, n: MR.n, kg: p.kg, skewV: p.skewV, skewVx: p.skewVx, extMin: p.extMin, regions: b.regions, skews: b.skews,
+    const DF = window.SBDLldf.compute({ ...base, haunchP: hP, n: MR.n, kg: p.kg, skewV: p.skewV, skewVx: p.skewVx, extMin: p.extMin, regions: b.regions, skews: b.skews, ...(p.pedJ ? { pedJ: p.pedJ } : {}),   // PEDM: set by cases() only
       haunchNote: lf.h0 ? `Haunch taken as 0 in the composite properties (${lf.cite && lf.cite.h ? lf.cite.h : lf.o}; owner rule OWN8); its weight stays in DC1.` : '' });
     const regions = DF.regions, g0 = regions[0].geo, lo = p.loadOverrides && typeof p.loadOverrides === 'object' ? p.loadOverrides : null;
     if (lo) Object.entries(lo).forEach(([id, o]) => { if (!o || typeof o !== 'object') return; if (o.x != null && !(isFinite(o.x) && o.x >= 0 && o.x <= g0.Wdeck + 1e-9)) errors.push(`Override of "${id}": x must be from 0 to the deck width ${f2(g0.Wdeck)} ft.`); if (o.plf != null && !(isFinite(o.plf) && o.plf >= 0)) errors.push(`Override of "${id}": the line load must be zero or positive.`); });
@@ -279,7 +287,7 @@
     const fw = St().work('xs');
     ['L', 'R'].forEach(sd => { const q = ll[sd], f = sd === 'L' ? fL : fR;
       fw.add({ id: 'f' + sd, label: `${sd === 'L' ? 'Left' : 'Right'} deck edge to its traffic face (${b.edge && b.edge[sd] && b.edge[sd].fby ? b.edge[sd].fby : 'barrier face'})`, sym: `f_{${sd}}`, eq: '', sub: '', value: f, unit: 'ft', d: 3 });
-      fw.add({ id: 'r' + sd, label: `${sd === 'L' ? 'Left' : 'Right'} live-load traffic face from the deck edge: ${q.by}${q.mount ? `; the ${n2(q.t)} in sidewalk is mountable (${q.how ? q.how : '< 12 in'}) and ignored` : ''}`, sym: `r_{${sd}}`, eq: q.sw > 0 ? '\\max(f, \\text{sidewalk curb}, \\text{fence})' : 'f', sub: '', value: q.r, unit: 'ft', d: 3, ref: `${ED} Art. 3.6.1.1.1` }); });
+      fw.add({ id: 'r' + sd, label: `${sd === 'L' ? 'Left' : 'Right'} live-load traffic face from the deck edge: ${q.by}${q.mount ? `; the ${n2(q.t)} in sidewalk is mountable (${q.how ? q.how : '< 12 in'}) and ignored` : ''}${q.fenceIgn ? `; the railing or fence on the sidewalk (${n2(q.fenceIgn)} ft) is not a traffic face in case 1 of RIDOT BDM 3.4.1.1.1 (the whole roadway width; engineer's decision 2026-11-26)` : ''}`, sym: `r_{${sd}}`, eq: q.sw > 0 ? '\\max(f, \\text{sidewalk curb}, \\text{fence})' : 'f', sub: '', value: q.r, unit: 'ft', d: 3, ref: `${ED} Art. 3.6.1.1.1` }); });
     fw.add({ id: 'n', label: 'Modular ratio for K_g (E_c from w_c' + (b.wcE > 0 ? ' for E_c, owner rule' : '') + ')', sym: 'n', eq: '\\frac{E_{s}}{E_{c}}', sub: `\\frac{29{,}000}{${St().g(MR.Ec, 0)}}`, value: MR.n, unit: '', d: 3, ref: `${ED} Eq. 5.4.2.4-1, Art. 6.10.1.1.1b` });
     const R0 = { errors: [], b, MR, regions, dead: D, base, p, ll, lf, hP, lldf: DF, steps: fw.steps.concat(DF.steps) };
     return p.noCases ? R0 : cases(b0, p, R0) || R0;
@@ -295,15 +303,31 @@
      c1 (case 1's result: the same, without the pedestrian load), c2 (case 2's: those sidewalks not mountable, their curb faces bound the
      roadway, the pedestrian load as entered), NL, w, steps }. The analysis (engine/analysis.js) works the live load with each case and takes
      the more severe at every station and effect. A non-mountable sidewalk, any other owner: null (R0 without .cases, as before). */
-  const CURB2 = { RIDOT: 'RIDOT BDM 3.4.1.1.1' };
+  /* Engineer's answers 2026-11-26 (#1730; CLAUDE.md §4, decided by the engineer):
+     Q1: mountable sidewalks only; Automatic judges mountable by the project's mountable curb height xs.sidewalks.mountH (default MOUNT_H = 8 in;
+         llFaces dl.mountH), in place of the 12 in rule, for the owners of CURB2.
+     Q2: case 1 ignores a railing or fence on a mountable sidewalk (dl.nofence<side>): the whole roadway width. c1 is then not the base
+         result R0 (whose faces keep the fence: deck, drawings, .lga, the Loads tables, as before); the analysis takes case 1 from c1
+         (.c1fence true when a face differs).
+     Q3: case 2 counts the pedestrian load as a loaded lane for the multiple presence factor (AASHTO LRFD 10th Ed. Art. 3.6.1.1.2, C3.6.1.1.2;
+         RIDOT BDM 3.4.1.1.2): on every girder that takes w_PL > 0 in case 2, the lever rule and the rigid cross-section use m for N + 1
+         lanes (shared/lldf.js p.pedLane, engine/lldf.js pedJ); the approximate equations (m built in), fatigue and g_Δ (no pedestrian load) are
+         unchanged. Decision (pending engineer review): m is applied to LL+IM only, not to the pedestrian load (as before: γ_LL on PL); case 2
+         with the vehicles alone (m for N lanes, no PL) is not worked separately: case 1 carries the same trucks on a wider roadway, with
+         d_e no smaller, so it is not less than it. */
+  const CURB2 = { RIDOT: 'RIDOT BDM 3.4.1.1.1' }, MOUNT_H = 8;
   function cases(b0, p, R0) {
     const own = (R0.lf && R0.lf.o) || b0.owner, cite = CURB2[own]; if (!cite) return null;
     const sides = ['L', 'R'].filter(sd => { const q = R0.ll[sd], f = sd === 'L' ? R0.base.fL : R0.base.fR; return q.mount && q.sw > f + 1e-9; });
     if (!sides.length) return null;
-    const c1 = compute(b0, { ...p, noCases: true, dl: { ...p.dl, ped: 0 } }), dl2 = { ...p.dl };
-    sides.forEach(sd => { dl2['mount' + sd] = 'no'; dl2['mcase' + sd] = true; });
-    const c2 = compute(b0, { ...p, noCases: true, dl: dl2 });
+    const dl1 = { ...p.dl, ped: 0 }, dl2 = { ...p.dl };
+    sides.forEach(sd => { dl1['nofence' + sd] = true; dl2['mount' + sd] = 'no'; dl2['mcase' + sd] = true; });   // Q2: case 1 without the fence face
+    const c1 = compute(b0, { ...p, noCases: true, dl: dl1 });
+    let c2 = compute(b0, { ...p, noCases: true, dl: dl2 });
     if (!c1 || (c1.errors && c1.errors.length) || !c2 || (c2.errors && c2.errors.length)) return null;
+    const pedJ = c2.dead.pl.map(v => v > 1e-12);   // Q3: the girders that take the pedestrian load in case 2
+    if (pedJ.some(v => v)) { c2 = compute(b0, { ...p, noCases: true, dl: dl2, pedJ }); if (!c2 || (c2.errors && c2.errors.length)) return null; c2.pedJ = pedJ; }
+    const c1fence = ['L', 'R'].some(sd => Math.abs(c1.ll[sd].r - R0.ll[sd].r) > 1e-9);
     const w = St().work('xs.case'), sdN = sd => (sd === 'L' ? 'left' : 'right'), g1 = c1.regions[0].geo, g2 = c2.regions[0].geo;
     [[1, c1, g1], [2, c2, g2]].forEach(([k, C, G]) => {
       w.add({ id: `w${k}`, label: `Case ${k}: roadway width for the design lanes (${k === 1 ? `between the barriers: the mountable ${sides.map(sdN).join(' and ')} sidewalk${sides.length > 1 ? 's' : ''} part of the roadway` : `curb to curb: the ${sides.map(sdN).join(' and ')} sidewalk curb${sides.length > 1 ? 's' : ''} bound the roadway`})`,
@@ -312,8 +336,13 @@
         note: G.twoHalf ? 'A roadway 20 to 24 ft wide: two design lanes, each half the roadway width (3.6.1.1.1).' : '' });
       w.add({ id: `PL${k}`, label: `Case ${k}: pedestrian load`, sym: `q_{PL,${k}}`, eq: '', sub: '', value: k === 1 ? 0 : nm(p.dl.ped) || 0, unit: 'psf', d: 0, ref: `${cite}; ${ED} Art. 3.6.1.6`,
         note: k === 1 ? 'Ignored in case 1 (RIDOT BDM 3.4.1.1.1); vehicles can mount the sidewalk, so the pedestrian load does not act with them (AASHTO 3.6.1.6).' : 'As entered, on the sidewalks (RIDOT BDM 3.4.1.1.1, 3.4.1.6; AASHTO 3.6.1.6).' }); });
+    if (c1fence) w.add({ id: 'fence1', label: 'Case 1: a railing or fence on the mountable sidewalk is not a traffic face (the whole roadway width, RIDOT BDM 3.4.1.1.1; engineer\'s decision 2026-11-26)', sym: 'r_{L},\ r_{R}', eq: '',
+      sub: `\text{base (fence): } ${n2(R0.ll.L.r)},\ ${n2(R0.ll.R.r)};\ \text{case 1: } ${n2(c1.ll.L.r)},\ ${n2(c1.ll.R.r)}`, value: g1.roadway, unit: 'ft', d: 2, ref: `${cite}`,
+      note: 'Case 1 has its own faces, geometry and distribution factors (steps c1.*). The fence weight stays in the dead loads. The Loads tables, the deck, the drawings and the .lga export keep the faces with the fence.' });
+    if (c2.pedJ) w.add({ id: 'pedm', label: `Case 2: the pedestrian load counts as one loaded lane for the multiple presence factor on ${c2.pedJ.map((v, j) => (v ? `G${j + 1}` : null)).filter(Boolean).join(', ')} (the girders that take w_PL)`, sym: 'm', eq: 'm(N + 1)', sub: '', value: c2.pedJ.filter(v => v).length, unit: 'girders', d: 0,
+      ref: `RIDOT BDM 3.4.1.1.2; ${ED} Art. 3.6.1.1.2, C3.6.1.1.2`, note: 'In the lever rule and the rigid cross-section, where m is applied explicitly (steps c2.df.*: "and the pedestrian load as one more loaded lane"). The approximate equations already contain m and are not changed; fatigue (one truck) and the deflection factor (no pedestrian load) are not changed. m is applied to LL+IM; the pedestrian load keeps γ_LL without m (decision pending engineer review).' });
     c1.case = 1; c2.case = 2;
-    R0.cases = { cite, sides, c1, c2, NL: [g1.NL, g2.NL], w: [g1.roadway, g2.roadway], steps: w.steps };
+    R0.cases = { cite, sides, c1, c2, c1fence, NL: [g1.NL, g2.NL], w: [g1.roadway, g2.roadway], steps: w.steps };
     return R0;
   }
 
@@ -377,7 +406,8 @@
       spans: spans.slice(), cont, skews: (xs.skews || []).slice(), regions, owner: lf.o, lf };
     const p = { gap: xs.lldf && xs.lldf.gap != null ? xs.lldf.gap : 4, kg: (xs.lldf && xs.lldf.kg) || 'max', skewV: (xs.lldf && xs.lldf.skewV) || 'all', skewVx: xs.lldf && xs.lldf.skewVx === 'taper' ? 'taper' : 'whole', extMin: xs.lldf && xs.lldf.extMin ? 'yes' : 'no', radius: 0,
       dl: { method: xs.dlMethod || 'massdot', ped: +sw.ped || 0, swL: +swL.w || 0, swThkL: swL.t != null ? swL.t : 8, swR: +swR.w || 0, swThkR: swR.t != null ? swR.t : 8,
-        ...(swL.mount === 'yes' || swL.mount === 'no' ? { mountL: swL.mount } : {}), ...(swR.mount === 'yes' || swR.mount === 'no' ? { mountR: swR.mount } : {}),   // RCURB: absent / 'auto': the 12 in rule
+        ...(swL.mount === 'yes' || swL.mount === 'no' ? { mountL: swL.mount } : {}), ...(swR.mount === 'yes' || swR.mount === 'no' ? { mountR: swR.mount } : {}),   // RCURB: absent / 'auto': the 12 in rule (RIDOT: the mountable curb height)
+        ...(sw.mountH != null && sw.mountH !== '' ? { mountH: +sw.mountH } : {}),   // Q1 (2026-11-26): xs.sidewalks.mountH (in), absent = MOUNT_H (8 in); read for RIDOT only
         medW: +med.w || 0, medThk: med.t != null ? med.t : 8, medJoint: med.joint ? 'yes' : 'no', wcA: xs.wcA, fenceL: swL.fence, fenceXL: swL.fenceX, fenceR: swR.fence, fenceXR: swR.fenceX,
         wsMode: ws.mode === 'thk' ? 'thk' : 'psf', wsThk: ws.thk, wsGam: ws.gam },
       extra: (xs.extra || []).map(r => ({ ...r })), ovl: (xs.overlays || []).map(r => ({ ...r })), edges: E, loadOverrides: xs.overrides || null, beamClass: xs.beamClass || null };
@@ -390,9 +420,10 @@
   function caseSteps(R, js) {
     const C = R && R.cases; if (!C) return [];
     const c2 = C.c2, pre = q => ({ ...q, id: 'c2.' + q.id }), out = C.steps.slice();
+    if (C.c1fence) { const c1 = C.c1, p1 = q => ({ ...q, id: 'c1.' + q.id }); out.push(...c1.steps.map(p1)); c1.regions.forEach(rg => { out.push(...rg.steps.map(p1)); (js || []).forEach(j => { if (rg.members[j]) out.push(...rg.members[j].steps.map(p1)); }); }); }   // Q2: case 1's own faces and factors
     out.push(...c2.steps.map(pre)); c2.regions.forEach(rg => { out.push(...rg.steps.map(pre)); (js || []).forEach(j => { if (rg.members[j]) out.push(...rg.members[j].steps.map(pre)); }); });
     const pl = (c2.dead.steps || []).filter(q => (js || []).some(j => new RegExp(`\\.G${j + 1}\\.PL$`).test(q.id))); out.push(...pl.map(pre));
     return out;
   }
-  window.SBDLoads = { STEEL_PLF, CATS, DIST, CLS, METHODS, CURB2, parseDim, numRows, xsIn, edgeIn, bridgeEff, edgeLoads, llFaces, dead, steelWeight, compute, cases, caseSteps, girder, segDC1, segSteps, fromModel };
+  window.SBDLoads = { STEEL_PLF, CATS, DIST, CLS, METHODS, CURB2, MOUNT_H, parseDim, numRows, xsIn, edgeIn, bridgeEff, edgeLoads, llFaces, dead, steelWeight, compute, cases, caseSteps, girder, segDC1, segSteps, fromModel };
 })();

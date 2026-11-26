@@ -55,7 +55,18 @@ test('hand check: lanes, faces and factors of the two cases (RIDOT, 8 in mountab
   close(s1[0].gM, 1.2 * 0.5 * (2.5 + S - 3.5) / S, 'case 1 g_M G1 (lever rule, one lane)'); close(s1[0].gM, 0.44571, 'case 1 g_M G1', 1e-4);
   // case 2: rigid cross-section, two lanes (trucks 2 ft from the curb: e = 8.5 and −3.5 ft), Σx² = 2(1.944² + 5.833² + 9.722² + 13.611² + 17.5²)
   let sx2 = 0; for (let k = 0; k < 10; k++) { const x = 2.5 + k * S - 20; sx2 += x * x; }
-  close(s2[0].gM, 2 / 10 + 17.5 * (8.5 - 3.5) / sx2, 'case 2 g_M G1 (rigid, two lanes)'); close(s2[0].gM, 0.27013, 'case 2 g_M G1', 1e-4);
+  // Engineer's answer 2026-11-26 (Q3): in case 2 the pedestrian load counts as a loaded lane for m on G1 and G2 (they take w_PL), so the rigid
+  // cross-section takes m for n + 1 lanes: 2 lanes 0.85(0.27013) = 0.22961 (before: 1.00(0.27013) = 0.27013, which governed). The e-factor
+  // (m built into the equation) now governs: d_e = 2.5 − 6.5 = −4.0 → −1.0 ft (4.6.2.2.2d), e = 0.77 − 1.0/9.1 = 0.66011, × g_M,2,int 0.39028 = 0.25763.
+  const R2 = 2 / 10 + 17.5 * (8.5 - 3.5) / sx2; close(R2, 0.27013, 'case 2 rigid R, two lanes', 1e-4);
+  const rg2 = s2[0].rig.trials.find(t => t.n === 2); close(rg2.m, 0.85, 'm, 2 lanes + the pedestrian lane'); close(rg2.g, 0.85 * R2, 'case 2 rigid g, two lanes'); assert.equal(rg2.mLanes, 3);
+  close(s2[0].rig.trials[0].m, 1.0, 'm, 1 lane + the pedestrian lane'); close(s2[0].eM, 0.77 - 1.0 / 9.1, 'e'); close(s2[0].mE, (0.77 - 1.0 / 9.1) * s2[1].emp.mom2, 'e g_int');
+  close(s2[0].gM, s2[0].mE, 'case 2 g_M G1 (e-factor governs)'); close(s2[0].gM, 0.25763, 'case 2 g_M G1', 1e-4);
+  // fatigue: one truck, no pedestrian load: unchanged by Q3 (max(lever 1 lane, rigid 1 lane with m 1.2)/1.2 = R_1)
+  close(s2[0].fatM, s2[0].rig.trials[0].R, 'case 2 g_fat G1 (one lane, no pedestrian lane)', 1e-12); close(s2[0].fatM, 0.21922, 'case 2 g_fat G1', 1e-4);
+  assert.deepEqual(J(C.c2.pedJ), [true, true, false, false, false, false, false, false, true, true]);
+  assert.ok(C.steps.find(q => q.id === 'xs.case.pedm'), 'the pedestrian-lane step');
+  assert.match(s2[0].steps.find(q => q.id === 'df.s0.G1.rig2.g').label, /pedestrian load as one more loaded lane \(m for 3 lanes\)/);
   // interior girders: the equations do not depend on N_L (two or more lanes): the same g in both cases
   for (let j = 1; j < 9; j++) close(s2[j].gM, s1[j].gM, `interior g_M G${j + 1}`, 1e-12);
   // deflection: g_Δ = m N_L / N_b: 0.85(3)/10 = 0.255 (case 1), 1.00(2)/10 = 0.200 (case 2)
@@ -69,7 +80,8 @@ test('hand check: governing M_u of the exterior line G1 (case 1 governs: no pede
   // exterior G1: at x = 30 ft the per-lane HL-93 moment 1,226.96 kip-ft; case 1: 1.2(0.4457)(1226.96) = 656.25; case 2: 1.2(0.2701)(1226.96) + M_PL 89.84 = 487.57
   const ix = iMax(Rx); close(Rx.x[ix], 30, 'x'); close(Rx.ll.perLane.Mmax[ix], 1226.96, 'M_HL93 per lane', 1e-5);
   assert.equal(Rx.cases.pick.Mpos[ix], 1); close(Rx.ll.Mpos[ix], 546.874, 'M_LL+IM', 1e-5); assert.equal(Rx.pl.Mpos[ix], 0, 'no pedestrian moment where case 1 governs');
-  const C = Rx.cases, v2 = 1.2 * C.c[1].ll.Mpos[ix] + C.p[1].Mpos[ix]; close(v2, 1.2 * 331.4386 + 89.8393, 'case 2', 1e-6); assert.ok(1.2 * Rx.ll.Mpos[ix] > v2);
+  // case 2 after Q3 (2026-11-26): 1.2(0.25763)(1226.96) + 89.84 = 469.15 (before: 1.2(0.27013)(1226.96) + 89.84 = 487.57); case 1 governs before and after
+  const C = Rx.cases, v2 = 1.2 * C.c[1].ll.Mpos[ix] + C.p[1].Mpos[ix]; close(C.c[1].ll.Mpos[ix], C.dfs[1].spans[0].gM * 1226.96, 'case 2 M_LL+IM', 1e-5); close(v2, 469.154, 'case 2', 1e-5); assert.ok(1.2 * Rx.ll.Mpos[ix] > v2);
   const MuX = Mu(Rx, ix, 1.2); close(MuX, 1.25 * (268.103 + 169.650) + 1.50 * 26.325 + 1.75 * 1.2 * 546.874, 'M_u G1 after', 1e-5); close(MuX, 1735.13, 'M_u G1 after', 1e-5);
   // before (main): case 1's lanes with case 2's pedestrian load: + 1.75(89.84) = 1,892.35
   close(MuX + 1.75 * 89.8393, 1892.35, 'M_u G1 before', 1e-5);
@@ -79,7 +91,7 @@ test('hand check: governing M_u of the exterior line G1 (case 1 governs: no pede
   // fatigue and deflection: case 1 (more lanes: g_Δ 0.255 > 0.200; the exterior fatigue g 0.3714 > 0.2192)
   assert.equal(Rx.lld[0].cs, 1); close(Rx.lld[0].gD, 0.255, 'g_Δ used'); assert.ok(Rx.cases.n2['fat.Mpos'] === 0);
   // the worked steps name both cases and the one taken
-  const st = Rx.steps.find(s => s.id === 'an.case.M.s1'); assert.ok(st); assert.match(st.label, /case 1 governs/); assert.match(st.sub, /^\\max\(1\.20\(0\.4457\)\(1227\.0\),\\ 1\.20\(0\.2701\)\(1227\.0\) \+ \(89\.8\)\)$/);
+  const st = Rx.steps.find(s => s.id === 'an.case.M.s1'); assert.ok(st); assert.match(st.label, /case 1 governs/); assert.match(st.sub, /^\\max\(1\.20\(0\.4457\)\(1227\.0\),\\ 1\.20\(0\.2576\)\(1227\.0\) \+ \(89\.8\)\)$/);
   ['an.case.w1', 'an.case.NL1', 'an.case.w2', 'an.case.NL2', 'an.case.PL2', 'an.case.g'].forEach(id => assert.ok(Rx.steps.find(s => s.id === id), id));
 });
 
@@ -120,4 +132,47 @@ test('the entered flag: "yes" makes a 12 in sidewalk mountable (two cases); "no"
   const Rn = loads(proj('RIDOT', { mount: 'no' })); assert.equal(Rn.cases, undefined); close(Rn.ll.L.r, 6.5, 'face'); assert.match(Rn.ll.L.by, /not mountable: entered/);
   // AASHTO with "no": the lanes curb to curb (2), the pedestrian load with them (no RIDOT cases)
   const Ra = loads(proj('AASHTO', { mount: 'no' })); assert.equal(Ra.regions[0].geo.NL, 2); assert.ok(Ra.dead.pl[0] > 0);
+});
+
+// ---- Engineer's answers 2026-11-26 (#1730 Q1, Q2, Q3) ----
+test('Q1: RIDOT judges Automatic by the mountable curb height xs.sidewalks.mountH (default 8 in); other owners keep the 12 in rule', () => {
+  assert.equal(LD.MOUNT_H, 8);
+  close(loads(proj('RIDOT')).ll.L.r, 1.5, '8 in: mountable (≤ 8 in)'); assert.ok(loads(proj('RIDOT')).cases);
+  const R9 = loads(proj('RIDOT', { t: 9 })); assert.equal(R9.cases, undefined, '9 in: not mountable, one case'); close(R9.ll.L.r, 6.5, '9 in: the curb face');
+  assert.match(R9.ll.L.by, /9\.00 in > 8\.00 in, the mountable curb height/);
+  const P10 = proj('RIDOT', { t: 9 }); P10.xs.sidewalks.mountH = 10; const R10 = loads(P10); assert.ok(R10.cases, '9 in with a 10 in setting: mountable'); close(R10.ll.L.r, 1.5, 'face');
+  // AASHTO, MassDOT, CTDOT: the 12 in rule, the setting not read
+  for (const ow of ['AASHTO', 'MassDOT', 'CTDOT']) { const Pa = proj(ow, { t: 9 }), Pb = proj(ow, { t: 9 }); Pb.xs.sidewalks.mountH = 4;
+    close(loads(Pa).ll.L.r, 1.5, `${ow} 9 in: mountable (< 12 in)`); for (const gi of [0, 1]) assert.deepEqual(llOf(an(Pa, gi)), llOf(an(Pb, gi)), `${ow}: the setting not read`); }
+  // 'yes' / 'no' still as entered
+  close(loads(proj('RIDOT', { t: 9, mount: 'yes' })).ll.L.r, 1.5, '9 in, yes');
+  // validation; saved data: absent stays absent, an entered value round-trips
+  const Pe = proj('RIDOT'); Pe.xs.sidewalks.mountH = -1; assert.ok(loads(Pe).errors.some(e => /^Mountable sidewalk curb height must be positive/.test(e)));
+  const r0 = M.importJSON(M.exportJSON(proj('RIDOT'))); assert.ok(r0.ok); assert.equal('mountH' in r0.project.xs.sidewalks, false);
+  const r1 = M.importJSON(M.exportJSON(P10)); assert.ok(r1.ok); assert.equal(r1.project.xs.sidewalks.mountH, 10);
+});
+
+test('Q2: case 1 ignores a railing or fence on the mountable sidewalk (the whole roadway); the base faces and the fence weight stay', () => {
+  const P = proj('RIDOT'); ['L', 'R'].forEach(sd => { P.xs.sidewalks[sd].fence = 0.05; P.xs.sidewalks[sd].fenceX = 5.0; });
+  const RL = loads(P), C = RL.cases; assert.ok(C);
+  close(RL.ll.L.r, 5.0, 'base face: the fence (as before)'); close(C.c1.ll.L.r, 1.5, 'case 1 face: the barrier'); close(C.c1.ll.R.r, 1.5, 'case 1 face R'); assert.equal(C.c1fence, true);
+  assert.deepEqual(J(C.NL), [3, 2]); close(C.w[0], 37, 'case 1 roadway (before: 40 − 5 − 5 = 30 ft, N_L 2)'); close(RL.regions[0].geo.roadway, 30, 'base roadway');
+  assert.deepEqual(J(C.c1.dead.dc2), J(RL.dead.dc2), 'the fence weight in DC2, unchanged');
+  assert.ok(C.steps.find(q => q.id === 'xs.case.fence1')); assert.ok(LD.caseSteps(RL, [0]).some(q => q.id === 'c1.df.s0.G1.gM'), 'case 1 factors worked (c1.*)');
+  // the analysis takes case 1's factors from case 1's own faces
+  const R = an(P, 1); close(R.cases.dfs[0].spans[0].gM, C.c1.regions[0].members[0].gM, 'case 1 g_M used', 1e-12); close(R.cases.dfs[0].spans[0].gM, 0.44571, 'case 1 g_M G1', 1e-4);
+  // without a fence case 1 is the base result: c1fence false
+  assert.equal(loads(proj('RIDOT')).cases.c1fence, false);
+});
+
+test('Q3: the pedestrian lane is used only in case 2, on the girders that take w_PL, and only where m is explicit; other owners unchanged', () => {
+  const C = loads(proj('RIDOT')).cases;
+  C.c1.regions.forEach(rg => rg.members.forEach(m => { if (m.rig) assert.ok(m.rig.trials.every(t => !t.mLanes)); assert.ok(!m.pedLane); }));
+  const s2 = C.c2.regions[0].members; assert.ok(s2[0].pedLane && s2[1].pedLane && s2[9].pedLane); assert.ok(!s2[4].pedLane);
+  // interior G2 (equations, m built in): unchanged by the pedestrian lane
+  close(s2[1].gM, C.c1.regions[0].members[1].gM, 'G2 g_M', 1e-12);
+  // deflection factor: no pedestrian load, m for N_L lanes as before
+  close(C.c2.regions[0].gDef, 0.200, 'g_Δ case 2');
+  // AASHTO with a non-mountable sidewalk and the pedestrian load: no RIDOT cases, no pedestrian lane (as before)
+  const Ra = loads(proj('AASHTO', { mount: 'no' })); Ra.regions.forEach(rg => rg.members.forEach(m => { assert.ok(!m.pedLane); if (m.rig) assert.ok(m.rig.trials.every(t => !t.mLanes)); }));
 });

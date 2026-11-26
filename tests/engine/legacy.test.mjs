@@ -80,8 +80,12 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
       // LL+IM includes the pedestrian load in both (GirderDetail's hand-off: pedestrianInLL; this app: SBDAnalysis.llPL, sb-ped-owner PR), and M_PL alone
       const A = RT.fromAnalysis(P, gi); assert.ok(!A.err, A.err); const S = A.pl.stations, Sg = pl.stations;
       assert.equal(!!A.pl.pedestrianInLL, !!(pl.pedestrianInLL && Sg.some(s => s.M_PLpos || s.M_PLneg)), `${where} pedestrianInLL`);
+      // xsA RIDOT (mountable sidewalks): RIDOT BDM 3.4.1.1.1's two live-load cases (sb-ridot-curb PR #1730 and the engineer's answers of 2026-11-26: the
+      // mountable curb height 8 in, the fence ignored in case 1, the pedestrian load a loaded lane for m) depart from GirderDetail, which took the lanes
+      // between the fences with the pedestrian load: its live-load quantities are listed apart, not bound (the case check: tests/engine/sb-ridot-curb.test.mjs)
+      const dep = pr === 'xsA' && ow === 'RIDOT', dsx = dep ? ' [xsA RIDOT, two cases]' : ''; if (dep) assert.ok(A.R && A.R.cases, `${where}: the two cases`);
       [...QA, ...(A.pl.pedestrianInLL ? [['M_PLpos', 'M_PLpos'], ['M_PLneg', 'M_PLneg']] : [])].forEach(([k, kg]) => { const val = s => +s[kg] || 0;
-        const ref = Sg.map(val), ours = S.map(s => s[k] || 0), sc = Math.max(...ref.map(Math.abs));
+        const ref = Sg.map(val), ours = S.map(s => s[k] || 0), sc = Math.max(...ref.map(Math.abs)); k = /^M_(LL|FAT|PL)/.test(k) ? k + dsx : k;
         note(k + ' max', ext(ours, Math.max), ext(ref, Math.max), where, sc); note(k + ' min', ext(ours, Math.min), ext(ref, Math.min), where, sc); });
       // negative flexure per span (GS7/GS9 compression, GS8 tension), as the Flexure tab on a file, on this app's analysis
       const nf = gd.checks && gd.checks.negFlex; if (!nf) continue;
@@ -91,7 +95,7 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
       const lf = U.SBDOwners.loadFactors(ow, P.ownerRules.eta, P.xs.nb);
       const F = FX.fromPayload(A.pl, { fl: flS.fl, owner: ow, rebar: P.deck.rebar, braces: frB.braces, lenOf: frB.lenOf, lf }), G = FX.girder(F.locs, F.prj, { supports: F.supports });
       // xsA (sidewalks with a pedestrian load) listed apart
-      const sfx = pr === 'xsA' ? ' [xsA, pedestrian]' : '';
+      const sfx = dep ? ' [xsA RIDOT, two cases]' : pr === 'xsA' ? ' [xsA, pedestrian]' : '';
       for (const sp of nf.spans) { const a = sup[sp.span - 1], b = sup[sp.span];
         // A3 (2026-11-19): a row next to a support takes the unbraced segment on its own side; GirderDetail's row 0.01 ft inside the span took the
         // governing of both segments, i.e. the one this app checks at the row 0.01 ft across the support: those rows (within 0.25 ft) are included
@@ -112,6 +116,7 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
 // - M_DC2, M_DW ≤ 0.05 %: round-off of the hand-off (0.001 kip-ft) and the station grids (largest 0.006 %).
 // - LL+IM (pedestrian load included on both sides since the sb-ped-owner PR), M_PL and fatigue moments ≤ 0.01 %.
 // - negative flexure ≤ 0.5 %: the M_DC1 above through f_bu, and C_b / L_b from this app's framing (largest 0.32 %, builtin CTDOT G2 span 1).
+// - xsA RIDOT: listed apart, not bound (the RIDOT two live-load cases, see the test).
 // - xsA (sidewalks, 75 psf pedestrian load): ≤ 0.5 %, as the others (sb-ped-owner PR: the pedestrian load in the analysis and the owner η, m in
 //   engine/flexure.js; before: up to 10.4 %, xsA RIDOT G1, 1.040 vs 1.160).
 const BOUNDS = [['M_DC1 max', 0.01], ['M_DC1 min', 0.01], ...['M_DC2', 'M_DW'].flatMap(k => [[k + ' max', 5e-4], [k + ' min', 5e-4]]),

@@ -97,7 +97,8 @@
       const { b, p } = LD.fromModel(P, { girder: gi }), R = LD.compute(b, p);
       if (R.errors && R.errors.length) return { errors: R.errors };
       const j = lineOf(P, P.girders[gi]), c2 = R.cases && R.cases.c2 ? { R: R.cases.c2, G: LD.girder(R.cases.c2, j) } : null;   // RCURB: RIDOT BDM 3.4.1.1.1 case 2 (engine/loads.js cases)
-      return { j, G: LD.girder(R, j), R, allow: b.allow, lf: R.lf, ...(c2 ? { c2 } : {}) };
+      const c1 = R.cases && R.cases.c1fence ? { R: R.cases.c1 } : null;   // Q2 (2026-11-26): case 1's own faces (the fence ignored): its distribution factors
+      return { j, G: LD.girder(R, j), R, allow: b.allow, lf: R.lf, ...(c2 ? { c2 } : {}), ...(c1 ? { c1 } : {}) };
     } catch (e) { return { errors: [e.message] }; }
   }
 
@@ -319,7 +320,7 @@
       const Wr = window.SBDRolled ? window.SBDRolled.plf(s) : null;   // ROLL: the tabulated weight of a rolled segment (lb/ft); a plate segment has no Wr / shape field
       return { x0: s.x0, x1: s.x1, p, As: st.A, Is: st.I, I3u: c3 ? c3.I : st.I, Inu: cn ? cn.I : st.I, Icr: comp ? cr.I : st.I, c3, cn, ...(Wr != null ? { Wr, shape: window.SBDRolled.label(s) } : {}) }; });
 
-    const LD = loadsOf(P, g, mod), DF = dfOf(P, g, ns, mod), warnings = [];
+    const LD = loadsOf(P, g, mod), DF = dfOf(P, g, ns, mod && mod.c1 ? { ...mod, R: mod.c1.R } : mod), warnings = [];   // Q2: case 1's factors from its own faces (mod.c1, the fence ignored); else the module's, as before
     /* RCURB (sb-ridot-curb PR, 2026-11-25): RIDOT BDM 3.4.1.1.1, a mountable sidewalk: two live-load cases, the more severe governs (engine/loads.js
        cases). The loads module's own result (mod, DF, LD) has case 1's lanes and factors (the roadway between the barriers, the mountable
        sidewalk part of it); case 1 takes no pedestrian load (PL1 = 0). mod.c2 is case 2: the lanes on the curb-to-curb roadway, the
