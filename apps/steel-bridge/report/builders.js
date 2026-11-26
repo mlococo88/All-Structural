@@ -679,7 +679,7 @@
   function rt(B, X) {
     const R = B.rating, s = R.sum, all = X.detail === 'all', subs = [], rk = q => 'rt@' + R.rows.indexOf(q), rfStep = q => (q.steps.find(t => /(^|\.)inv$/.test(t.id)) || q.steps[q.steps.length - 1] || {}).id;
     let nCap = 0; const capOf = q => { const r = R.cap.get(q); if (!r) return { sc: null, item: null }; let sc = X.have.get(r), item = null;
-      if (!sc) { sc = 'rtcap@' + (nCap++); X.have.set(r, sc); item = gsteps(q.kind === 'shear' ? 'SBDShearUI:loc' : 'SBDFlexureUI:x', sc, (q.kind === 'shear' ? window.SBDShearUI.stepsOf(R.shear, 'loc', r) : window.SBDFlexureUI.stepsOf(R.flex, r)) || [], { lazy: true, title: `Capacity: ${q.kind === 'shear' ? 'shear' : 'flexure'} at ${r.name}` }); }
+      if (!sc) { sc = 'rtcap@' + (nCap++); X.have.set(r, sc); item = gsteps(q.kind === 'shear' ? 'SBDShearUI:loc' : 'SBDFlexureUI:x', sc, (q.kind === 'shear' ? window.SBDShearUI.stepsOf(R.shearRt || R.shear, 'loc', r) : window.SBDFlexureUI.stepsOf(R.flexRt || R.flex, r)) || [], { lazy: true, title: `Capacity: ${q.kind === 'shear' ? 'shear' : 'flexure'} at ${r.name}` }); }
       return { sc, item }; };
     const gi = s.gov.inv, go = s.gov.opr, rf = v => !isFinite(v) ? '—' : f(v, 2), rcls = v => !isFinite(v) ? '' : v < 1 - 1e-9 ? 'ng' : v < 1.1 ? 'hi' : 'ok';
     if (gi) X.gov.push({ mod: 'Rating', grp: 'Rating: Inventory RF', check: `Inventory RF, ${tt(gi.title)}`, loc: gi.name, rf: gi.inv, key: K(rk(gi), rfStep(gi)) });

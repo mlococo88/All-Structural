@@ -176,3 +176,13 @@ test('Q3: the pedestrian lane is used only in case 2, on the girders that take w
   // AASHTO with a non-mountable sidewalk and the pedestrian load: no RIDOT cases, no pedestrian lane (as before)
   const Ra = loads(proj('AASHTO', { mount: 'no' })); Ra.regions.forEach(rg => rg.members.forEach(m => { assert.ok(!m.pedLane); if (m.rig) assert.ok(m.rig.trials.every(t => !t.mLanes)); }));
 });
+
+test('Q6 (engineer\'s answer 2026-11-26): the load rating takes case 1\'s factors at every station, no pedestrian load (SBDAnalysis.rateView)', () => {
+  for (const gi of [0, 1]) { const R = an(proj('RIDOT'), gi), V = AN.rateView(R), c1 = R.cases.c[0];
+    assert.equal(V.ll, c1.ll); assert.equal(V.fat, c1.fat); assert.equal(V.llR, c1.llR); assert.equal(V.pl, null); assert.equal(V.rateCase.case, 1);
+    assert.equal(V.st, R.st, 'dead loads as the design'); assert.equal(R.ll === c1.ll, false, 'the design keeps the envelope');
+    // where case 2 governs the design (G2 at x = 26 ft: M_PL 56.41), the rating has case 1's LL+IM and no pedestrian load
+    if (gi === 0) { const i = iMax(R); assert.equal(R.cases.pick.Mpos[i], 2); close(V.ll.Mpos[i], c1.ll.Mpos[i], 'case 1 M_LL+IM'); assert.ok(R.pl.Mpos[i] > 50); } }
+  // other owners, no two cases: the analysis itself
+  const Ra = an(proj('AASHTO'), 1); assert.equal(AN.rateView(Ra), Ra);
+});

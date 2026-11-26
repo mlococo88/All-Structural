@@ -75,9 +75,12 @@
     const P = ctx.P, M = window.SBDModel, OW = window.SBDOwners, FX = window.SBDFlexure, SH = window.SBDShear, RT = window.SBDRating, SB = window.SBDStiffeners, g = ctx.g || 0;
     const rt = ensure(P), src = ctx.src || srcOf(P);
     if (ctx.pl === undefined && src === 'custom') return buildCustom(ctx);
-    let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null, AR = null;
+    let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null, AR = null, plRt = null, ARt = null;   // plRt, ARt: RCURB Q6, the rating's demands (null: the design's)
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
-    if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R; }
+    if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R;
+      // RCURB Q6 (engineer's answer 2026-11-26): RIDOT two live-load cases: the rating takes case 1's factors, no pedestrian load (SBDAnalysis.rateView)
+      // The design results the Report and Summary take from this build (out.flex, out.shear) keep the design envelope (pl, AR); the rating rows use plRt, ARt.
+      const RV = window.SBDAnalysis.rateView ? window.SBDAnalysis.rateView(AR) : AR; if (RV !== AR) { ARt = RV; plRt = fromAnalysis(P, g, { R: RV }).pl; } }
     const fromAn = !!AR, own = fromAn ? (P.ownerRules || {}).owner || 'AASHTO' : (pl.ownerRules || {}).owner || 'AASHTO';
     const plR = RT.noDoublePL(pl), sup = (pl.member || {}).supports || [];
     // flexure: the Flexure module itself (ui/flexure.js build; SB2-W1, SB2-W2): its locations (every station), brace points (Framing &amp; bracing tab)
@@ -88,20 +91,23 @@
     // shear: the Shear tab's stations (V_n with the stiffener layout), demands by direction
     const SHR = window.SBDShearUI.build({ P, g, pl: plR });
     if (SHR.err) return { err: 'Shear: ' + SHR.err };
-    const cases = RT.shearCases(pl), ph = RT.phi(rt.phiC, rt.phiS), G = RT.factors(), opt = { G, phi: ph, mat: F.prj.mat };
+    // RCURB Q6: with the RIDOT two cases the rating rows take case 1's demands (rateView): their own Flexure and Shear builds on plRt
+    const GrR = plRt ? window.SBDFlexureUI.build({ P, g, src: 'analysis', an: { pl: plRt, R: ARt }, method: 'auto' }) : Gr; if (GrR.err) return { err: 'Flexure (rating, case 1): ' + GrR.err };
+    const SHRr = plRt ? window.SBDShearUI.build({ P, g, pl: RT.noDoublePL(plRt) }) : SHR; if (SHRr.err) return { err: 'Shear (rating, case 1): ' + SHRr.err };
+    const cases = RT.shearCases(plRt || pl), ph = RT.phi(rt.phiC, rt.phiS), G = RT.factors(), opt = { G, phi: ph, mat: F.prj.mat };
     const rows = [], cap = new Map();   // cap: rating row -> the capacity location (its worked steps)
-    Gr.rows.forEach(r => { RT.flexure(r, opt).forEach(q => { cap.set(q, r); rows.push(q); }); RT.service(r, opt).forEach(q => { cap.set(q, r); rows.push(q); }); });
-    SHR.stations.forEach(r => { const q = RT.shear(r, { ...opt, cases: cases(r.x) }); cap.set(q, r); rows.push(q); });
+    GrR.rows.forEach(r => { RT.flexure(r, opt).forEach(q => { cap.set(q, r); rows.push(q); }); RT.service(r, opt).forEach(q => { cap.set(q, r); rows.push(q); }); });
+    SHRr.stations.forEach(r => { const q = RT.shear(r, { ...opt, cases: cases(r.x) }); cap.set(q, r); rows.push(q); });
     // fatigue (owner target only, GS20): 1/ratio of GS17 at every flexure location
     const T = RT.target(own);
     if (T && T.fat && window.SBDFatigue && P.fatigue) { const FA = window.SBDFatigue, set = FA.settings(P.fatigue), spans = sup.slice(1).map((x, k) => x - sup[k]), B = FA.supports({ ok: true, spans, cont: sup.length > 2 });
-      if (set.ok) Gr.rows.forEach(r => { const o = FA.flange(r, { set, B, catT: P.fatigue.catT, catB: P.fatigue.catB }); (o.items || []).forEach(it => { if (it.r > 0 && isFinite(it.r)) { const q = RT.fatigue(it, r); cap.set(q, r); rows.push(q); } }); }); }
+      if (set.ok) GrR.rows.forEach(r => { const o = FA.flange(r, { set, B, catT: P.fatigue.catT, catB: P.fatigue.catB }); (o.items || []).forEach(it => { if (it.r > 0 && isFinite(it.r)) { const q = RT.fatigue(it, r); cap.set(q, r); rows.push(q); } }); }); }
     const sum = RT.girder(rows, { owner: own });
     const bfl = `L<sub>b</sub>, C<sub>b</sub> ${Gr.frB ? `from the Framing &amp; bracing tab (G${Gr.frB.line + 1}'s bearings and cross-frames)` : fromAn ? "from the stiffener layout's cross-frames (no framing)" : "from the file's cross-frame spacing (not this project's bridge, or no framing)"}; f<sub>ℓ</sub> = ${fmt(Gr.fl, 2)} ksi ${Gr.D && Gr.D.flSrc === 'entered' ? 'as entered on the Flexure tab' : `from skew (C6.10.1; largest support skew ${fmt(Gr.flS.skMax, 1)}°)`}, as on the <a href="#" data-gotab="flex">Flexure tab</a>`;
     const what = fromAn ? `This app's analysis of ${esc(P.girders[g].label || P.girders[g].id)}: ${pl.stations.length} stations, ${sup.length - 1} span(s); the project's plates, deck, materials and stiffener layout; ${bfl}.`
       : `${esc(S.plName || 'hand-off')}: ${pl.stations.length} stations, ${sup.length - 1} span(s), G${esc((pl.girderDetail || {}).girder || '')}; plates, deck and skews from the file, the project's stiffener layout; ${bfl}.${pl.pedestrianInLL === true ? ' The pedestrian load is in its LL+IM (pedestrianInLL): not added again.' : ''}`;
-    const out = { rows, sum, cap, ph, G, own, T, what, flex: Gr, shear: SHR, pl };
-    if (ctx.veh && vehOn(P)) { const V = fromAn ? buildVeh(P, g, AR, ph, own) : { list: [], err: [], only: true }; if (V) out.veh = V; }   // legal and permit vehicles (2026-11-23): only when asked and ticked
+    const out = { rows, sum, cap, ph, G, own, T, what: what + (ARt && ARt.rateCase ? ` ${esc(ARt.rateCase.cite)}, two live-load cases: the rating takes case 1's distribution factors at every station (the lanes over the mountable sidewalk, no pedestrian load; engineer's decision 2026-11-26), also where case 2 governs the design (Analysis tab, steps an.case.*).` : ''), flex: Gr, shear: SHR, pl, ...(ARt ? { rateCase: ARt.rateCase, plRt, flexRt: GrR, shearRt: SHRr } : {}) };   // flexRt, shearRt: the rating rows' capacity locations (cap) where they differ from the design's flex, shear
+    if (ctx.veh && vehOn(P)) { const V = fromAn ? buildVeh(P, g, ARt || AR, ph, own) : { list: [], err: [], only: true }; if (V) out.veh = V; }   // legal and permit vehicles (2026-11-23): only when asked and ticked
     return out;
   }
   /* ---------- legal-load and permit vehicles (2026-11-23) ---------- */
@@ -283,7 +289,7 @@
         : `<tr data-rt="${i}" class="${i === S.sel ? 'sel' : ''}${q === gi ? ' fx-gov' : ''}"><td class="lft">${esc(q.name)}</td><td class="lft">${window.SBDSub.html(q.title)}</td><td>${q.kind === 'fat' ? '' : fmt(q.C, q.unit === 'ksi' ? 2 : 1)}</td><td>${q.kind === 'fat' ? '' : fmt(q.DC, q.unit === 'ksi' ? 2 : 1)}</td><td>${q.kind === 'fat' ? '' : fmt(q.DW, q.unit === 'ksi' ? 2 : 1)}</td><td>${q.kind === 'fat' ? '' : fmt(q.LL, q.unit === 'ksi' ? 2 : 1)}</td><td style="white-space:nowrap">${esc(q.unit || '')}</td><td class="${cls(q.inv)}">${rfTxt(q.inv)}</td><td class="${q.kind === 'fat' ? '' : cls(q.opr)}">${q.kind === 'fat' ? '—' : rfTxt(q.opr)}</td></tr>`).join('')}
       </tbody></table></div></div></section>`;
     const q = R.rows[S.sel] || gi;
-    if (q && !q.oos) { const r = R.cap.get(q), cst = r ? (q.kind === 'shear' ? window.SBDShearUI.stepsOf(R.shear, 'loc', r) : window.SBDFlexureUI.stepsOf(R.flex, r)) : [];   // with custom demands their step first
+    if (q && !q.oos) { const r = R.cap.get(q), cst = r ? (q.kind === 'shear' ? window.SBDShearUI.stepsOf(R.shearRt || R.shear, 'loc', r) : window.SBDFlexureUI.stepsOf(R.flexRt || R.flex, r)) : [];   // with custom demands their step first
       h += `<section class="sec" id="rt-steps"><div class="secHead">Worked steps, ${esc(q.name)}: ${window.SBDSub.html(q.title)}</div><div class="secBody"><p class="note">The rating first (${esc(window.SBDRating.MBE)}), then the ${q.kind === 'shear' ? 'shear' : 'flexure'} work of this location (the same steps as the ${q.kind === 'shear' ? 'Shear &amp; stiffeners' : 'Flexure'} tab), where R<sub>n</sub> is worked. AASHTO LRFD 10th Ed. (2024).</p>
         ${stepsHtml(q.steps, null, rfSt(q))}${cst && cst.length ? `<h4 class="sub" style="font-family:var(--font-ui);font-size:9pt;margin:10px 0 2px">${q.kind === 'shear' ? 'Shear' : 'Flexure'} at ${esc(r.name)}</h4>${stepsHtml(cst, capGroups(q, cst), capSt(r))}` : ''}</div></section>`; }
     return h;

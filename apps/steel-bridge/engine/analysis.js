@@ -740,6 +740,15 @@
      takes this app's analysis builds its LL+IM from here (ui/rating.js, ui/shear.js, ui/fatigue.js, ui/welds.js fromAnalysis; engine/splices.js
      arraysFromAnalysis), and R.pl gives the pedestrian part (M_PL, V_PL) so that the owner multiplier m is kept off it (GD45).
      Returns { Mpos, Mneg, VRpos, VRneg, VLpos, VLneg, R: [{ max, min }], pl: R.pl } or null (no live load). */
+  /* rateView(R) (RCURB Q6, engineer's answer 2026-11-26; CLAUDE.md §4): the analysis as the load rating takes it. With the RIDOT BDM 3.4.1.1.1
+     two cases (R.cases), where case 2 governs the HL-93 design effect the rating uses case 1's distribution factors (the lanes over the
+     mountable sidewalk, no pedestrian load), and case 1 already governs elsewhere: so the rating takes case 1 at every station: its LL+IM
+     (ll, with gM, gVR, gVL), its fatigue-truck factors (fat), its reactions (llR), and no pedestrian load (pl null). Before: the case taken
+     by the design envelope at each station, with case 2's w_PL where case 2 governed. Without the two cases: R itself (unchanged). */
+  function rateView(R) {
+    const C = R && R.cases; if (!C || !C.c || !C.c[0]) return R;
+    const c1 = C.c[0]; return { ...R, ll: c1.ll, fat: c1.fat, llR: c1.llR, pl: null, rateCase: { case: 1, cite: C.cite, n2: C.n2 } };
+  }
   function llPL(R) {
     if (!R || !R.ll) return null; const L = R.ll, Q = R.pl, add = k => L[k].map((v, i) => v + (Q ? Q[k][i] : 0));
     return { Mpos: add('Mpos'), Mneg: add('Mneg'), VRpos: add('VRpos'), VRneg: add('VRneg'), VLpos: add('VLpos'), VLneg: add('VLneg'),
@@ -792,5 +801,5 @@
     return { level: lv, items, th, wg, Is, steps: w.steps };
   }
 
-  window.SBDAnalysis = { skewTaper, plateOfLine, applicability, DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, allowFor, allowOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
+  window.SBDAnalysis = { skewTaper, plateOfLine, applicability, DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, allowFor, allowOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL, rateView };
 })();
