@@ -25,7 +25,7 @@ M.setLines(P, 0, [1, 2, 3, 4, 5, 6, 7, 8]); M.setLines(P, 1, [0, 9]); P.framing.
 const SEED = { 'sbd2.project.current': JSON.stringify(J(P)), 'sbd2.ui': JSON.stringify({ otab: 'rpt', itab: 'gird', g: 0, rpt: { scope: 'girder' } }) };
 
 const t0 = Date.now();
-const { b, p, errs, blocked } = await openPage(path.join(REPO, 'apps/steel-bridge/index.html'), { vw: 1400, vh: 1000, timeout: 120000, ls: SEED });
+const { b, p, errs, blocked } = await openPage(path.join(REPO, 'apps/steel-bridge/index.html'), { vw: 1400, vh: 1000, timeout: 120000, ls: SEED, dsf: shots ? 2 : undefined });
 const saved = () => p.evaluate(() => JSON.parse(localStorage.getItem('sbd2.project.current')).girders[0]);
 try {
   await p.waitForSelector('#rp_build', { timeout: 120000 });
