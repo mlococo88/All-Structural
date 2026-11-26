@@ -49,7 +49,24 @@
   const sub = (id, title, items) => ({ id, title, items: items.filter(Boolean) });
   const ED = 'AASHTO LRFD 10th Ed. (2024)';
   const spanOf = (sup, x) => { if (!sup || sup.length < 2 || x == null) return 1; let k = 0; while (k < sup.length - 2 && x > sup[k + 1] + 1e-9) k++; return k + 1; };
-  const gName = g => g ? g.label || g.id : '';
+  // SBRF-6 (2026-11-25, display only): a girder type is named "Type: <label>" (its id, G1, G2, was read as a girder line name); gLn(B) adds
+  // the line the report works: "Type: Interior on line G6"
+  const gName = g => g ? `Type: ${g.label || g.id}` : '';
+  const lnOf = B => (window.SBDAnalysis && window.SBDAnalysis.lineOf ? window.SBDAnalysis.lineOf(B.P, B.girder) : null);
+  const gLn = B => { const j = lnOf(B); return `${gName(B.girder)}${Number.isInteger(j) ? ` on line G${j + 1}` : ''}`; };
+  /* SBRF-7 (2026-11-25, display only): the Strength I and deck placement factors the modules use (the owner's η and m applied), quoted in the
+     notes with a link to where η and m are worked (Project and owner, Owner load rules); fG: 2 decimals, or 4 where a factor has more (1.3125) */
+  const fG = x => f(x, Math.abs(x * 100 - Math.round(x * 100)) < 1e-9 ? 2 : 4);
+  const facOf = P => { const own = P.ownerRules || {}, lf = window.SBDOwners.loadFactors(own.owner, own.eta, (P.xs || {}).nb), FX = window.SBDFlexure, CN = window.SBDConstr;
+    return { lf, G: FX.factorsOwner ? FX.factorsOwner(lf) : FX.factors(), C: CN && CN.factorsOwner ? CN.factorsOwner(lf) : { cdc: 1.25, ccl: 1.5, eta: 1 } }; };
+  const ownLk = (X, m) => (X.made && X.made.has('proj') ? ` (η: see [[own.eta]]${m ? ', m: [[own.m]]' : ''})` : '');
+  /* SBRF-5 (2026-11-25, display only): the b_eff the section properties use against the tributary width of the line worked (Art. 4.6.2.6.1),
+     a note where they differ by more than 0.5 in (the Girders & plates tab's typeNotes rule); SBDModel.beffOf where the app has it */
+  function beffNote(B) {
+    const M = window.SBDModel, P = B.P, g = B.girder, j = lnOf(B); if (!M || !M.tribBeff || !P.xs || !g || !Number.isInteger(j)) return null;
+    const t = M.tribBeff(P.xs, j), b = M.beffOf ? +M.beffOf(P, g) : +g.beff; if (!isFinite(t) || !isFinite(b) || Math.abs(t - b) <= 0.5) return null;
+    return `$b_{eff}$ = ${f(b, 2)} in is used for ${gName(g)} (the value entered for the type); the tributary width of line G${j + 1} is ${f(t, 2)} in (Art. 4.6.2.6.1). The $b_{eff}$ used is ${f(Math.abs(b / t - 1) * 100, 1)} % ${b > t ? 'larger' : 'smaller'} than the tributary width.`;
+  }
   /* f_ℓ of a module and where it comes from (engine/framing.js design: entered, else from skew, C6.10.1; paths PR 2026-10-30); the skew
      value links to its step in the Framing section when that section works the same value */
   const flNote = (B, D, tab) => !D ? '' : D.flSrc === 'entered' ? `$f_{\\ell}$ = ${f(D.fl, 2)} ksi as entered on the ${tab}`
@@ -112,8 +129,8 @@
         p.notes ? note(p.notes) : null,
         window.SBDInputCheck ? note(window.SBDInputCheck.NOTE) : null,   // SBINV (engineer rule 2026-11-10: decisions noted in the app and the report)
         kv([['Spans', `${P.spans.lengths.map(L => f(+L, 2)).join(' + ')} ft (${P.spans.continuity === 'simple' || P.spans.lengths.length < 2 ? 'simple spans' : 'continuous'})`],
-          ['Girder reported', `${gName(g)}, ${g.position}; cross-section girder G${line + 1} (dead loads and distribution factors)`], ['$b_{eff}$', `${f(g.beff, 2)} in`],
-          ['Design specification', ED], ['Demands', B.src === 'file' ? `hand-off file ${B.plName || ''} (GirderDetail → ST-Girder), where a module takes it (see each section)` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)} (see each section); this project's analysis (Analysis tab) for the rest` : "this project's analysis (Analysis tab)"]])]),
+          ['Girder reported', `${gName(g)}, ${g.position}; cross-section girder G${line + 1} (dead loads and distribution factors)`], ['$b_{eff}$', `${f(g.beff, 2)} in`], beffNote(B) ? ['$b_{eff}$ and the tributary width', beffNote(B)] : null,
+          ['Design specification', ED], ['Demands', B.src === 'file' ? `hand-off file ${B.plName || ''} (GirderDetail → ST-Girder), where a module takes it (see each section)` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)} (see each section); this project's analysis (Analysis tab) for the rest` : "this project's analysis (Analysis tab)"]].filter(Boolean))]),
       sub('m', 'Materials and deck', [kv([['Steel, top / bottom flange, web', `${m.steel.top} / ${m.steel.bot} / ${m.steel.web} ($F_{y}$ = ${G[m.steel.top].Fy} / ${G[m.steel.bot].Fy} / ${G[m.steel.web].Fy} ksi)`], ['$E_{s}$', `${f(m.Es, 0)} ksi`],
         ["$f'_{c}$, $w_{c}$, $K_{1}$", `${f(m.concrete.fc, 2)} ksi, ${f(m.concrete.wc, 3)} kcf, ${f(m.concrete.K1, 2)}`], ['Deck', `${d.composite === false ? 'noncomposite' : 'composite'}; $t_{s}$ = ${f(d.ts, 2)} in, total ${f(d.tdeck, 2)} in, haunch ${f(d.haunch, 2)} in`],
         ['Deck rebar', `top ${f(d.rebar.top.A, 2)} in² at ${f(d.rebar.top.c, 2)} in, bottom ${f(d.rebar.bot.A, 2)} in² at ${f(d.rebar.bot.c, 2)} in; $F_{yr}$ = ${f(m.rebar.Fyr, 0)} ksi`]])]),
@@ -134,7 +151,7 @@
     R.regions.forEach(rg => { regSteps.push(...rg.steps); gs.forEach(j => { if (rg.members[j]) regSteps.push(...rg.members[j].steps); }); });
     const geo = R.regions[0].geo;
     const eq = P.xs && P.xs.spMode === 'equal' ? window.SBDModel.equalSpacing(P.xs) : null;   // EQSP (2026-11-09): girders equally spaced from the exterior girder spacing
-    return { title: 'Cross-section, loads and live-load distribution', note: `Cross-section girder G${line + 1} carries the reported girder ${gName(B.girder)}${all ? '; every girder of the cross-section is worked' : ''}. As on the [[tab:loads|Loads & LLDF tab]].`, subs: [
+    return { title: 'Cross-section, loads and live-load distribution', note: `Cross-section girder G${line + 1} carries ${gName(B.girder)}${all ? '; every girder of the cross-section is worked' : ''}. As on the [[tab:loads|Loads & LLDF tab]].`, subs: [
       ...(eq ? [sub('sp', 'Girder spacing (girders equally spaced)', [kv([['Number of girders $N_{b}$', String(eq.nb)], ['Exterior girder spacing $W_{cc}$ (℄ to ℄ of the exterior girders)', `${f(eq.Wcc, 3)} ft`],
         ['Overhangs left / right', `${f(+P.xs.ohL, 2)} / ${f(+P.xs.ohR, 2)} ft`], ['Deck width out to out', `${f(+P.xs.ohL + eq.Wcc + +P.xs.ohR, 2)} ft`]]), steps('', [window.SharedSteps.step(eq.step)]),
         note('Every bay takes S; the dead loads and distribution factors below use these spacings.')])] : []),
@@ -303,9 +320,24 @@
           ['$R_{h}$', f(c.Rh, 3), K(sc, !c.comp ? 'rh.s.Rh' : c.region === 'pos' ? 'rh.cn.Rh' : 'rh.cr.Rh')]]),
         c.comp ? null : note('Noncomposite girder: the steel section alone (6.10.1.1.1a).'),
         gsteps('SBDFlexureUI:sec', sc, (window.SBDRolled ? window.SBDRolled.steps(s) : []).concat(c.steps), { lazy: true, title: 'Worked steps' })])); });   // opened on demand: the flexure and constructibility steps repeat them per location
+    { const bn = beffNote(B); if (bn) subs[0].items.unshift(note(bn, true)); }   // SBRF-5
+    if (subs[0] && !subs[0].key) subs[0].key = 'sec.props';   // SBRF-7: the link target of the fatigue and stud notes, the first subsection (a § reference names a subsection)
     return { title: 'Section properties', note: `Plates of ${gName(B.girder)}; y up from the bottom of the steel. As on the [[tab:sec|Section properties tab]]; the flexure and constructibility steps below repeat the properties of each location.`, subs };
   }
 
+  const FXC = id => /^GS1[23]$/.test(id) ? 'svc' : /^GS([1-4]|22)$/.test(id) ? 'prop' : 'str';   // report/summary.js FLEX_CLS
+  const grv = r => (isFinite(r) ? r : Infinity);
+  /* flexCats(Gr): the Executive summary's flexure rows (PR3): per category (Strength I M+, M−, Service II, proportions) the location and check
+     with the largest ratio, { k, t, b: { r, c } }. SBRF-7 (2026-11-25): one helper for exec() and flex(), so that the Flexure section works
+     each of these locations (before, a location that governed a category but not its span and region was only in the results table, and
+     the Executive summary quoted its ratio without a link) */
+  function flexCats(Gr) {
+    const out = []; if (!Gr || Gr.err || !Gr.rows) return out;
+    const cats = [['strP', 'Flexure, Strength I, positive moment (M+)', r => r.pos], ['strN', 'Flexure, Strength I, negative moment (M−)', r => !r.pos], ['svc', 'Flexure, Service II (GS12, GS13)', () => true], ['prop', 'Cross-section proportions (GS1–GS4)', () => true]];
+    cats.forEach(([k, t, inR]) => { let b = null; Gr.rows.forEach(r => { if (!inR(r)) return; r.checks.forEach(c => { if (!(c.inUse && c.na == null && c.ratio !== undefined)) return; const cl = FXC(c.id); if ((k === 'strP' || k === 'strN') ? cl !== 'str' : cl !== k) return; if (!b || grv(c.ratio) > grv(b.c.ratio) || (grv(c.ratio) === grv(b.c.ratio) && r === Gr.gov && c === Gr.gov.gov)) b = { r, c }; }); });   // a tie: the Flexure section's governing location
+      if (b) out.push({ k, t, b }); });
+    return out;
+  }
   /* ---------- 6. flexure ---------- */
   function checksTbl(r, sc) {
     return tbl(['Check', 'Demand', 'Capacity', 'Ratio', ED], r.checks.map(c => isFinite(c.ratio)
@@ -343,7 +375,8 @@
     }
     const one = r => [ptHead(B, r), checksTbl(r, scOf(r)), kv([['$M_{u}$ / $M_{s}$', `${f(r.Mu, 1)} / ${f(r.Ms, 1)} kip-ft`, K(scOf(r), 'fx.Mu')], ['$D_{c}$ (Service II)', `${f(r.DcS, 3)} in`, K(scOf(r), 'fx.DcS')],
       ['Fatigue I Δf top / bottom', `${f(r.dfT, 2)} / ${f(r.dfB, 2)} ksi`, K(scOf(r), 'fx.fatT')]])];
-    const detailed = all ? (Gr.gov ? [Gr.gov] : []) : [...new Set(govRows.concat(PS ? PS.gov.map(q => q.row) : []))].sort((a, b) => a.x - b.x);   // B3: the proportions' locations too (their links)
+    const ex = all ? [] : flexCats(Gr).map(q => q.b.r); ex.forEach(r => { if (!X.have.has(r)) X.have.set(r, scOf(r)); });   // SBRF-7: the Executive summary's locations, worked
+    const detailed = all ? (Gr.gov ? [Gr.gov] : []) : [...new Set(govRows.concat(PS ? PS.gov.map(q => q.row) : [], ex))].sort((a, b) => a.x - b.x);   // B3: the proportions' locations too (their links)
     const stF = r => (window.SBDFlexureUI.stepsOf ? window.SBDFlexureUI.stepsOf(Gr, r) : r.steps);   // with custom demands the step that names them first
     if (Gr.custom) subs.splice(1, 0, cdSub('flex', B));
     detailed.forEach(r => subs.push(sub(scOf(r), `${at(r, 2)}${r === Gr.gov ? ' (governing)' : ''}`, [...one(r), gsteps('SBDFlexureUI:x', scOf(r), stF(r), { title: 'Worked steps (flexure, then the section properties of this location)' })])));
@@ -369,7 +402,7 @@
     if (R.tsGov) gl.push({ g: 'Transverse stiffeners', it: `${R.tsGov.it.loc}: ${R.tsGov.c.id} ${tt(R.tsGov.c.title)}`, r: R.tsGov.it.r, key: K(tk(R.tsGov.i), R.tsGov.it.step) });
     if (R.bsGov) gl.push({ g: 'Bearing stiffeners', it: `${R.bsGov.it.loc}: ${R.bsGov.c.id} ${tt(R.bsGov.c.title)}`, r: R.bsGov.it.r, key: K(bk(R.bsGov.i), R.bsGov.it.step) });
     gl.forEach(q => X.gov.push({ mod: 'Shear & stiffeners', grp: 'Shear & stiffeners: ' + q.g, check: q.it, loc: q.g, r: q.r, key: q.key }));
-    subs.push(sub('gov', 'Governing items', [note(fromHtml(R.what)), note('Strength I $\\gamma_{DC}$ 1.25, $\\gamma_{DW}$ 1.50, LL+IM 1.75 (with the owner\'s η and m); special fatigue loading 6.10.5.3; deck placement 1.25$V_{DC1}$ + 1.50$V_{CL}$; $\\phi_{v}$ = 1.0. As on the [[tab:shear|Shear & stiffeners tab]].'),
+    subs.push(sub('gov', 'Governing items', [note(fromHtml(R.what)), (F => note(`Strength I $\\gamma_{DC}$ ${fG(F.G.dc)}, $\\gamma_{DW}$ ${fG(F.G.dw)}, $\\gamma_{LL}$ ${fG(F.G.ll)} (1.25η, 1.50η, 1.75ηm: the owner's η and m${ownLk(X, true)}); special fatigue loading 6.10.5.3; deck placement ${fG(F.C.cdc)}$V_{DC1}$ + ${fG(F.C.ccl)}$V_{CL}$; $\\phi_{v}$ = 1.0. As on the [[tab:shear|Shear & stiffeners tab]].`))(facOf(B.P)),   // SBRF-7: the factors used (before: 1.25, 1.50, 1.75 "with the owner's η and m")
       tbl(['Group', 'Governing item', 'Ratio'], gl.map(q => [q.g, q.it, R3(q.r, q.key)])),
       R.TS && R.TS.errors && R.TS.errors.length ? note('Transverse stiffeners: ' + R.TS.errors.join('; '), true) : null, R.BS.errors && R.BS.errors.length ? note('Bearing stiffeners: ' + R.BS.errors.join('; '), true) : null]));
     if (R.custom) subs.push(cdSub('shear', B));
@@ -398,6 +431,17 @@
     return { title: 'Shear and stiffeners', subs };
   }
 
+  /* SBRF-7 (2026-11-25, display only): the fatigue and stud steps quote section properties (b_eff, n, ȳ, I): a link to the Section properties
+     section that works them (when it is in the report) */
+  const secLk = X => (X.made && X.made.has('sec') ? note('The section properties these steps quote ($b_{eff}$, n, $\\bar{y}$, I of the steel, short-term n, long-term 3n and steel + rebar sections) are worked for each plate segment in Section properties (see [[sec.props]]).') : null);
+  /* SBRF-4 (2026-11-25, display only): the Z_r step of a pitch zone that is the same as an earlier zone's (same label, equation, substitution and
+     value: the same limit state and stud) is worked once; the later zones show the value with a reference to it (the step objects are not changed) */
+  function zrOnce(list) {
+    const first = new Map();
+    return (list || []).map(s => { if (!/^scz\d+\.Zr$/.test(String(s.id))) return s;
+      const k = JSON.stringify([s.label, s.sym, s.eq, s.sub, s.value, s.unit, s.ref, s.note]); if (!first.has(k)) { first.set(k, s.id); return s; }
+      return { ...s, eq: '', sub: '', ref: '', note: `The same as the first zone with this limit state: see §${first.get(k)}.` }; });
+  }
   /* ---------- 8. fatigue and studs ---------- */
   function fat(B, X) {
     const R = B.fat, FA = window.SBDFatigue, SC = window.SBDStuds, all = X.detail === 'all', subs = [], gl = [];
@@ -411,7 +455,7 @@
       R.FR.errors.length ? note('Fatigue: ' + R.FR.errors.join('; '), true) : null, R.SR.errors.length ? note('Shear connectors: ' + R.SR.errors.join('; '), true) : null]));
     if (R.custom) subs.push(cdSub('fat', B));
     if (!R.FR.errors.length) { const rows = R.FR.rows, sel = all ? rows.map((r, i) => i) : faI >= 0 ? [faI] : [];
-      subs.push(sub('fa', 'Fatigue details (FA1, FA2, FA3; 6.6.1.2, 6.10.5.3)', [note(`$ADTT_{SL}$ = ${f(R.FR.ADTTSL, 0)} trucks/day. Fatigue I where $ADTT_{SL}$ is at least the detail's infinite-life equivalent, else Fatigue II; exempt: net compression under the permanent loads (FA2).`),
+      subs.push(sub('fa', 'Fatigue details (FA1, FA2, FA3; 6.6.1.2, 6.10.5.3)', [note(`$ADTT_{SL}$ = ${f(R.FR.ADTTSL, 0)} trucks/day. Fatigue I where $ADTT_{SL}$ is at least the detail's infinite-life equivalent, else Fatigue II; exempt: net compression under the permanent loads (FA2).`), secLk(X),
         tbl(['Detail', 'Cat.', 'n', 'Limit state', 'γ(Δf) (ksi)', '$(\\Delta F)_{n}$ (ksi)', 'FA1'], rows.map((r, i) => { const a = ck('FA1').items[i] || {}; return { cells: [`${r.name}${r.exempt ? ' (exempt)' : ''}`, r.cat, String(r.nn), `Fatigue ${r.lim}`, N(r.dem, 2), N(r.res, 2),
           r.exempt ? { t: 'exempt', cls: 'ok' } : R3(a.r, sel.includes(i) && a.step ? K(fk(i), a.step) : null)], cls: i === faI ? 'gov' : '' }; })),
         ...sel.map(i => gsteps('SBDFatigueUI:x', fk(i), window.SBDFatigueUI.stepsOf(R, 'fa', rows[i]), { lazy: all && i !== faI, title: rows[i].name }))])); }
@@ -429,10 +473,11 @@
     if (!R.SR.errors.length) { const Sr = R.SR, C = R.SCC, cc = id => C.find(c => c.id === id) || { items: [] };
       subs.push(sub('sc', `Shear connectors (6.10.10): ${Sr.zones.length} pitch zones, ${Sr.regions.length} strength regions`, [
         note(window.SBDFatigueUI.SC_ED_TXT),   // F5 (2026-11-23): the stud checks follow the 10th Ed. only
+        secLk(X),
         kv([['Studs', `${f(Sr.d, 3)} × ${f(Sr.h, 2)} in`], ['$Q_{r}$', `${f(Sr.Qr, 2)} kip`, K('sc', 'sc.Qr')], ['$Z_{r}$ (Fatigue I)', `${f(Sr.Zr, 3)} kip`, K('sc', 'sc.ZrI')], ['$b_{eff}$', `${f(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? "this girder's own" : 'bridge-wide'})`, K('sc', 'sc.beff')]]),
         tbl(['Zone', 'Studs', '$V_{f}$ (kip)', 'Limit state', '$V_{sr}$ (kip/in)', '$p_{max}$ (in)', 'SC1'], Sr.zones.map((z, i) => { const a = cc('SC1').items[i] || {}; return [z.name, `${z.nr} @ ${f(z.p, 2)} in`, N(z.Vfr, 1), `Fatigue ${z.fat.lim}`, N(z.Vsr, 3), N(z.preq, 2), R3(a.r, K('sc', `scz${z.i}.ok`))]; })),
         tbl(['Region', 'P (kip)', 'n required', 'n provided', 'SC2'], Sr.regions.map((r, i) => { const a = cc('SC2').items[i] || {}; return [r.name, N(r.P, 1), N(r.nreq, 2), `${r.nprov}${r.lost ? ` − ${r.lost}` : ''}`, R3(a.r, K('sc', `scr${r.i}.ok`))]; })),
-        gsteps('SBDFatigueUI:x', 'sc', window.SBDFatigueUI.stepsOf(R, 'sc'), { lazy: all, title: 'Worked steps, shear connectors' })])); }
+        gsteps('SBDFatigueUI:x', 'sc', zrOnce(window.SBDFatigueUI.stepsOf(R, 'sc')), { lazy: all, title: 'Worked steps, shear connectors' })])); }
     return { title: 'Fatigue and studs', subs };
   }
 
@@ -447,8 +492,9 @@
     const cell = o => !o ? '—' : { ...R3(o.ratio, keyOf(o)), t: `${f(o.ratio, 3)} (${o.row.conC ? '' : o.check.id + ', '}${f(o.row.x, 2)} ft${o.row.conC && o.row.alt ? `, ${sgn(o.cs)} case` : ''})` };
     const ga = R.govAll;
     if (ga) X.gov.push({ mod: 'Constructibility', grp: 'Constructibility (deck placement)', check: `${ga.check.id} ${tt(ga.check.title)}`, loc: `x = ${f(ga.row.x, 2)} ft`, r: ga.ratio, key: keyOf(ga) });
-    const wh = R.custom ? fromHtml(R.what) : B.src === 'file' ? `${B.plName || 'Hand-off file'}: ${R.F.locs.length} stations; $M_{DCc}$, $M_{CL}$, $V_{DC1}$, $V_{CL}$ from the file.` : `${gName(B.girder)}: ${R.F.locs.length} locations from this project's analysis (dead loads): $M_{DC1}$, $V_{DC1}$, ${R.F.seq ? '$M_{DCc}$ the noncomposite envelope of the deck placement sequence [[an.seq.MDCc]]' : 'no pour sequence ($M_{DC1}$)'}, construction live load $M_{CL}$, $V_{CL}$.`;
-    subs.push(sub('gov', 'Governing ratio of each span', [note(`${wh} $M_{c}$ = 1.25$M_{DCc}$ + 1.50$M_{CL}$, $V_{u}$ = 1.25$V_{DC1}$ + 1.50$V_{CL}$ on the noncomposite steel section (3.4.2.1, 6.10.3.4.1); $\\phi_{f}$ = $\\phi_{v}$ = 1.0; ${R.D ? flNote(B, R.D, '[[tab:cn|Constructibility tab]]').replace('$f_{\\ell}$', '$f_{\\ell}$ during deck placement') : ''}.`),
+    const wh = R.custom ? fromHtml(R.what) : B.src === 'file' ? `${B.plName || 'Hand-off file'}: ${R.F.locs.length} stations; $M_{DCc}$, $M_{CL}$, $V_{DC1}$, $V_{CL}$ from the file.` : `${gLn(B)}: ${R.F.locs.length} locations from this project's analysis (dead loads): $M_{DC1}$, $V_{DC1}$, ${R.F.seq ? '$M_{DCc}$ the noncomposite envelope of the deck placement sequence [[an.seq.MDCc]]' : 'no pour sequence ($M_{DC1}$)'}, construction live load $M_{CL}$, $V_{CL}$.`;
+    const FC = facOf(B.P).C, ce = FC.eta && FC.eta !== 1 ? ` (1.25η and 1.50η, the owner's η${ownLk(X, false)})` : '';   // SBRF-7: the factors used
+    subs.push(sub('gov', 'Governing ratio of each span', [note(`${wh} $M_{c}$ = ${fG(FC.cdc)}$M_{DCc}$ + ${fG(FC.ccl)}$M_{CL}$, $V_{u}$ = ${fG(FC.cdc)}$V_{DC1}$ + ${fG(FC.ccl)}$V_{CL}$${ce} on the noncomposite steel section (3.4.2.1, 6.10.3.4.1); $\\phi_{f}$ = $\\phi_{v}$ = 1.0; ${R.D ? flNote(B, R.D, '[[tab:cn|Constructibility tab]]').replace('$f_{\\ell}$', '$f_{\\ell}$ during deck placement') : ''}.`),
       tbl(['Span', 'Top flange in compression', 'Bottom flange in compression', 'Tension flange', 'Shear (GS16)', ...(R.oh ? ['Overhang OH1–OH4', 'OH5'] : [])], R.spans.map(s => [String(s.span), cell(s.top), cell(s.bot), cell(s.tens), cell(s.shear), ...(R.oh ? [cell(s.oh), cell(s.ohfl)] : [])])),
       ...window.SBDConstr.notes(R.F.locs.some(L => L.M.DCc !== 0), !!R.F.sides).map(t => note(t)),
       R.oh && R.oh.errors && R.oh.errors.length ? note('Overhang brackets: ' + R.oh.errors.join(' '), true) : null]));
@@ -519,7 +565,7 @@
     if (sg) X.gov.push({ mod: 'Field splices', grp: 'Field splices', check: `${sg.q.c.id} ${tt(sg.q.c.title)}`, loc: `${sg.s.name}, ${tt(sg.q.it.loc)}`, r: sg.q.it.r, key: K('spl@' + sg.k, sg.q.it.step) });
     subs.push(sub('list', `Splices of ${gName(B.girder)}`, [G.custom ? note('Demands: entered (Custom) on the Field splices tab, the row at each splice station (table below).') : note("Demands: this project's analysis, moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule); sections 0.01 ft each side, the smaller carries the design forces (6.13.6.1.1). As on the [[tab:spl|Field splices tab]]."),
       G.errors.length ? note(G.errors.join(' '), true) : null,
-      G.list.length ? (() => { const cap17 = `Splice locations on girder ${gName(B.girder)}; marker colour: the governing ratio of each splice`;   // DETC: the option C figure of the tab (ui/gfxdet.js), else the CAD drawing
+      G.list.length ? (() => { const cap17 = `Splice locations on ${gLn(B)}; marker colour: the governing ratio of each splice`;   // DETC: the option C figure of the tab (ui/gfxdet.js), else the CAD drawing
         try { if (window.SBDGfxDet && window.SBDVizKit && window.SBDVizKit.scene) return { type: 'figure', svg: window.SBDGfxDet.stripFigure(G.list, B.P, 760), caption: cap17 }; } catch (e) { /* the CAD figure */ }
         return splFig(GB => GB.spliceStrip(G.list, B.P, {}), cap17); })() : null,
       tbl(['Splice', 'Plates and bolts', 'Governing', 'Ratio', 'Largest strength ratio', 'Status'], G.list.map((s, k) => { const fl = s.R && s.R.fl, gv = s.gov, q = strGov(s.CK), bad = s.CK ? s.CK.filter(c => c.status === 'fail').length : 0;
@@ -721,8 +767,8 @@
     const G = window.SBDTabGfxB, D = window.SharedDxf; if (!G || !D || !window.SBDGraphics) return null;
     // SBVZB (2026-11-10): the figure in the data-viz style (ui/alonggfx.js summarySvg: static SVG with its style inside, prints grey / hatched); the old drawing without it
     const AG = window.SBDAlongGfx, sv = AG && window.SBDVizAlong ? AG.summarySvg({ gov: X.gov }, B.P, B.g) : '';
-    if (sv) return { type: 'figure', svg: sv, caption: `Governing check of each group along girder ${gName(B.girder)} (the rows of the table below; ratio, or rating factor RF). Green below 0.90, amber 0.90 to 1.00, red above 1.00 or NG (RF below 1.0); not to scale vertically.` };
-    try { const g = G.summary({ gov: X.gov }, B.P, { gi: B.g }); return { type: 'figure', svg: (window.SBDGraphics && window.SBDGraphics.tightSvg ? window.SBDGraphics.tightSvg : (DD, o) => D.toSVG(DD, o))(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: '100%' }), caption: `Governing check of each group along girder ${gName(B.girder)} (the rows of the table below; ratio, or rating factor RF).` }; }
+    if (sv) return { type: 'figure', svg: sv, caption: `Governing check of each group along ${gLn(B)} (the rows of the table below; ratio, or rating factor RF). Green below 0.90, amber 0.90 to 1.00, red above 1.00 or NG (RF below 1.0); not to scale vertically.` };
+    try { const g = G.summary({ gov: X.gov }, B.P, { gi: B.g }); return { type: 'figure', svg: (window.SBDGraphics && window.SBDGraphics.tightSvg ? window.SBDGraphics.tightSvg : (DD, o) => D.toSVG(DD, o))(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: '100%' }), caption: `Governing check of each group along ${gLn(B)} (the rows of the table below; ratio, or rating factor RF).` }; }
     catch (e) { return null; }
   }
   function summary(B, X, built) {
@@ -741,7 +787,7 @@
     const dfNote = DF ? note(`Note (informational, not in the verdict): ${DF.flagged ? 'below optional AASHTO depth guidance' : 'meets the optional AASHTO depth guidance'} (Art. 2.5.2.6.3, Table 2.5.2.6.3-1; optional criteria, e.g. clearance-limited structures may be shallower) [[dg.${DF.comp ? 'O' : 'I'}]].`) : null;
     const dfSub = DF ? sub('depth', 'Span-to-depth guidance (informational; Art. 2.5.2.6.3, optional criteria)', [note(DF.text.replace(/≤/g, '$\\le$').replace(/ > /g, ' $>$ ')),
       note('Optional criteria: they apply where the owner invokes span-to-depth controls (2.5.2.6.3); a structure may be shallower, e.g. where clearance limits the depth. Shown for information: not a check, not counted in any ratio, status or verdict.'), steps('', DF.steps)]) : null;
-    return { title: 'Summary of governing ratios', subs: [sub('gov', `Girder ${gName(B.girder)}: governing demand / capacity of each check group`, [
+    return { title: 'Summary of governing ratios', subs: [sub('gov', `${gLn(B)}: governing demand / capacity of each check group`, [
       apNote,
       note(`Each ratio links to the step that works it. Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Demands: ${B.src === 'file' ? `the hand-off file ${B.plName || ''} for flexure, shear, fatigue, constructibility and rating; this project for the rest` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)}; this project's analysis for the rest` : "this project's analysis"}. ${ED}.`),
       top ? note(`Largest ratio: ${f(top.r, 3)} (${top.mod}, ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.`) : null,
@@ -756,17 +802,13 @@
 
   /* ---------- PR3 (2026-11-19, engineer's request; report and presentation only: every value below is a value a module computes, shown again
      and linked to the step that works it; nothing new is calculated except the steel bill of materials' weights, worked in its table) ---------- */
-  const FXC = id => /^GS1[23]$/.test(id) ? 'svc' : /^GS([1-4]|22)$/.test(id) ? 'prop' : 'str';   // report/summary.js FLEX_CLS
-  const grv = r => (isFinite(r) ? r : Infinity);
   /* banner(text, kind): the verdict as a print-safe SVG box (black on white: border weight and the word carry the status) */
   const banner = (t, sub2) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 74" width="100%" role="img" aria-label="${t}"><rect x="2" y="2" width="636" height="70" fill="#fff" stroke="#000" stroke-width="${t === 'PASS' ? 2 : 5}"${t === 'PASS WITH NOTES' || t === 'REVIEW' ? ' stroke-dasharray="14 6"' : ''}/><text x="320" y="40" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#000">${t}</text><text x="320" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#000">${sub2}</text></svg>`;
   /* exec(B, X): Executive summary (first section): verdict, governing D/C, one row per limit state / check group, the items not in the verdict */
   function exec(B, X) {
-    const rows = [], Gr = B.flex, scOf = r => 'flex@' + Gr.rows.indexOf(r), G = gName(B.girder), wk = r => (!X.on || X.on('flex')) && X.have.has(r) && (X.detail !== 'all' || r === Gr.gov), sumOn = !X.on || X.on('sum');   // linked where the location's steps are written out
+    const rows = [], Gr = B.flex, scOf = r => 'flex@' + Gr.rows.indexOf(r), G = gLn(B), wk = r => (!X.on || X.on('flex')) && X.have.has(r), sumOn = !X.on || X.on('sum');   // linked where the location's steps are written out
     if (Gr && !Gr.err && Gr.rows) {
-      const cats = [['strP', 'Flexure, Strength I, positive moment (M+)', r => r.pos], ['strN', 'Flexure, Strength I, negative moment (M−)', r => !r.pos], ['svc', 'Flexure, Service II (GS12, GS13)', () => true], ['prop', 'Cross-section proportions (GS1–GS4)', () => true]];
-      cats.forEach(([k, t, inR]) => { let b = null; Gr.rows.forEach(r => { if (!inR(r)) return; r.checks.forEach(c => { if (!(c.inUse && c.na == null && c.ratio !== undefined)) return; const cl = FXC(c.id); if ((k === 'strP' || k === 'strN') ? cl !== 'str' : cl !== k) return; if (!b || grv(c.ratio) > grv(b.c.ratio) || (grv(c.ratio) === grv(b.c.ratio) && r === Gr.gov && c === Gr.gov.gov)) b = { r, c }; }); });   // a tie: the Flexure section's governing location
-        if (b) rows.push({ cat: t, check: `${b.c.id} ${tt(b.c.title)}`, loc: at(b.r, 2) + (wk(b.r) ? '' : X.on && !X.on('flex') ? ' (section not included)' : ' (Flexure section, results table)'), r: b.c.ratio, key: wk(b.r) ? K(scOf(b.r), b.c.step) : null }); });   // linked where the location is worked in this report
+      flexCats(Gr).forEach(({ t, b }) => rows.push({ cat: t, check: `${b.c.id} ${tt(b.c.title)}`, loc: at(b.r, 2) + (wk(b.r) ? '' : X.on && !X.on('flex') ? ' (section not included)' : ' (Flexure section, results table)'), r: b.c.ratio, key: wk(b.r) ? K(scOf(b.r), b.c.step) : null }));   // linked where the location is worked in this report
     }
     X.gov.forEach(q => { if (q.mod === 'Flexure') return; rows.push({ cat: q.grp || q.mod, check: q.check, loc: q.loc, r: q.r, rf: q.rf, key: q.key, status: q.status }); });
     const st = q => q.rf != null ? (!isFinite(q.rf) ? 'REVIEW' : q.rf < 1 - 1e-9 ? 'FAIL' : 'OK') : !isFinite(q.r) ? 'REVIEW' : q.r > 1 + 1e-9 ? 'FAIL' : q.status === 'warn' ? 'Warning' : 'OK';
@@ -780,13 +822,13 @@
     const notes = out.some(q => q[1] !== 'meets the optional guidance') || nRev > 0;
     const verdict = nFail ? 'FAIL' : notes ? 'PASS WITH NOTES' : 'PASS';
     const top = rows.filter(q => q.rf == null).reduce((a, q) => (!a || grv(q.r) > grv(a.r) ? q : a), null), low = rows.filter(q => q.rf != null && isFinite(q.rf)).reduce((a, q) => (!a || q.rf < a.rf ? q : a), null);
-    const items = [{ type: 'figure', plain: true, svg: banner(verdict, `Girder ${G}: ${nFail} FAIL, ${nRev} REVIEW / warning, ${rows.length - nFail - nRev + (AP && AP.level === 'fail' ? 1 : 0)} OK of ${rows.length} check groups${AP && AP.level === 'fail' ? ' + analysis applicability FAIL' : ''}`), caption: 'Verdict of this girder: FAIL where any check group exceeds 1.0 (or a rating factor is below 1.0) or the line-girder analysis is not applicable (SA4 FAIL); PASS WITH NOTES where a check has a warning, a ratio is not a number (REVIEW) or an item below is flagged; else PASS.' },
+    const items = [{ type: 'figure', plain: true, svg: banner(verdict, `${G}: ${nFail} FAIL, ${nRev} REVIEW / warning, ${rows.length - nFail - nRev + (AP && AP.level === 'fail' ? 1 : 0)} OK of ${rows.length} check groups${AP && AP.level === 'fail' ? ' + analysis applicability FAIL' : ''}`), caption: 'Verdict of this girder: FAIL where any check group exceeds 1.0 (or a rating factor is below 1.0) or the line-girder analysis is not applicable (SA4 FAIL); PASS WITH NOTES where a check has a warning, a ratio is not a number (REVIEW) or an item below is flagged; else PASS.' },
       top ? note(`Governing D/C: ${f(top.r, 3)} (${top.cat}; ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.${low ? ` Lowest rating factor: ${f(low.rf, 2)} (${low.check}, ${low.loc})${low.key ? ` [[${low.key}]]` : ''}.` : ''}`) : null,
       AP && AP.level === 'fail' ? note(`Line-girder analysis not applicable (SA4 FAIL): ${AP.items.filter(q => q.level === 'fail').map(q => `${q.title}, ${q.val}`).join('; ')}: refined analysis required${sumOn ? ' [[ap.th]]' : ''}.`, true) : null,
       tbl(['Limit state / check group', 'Governing check', 'Girder', 'Location', 'D/C or RF', 'Status'], rows.map(q => ({ cells: [q.cat, q.check, G, q.loc, q.rf != null ? { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, key: q.key } : R3(q.r, q.key), st(q)], cls: st(q) === 'FAIL' ? 'gov' : '' })), { wide: true, caption: 'Every check group the app computes for this girder (each value links to the step that works it); the per-group detail is in the Summary section and the module sections' }),
       out.length ? tbl(['Not included in the verdict', 'Status', 'Value', 'Work'], out.map(q => [q[0], q[1], q[2], q[3] ? { t: '', key: q[3] } : ''])) : note('Not included in the verdict: none.'),
       note('Items not included in the verdict are listed so that this summary never reads as all-pass while a check fails: the span-to-depth guidance is optional (2.5.2.6.3; e.g. clearance-limited structures), applicability warnings and notes do not change the verdict, warnings are for review.')];
-    return { title: 'Executive summary', subs: [sub('v', `Girder ${G}: verdict`, items)] };
+    return { title: 'Executive summary', subs: [sub('v', `${G}: verdict`, items)] };
   }
   /* basis(B, X): Basis of design: specification, owner, materials, factors, combinations, IM, fatigue traffic, analysis method and its applicability */
   function basis(B, X) {
@@ -924,8 +966,8 @@
     const rest = (P.girders || []).map((g, gi) => gi).filter(gi => gi !== B.g);
     return { title: 'Steel bill of materials', subs: [sub('b', 'Plate girders', bomPlatesItems(P, PL)),
       ...bomItemSubs('g', `girder ${G}`, it, ref), ...(it.xf ? [bomXfSub(it.xf)] : []),
-      bomTotals(P, PL, [{ who: `Girder ${G}`, gi: B.g, n: PL.nLs[B.g] || 1, it }], it.xf, rest), ...(B.dk ? [bomDeck(P, B.dk)].filter(Boolean) : [])].concat(
-      (PL.nLs[B.g] || 1) > 1 ? [sub('n', 'Lines of this girder type', [note(`Girder type ${G} is on ${PL.nLs[B.g]} lines: its stiffeners, connection plates and splice plates are counted here as those of the reported line on each of them. The every-girder report (Report tab, scope "Every girder") lists each line's own.`)])] : []) };
+      bomTotals(P, PL, [{ who: `${G}`, gi: B.g, n: PL.nLs[B.g] || 1, it }], it.xf, rest), ...(B.dk ? [bomDeck(P, B.dk)].filter(Boolean) : [])].concat(
+      (PL.nLs[B.g] || 1) > 1 ? [sub('n', 'Lines of this girder type', [note(`Girder ${G} is on ${PL.nLs[B.g]} lines: its stiffeners, connection plates and splice plates are counted here as those of the reported line on each of them. The every-girder report (Report tab, scope "Every girder") lists each line's own.`)])] : []) };
   }
   /* dfFigs(B): the cross-section with the wheel positions of each LLDF case (ui/gfxa.js loadsGraphic, the tab's own drawing), exterior girder G1 and the reported girder, span 1 */
   function dfFigs(B) {
@@ -954,7 +996,20 @@
       ['Stiffener panel $d_{o}$', sh && +sh.do > 0 ? `${f(+sh.do, 2)} in (Shear & stiffeners section, x = ${f(sh.x, 2)} ft)` : sh ? 'unstiffened web' : '—']]);
   }
 
-  const BUILD = { proj, loads, an, defl, sec, flex, shear, fat, cn, frm, spl, wd, dk, rt };
+  /* SBRF-6 (2026-11-25, display only): the Shear & stiffeners rows name the girder by its type number ("G2, stiffener at 2.50 ft",
+     "Abut. 1, G2": ui/shear.js geom, gNo), read as line G2. In the Report the type is named "Type: <label>" instead: every text of the section
+     and of its summary rows is rewritten here (copies; the module's rows, items and steps are not changed). The row names stay as they are
+     in the module: a check reads them (engine/stiffeners.js TS8 isExt), so renaming them there would change a result. */
+  function relabelShear(B, X) {
+    const g0 = X.gov.length, s = shear(B, X), gm = B.shear && B.shear.gm, g = B.girder;
+    if (!gm || gm.gLab || !g || B.src === 'file') return s;
+    const n = gm.gNo, L = gName(g), re1 = new RegExp(`\\bG${n}(?=, (?:stiffener|connection plate) at )`, 'g'), re2 = new RegExp(`((?:Abut\\. [12]|Pier \\d+), )G${n}(?!\\d)`, 'g');
+    const T = t => t.replace(re1, L).replace(re2, `$1${L}`);
+    const map = o => typeof o === 'string' ? T(o) : Array.isArray(o) ? o.map(map) : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, k === 'svg' || k === 'scope' || k === 'key' || k === 'id' ? v : map(v)])) : o;
+    X.gov.slice(g0).forEach(q => { q.check = T(String(q.check)); q.loc = T(String(q.loc)); });
+    return map(s);
+  }
+  const BUILD = { proj, loads, an, defl, sec, flex, shear: relabelShear, fat, cn, frm, spl, wd, dk, rt };
   /* sectionsOf(P) (DK): SECTIONS, with "Deck slab" before the Rating where the project has the deck design switched on (else SECTIONS itself) */
   const DK_SEC = ['dk', 'Deck slab'], dkOn = P => !!(window.SBDDeck && window.SBDDeck.isOn && window.SBDDeck.isOn(P));
   const SECTIONS_DK = [].concat(...SECTIONS.map(s => (s[0] === 'rt' ? [DK_SEC, s] : [s])));
@@ -963,7 +1018,7 @@
   const NEED = { loads: 'loads', an: 'an', defl: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', wd: 'wd', dk: 'dk', rt: 'rating' };
   function model(B, opt) {
     opt = opt || {};
-    const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [], on, anch: new Set() };   // on, anch: BOM2 (2026-11-23), the bill of materials links only into the subsections written in this report (BOM_ANCH)
+    const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [], on, anch: new Set(), made: new Set() };   // made: SBRF-7, the sections written so far (a link only into one of them)   // on, anch: BOM2 (2026-11-23), the bill of materials links only into the subsections written in this report (BOM_ANCH)
     const P = B.P, p = P.project || {}, secs = [], built = [], dropped = [];
     const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, defl: B.src === 'file' ? null : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, wd: B.wd, dk: B.dk, rt: B.rating };
     (B.dkOn ? SECTIONS_DK : SECTIONS).forEach(([k, label]) => {
@@ -971,7 +1026,7 @@
       if (k === 'sum' || k === 'exec' || k === 'sign') return;   // built after the modules (exec, sum) or last (sign)
       if (k === 'basis' || k === 'bom') { if (on(k)) { let s0; try { s0 = (k === 'basis' ? basis : bom)(B, X); } catch (e) { s0 = { title: label, subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; } secs.push({ id: k, ...s0 }); } return; }
       const want = on(k);
-      if (k === 'proj') { if (want) { const s0 = proj(B, X), v3 = snapSub({ snap3d: opt.snap3d }); if (v3) s0.subs.push(v3); secs.push({ id: k, ...s0 }); } return; }   // RPX: + the 3D view captured
+      if (k === 'proj') { if (want) { const s0 = proj(B, X), v3 = snapSub({ snap3d: opt.snap3d }); if (v3) s0.subs.push(v3); secs.push({ id: k, ...s0 }); X.made.add(k); } return; }   // RPX: + the 3D view captured
       if (k === 'defl' && !DEFL_ON()) return;
       if (k === 'defl' && B.src === 'file') { if (want) secs.push({ id: k, title: 'Deflection', subs: [sub('n', 'Not in this report', [note('Deflections are calculated from this project\'s analysis; this report takes its demands from a hand-off file. Choose "This project\'s analysis" to include them, or see the [[tab:defl|Deflection tab]].')])] }); return; }   // DEFL
       if (k === 'spl' && B.src === 'file') { if (want) secs.push({ id: k, title: 'Field splices', subs: [sub('n', 'Not in this report', [note('Field splices are designed from this project\'s analysis; this report takes its demands from a hand-off file. Choose "This project\'s analysis" to include them, or see the [[tab:spl|Field splices tab]].')])] }); return; }
@@ -981,7 +1036,7 @@
       let s; try { s = BUILD[k](B, X); } catch (e) { s = { title: label, subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
       if (want) { if (BOM_ANCH[k]) s.subs.forEach(q => { const a = BOM_ANCH[k][q.id]; if (a && !q.key) { q.key = a; X.anch.add(a); } });   // BOM2: "§n.m" anchors of the subsections the bill of materials takes its sizes from
         { const fg = opt.figures ? figSub(k, opt.figures[k]) : null; if (fg) s.subs.push(fg); }   // RPX: the tab's own graphics, last in the section
-        built.push(k); secs.push({ id: k, ...s }); return; }
+        built.push(k); secs.push({ id: k, ...s }); X.made.add(k); return; }
       // not chosen: its summary rows stay, without a link (their work is not in this report); later sections do not link into it
       X.gov.slice(g0).forEach(q => { q.key = null; q.loc += ' (section not included)'; });
       [...X.have.keys()].forEach(r => { if (!h0.has(r)) X.have.delete(r); });
@@ -1014,9 +1069,9 @@
         : it.type === 'kv' ? { ...it, rows: it.rows.map(r => (r[2] && !have.has(r[2]) ? [r[0], r[1], null] : r)) } : it); }); } });   // exec and basis (PR3)
     const girder = B.girder;
     numberFigs(secs);   // RPX: Figure n.m
-    return { refs: refsOf(secs, P), title: 'Steel Bridge Design', subtitle: `Calculation report: girder ${gName(girder)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
+    return { refs: refsOf(secs, P), title: 'Steel Bridge Design', subtitle: `Calculation report: ${gLn(B)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
-      head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nGirder ${gName(girder)}`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
+      head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\n${gLn(B)}`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
       sections: secs, gov: X.gov };
   }
 
@@ -1048,7 +1103,7 @@
     let AP = null; try { AP = window.SBDAnalysis && window.SBDAnalysis.applicability ? window.SBDAnalysis.applicability(P) : null; } catch (e) { AP = null; }
     const apFail = !!(AP && AP.level === 'fail'), verdict = apFail ? 'FAIL' : ov.verdict;   // ui/summary.js paint(): an applicability FAIL fails the verdict
     const kOf = (S, q) => { const t = T.find(z => z.S === S), u = t && (q.ln != null ? t.us.find(z => z.j === q.ln) : null) || (t && t.us[0]); return u ? u.k : 0; };
-    const gl = (S, q) => `${S.label}${q.ln != null ? ` on G${q.ln + 1}` : ''}`, nf = r => (isFinite(r) ? f(r, 3) : r === Infinity ? '∞' : r === -Infinity ? '−∞' : 'NaN');
+    const gl = (S, q) => `${S.deck ? S.label : 'Type: ' + S.label}${q.ln != null ? ` on G${q.ln + 1}` : ''}`, nf = r => (isFinite(r) ? f(r, 3) : r === Infinity ? '∞' : r === -Infinity ? '−∞' : 'NaN');
     const stT = { pass: 'PASS', fail: 'FAIL', review: 'REVIEW', na: 'n/a', notrun: 'not run' }, chk = (c, q) => (q.check ? (/^flex/.test(c.id) ? tt(q.check) : q.check) : '—');
     const val = (c, q, k) => (q.st === 'na' || q.st === 'notrun' ? '—' : c.rf ? { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, cls: !isFinite(q.rf) ? '' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok', key: 'per.g' + k } : { t: nf(q.r), n: true, cls: rc(q.r), key: 'per.g' + k });
     const cnt = c => { const a = { fail: 0, review: 0, pass: 0 }; T.forEach(t => { const q = t.S.cells[c.id]; if (q && a[q.st] != null) a[q.st]++; }); return `${a.fail} / ${a.review} / ${a.pass}`; };
@@ -1101,10 +1156,11 @@
     let top = null; list.forEach(G => (G.rows || []).forEach(q => { if (q.rf == null && isFinite(q.r) && (!top || q.r > top.q.r)) top = { G, q }; }));
     let low = null; list.forEach(G => (G.rows || []).forEach(q => { if (q.rf != null && isFinite(q.rf) && (!low || q.rf < low.q.rf)) low = { G, q }; }));
     const head = ['Check group', ...list.map(G => G === (top && top.G) ? `${G.label} (controls)` : G.label), 'Controlling girder'];
-    const cell = (G, gp) => { const q = (G.rows || []).find(z => z.grp === gp); if (!q) return { t: '—', cls: 'na' }; const c = C.get(gp), mk = c && c.G === G && list.length > 1 ? ' ◆' : '';
-      if (q.rf != null) return { t: (isFinite(q.rf) ? f(q.rf, 2) : '—') + mk, n: true, cls: !isFinite(q.rf) ? '' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok' };
-      return { t: (isFinite(q.r) ? f(q.r, 3) : '—') + mk, n: true, cls: rc(q.r) }; };
-    const rows = grps.map(gp => { const c = C.get(gp); return { cells: [gp, ...list.map(G => cell(G, gp)), c ? `${c.G.label} (${isRF(gp) ? 'RF ' + f(c.v, 2) : f(c.v, 3)})` : '—'], cls: c && !isRF(gp) && c.v > 1 + 1e-9 ? 'gov' : '' }; });
+    // SBRF-7 (2026-11-25): each value links to that girder's governing rows below (per.g<k>), as the Executive summary's
+    const cell = (G, gp) => { const q = (G.rows || []).find(z => z.grp === gp); if (!q) return { t: '—', cls: 'na' }; const c = C.get(gp), mk = c && c.G === G && list.length > 1 ? ' ◆' : '', key = 'per.g' + list.indexOf(G);
+      if (q.rf != null) return { t: (isFinite(q.rf) ? f(q.rf, 2) : '—') + mk, n: true, cls: !isFinite(q.rf) ? '' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok', key };
+      return { t: (isFinite(q.r) ? f(q.r, 3) : '—') + mk, n: true, cls: rc(q.r), key }; };
+    const rows = grps.map(gp => { const c = C.get(gp); return { cells: [gp, ...list.map(G => cell(G, gp)), c ? { t: `${c.G.label} (${isRF(gp) ? 'RF ' + f(c.v, 2) : f(c.v, 3)})`, key: 'per.g' + list.indexOf(c.G) } : '—'], cls: c && !isRF(gp) && c.v > 1 + 1e-9 ? 'gov' : '' }; });
     const errs = list.filter(G => G.err && Object.keys(G.err).length);
     const subs = [sub('tbl', 'Governing ratio of each check group, every girder', [
       note(`Each cell is the governing demand / capacity ratio of that check group on that girder (OK ≤ 1.0), or its rating factor RF (OK ≥ 1.0), from the girder's own calculation report (Report tab, scope "Selected girder", where each value is worked). ◆ marks the controlling girder of each group (the largest ratio, the smallest RF). Demands: this project's analysis of each girder. ${ED}.`),
