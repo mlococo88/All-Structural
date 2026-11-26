@@ -601,3 +601,7 @@ Each folder has the package's `LICENSE`. Not included: Pyodide and ezdxf (Girder
 - Results are compared exactly (no rounding). A pure refactor must give `all sections identical`. A deliberate result change shows up as the listed values. Put those in the PR's §4 callout with a hand check.
 - Running A and B in parallel roughly doubles CPU load. GirderDetail cases take about 2 min each; with `--jobs` (default: one case per CPU) a matrix takes about as long as its slowest cases. Use `--jobs 1` on a slow machine if idle waits time out.
 - Never commit licensed references (owner manuals, AASHTO text) here or anywhere in the repo.
+
+# PS Bridge Settings window (SET, 2026-11-26): the gear button, moved rows hidden on their tabs, edit / Save / Undo / Redo / Cancel / Esc, focus
+# trap, per-girder-type values under the "Entered values for" selector, owner and Auto design fields, links and the error banner, phone width
+node tests/smoke/ps-bridge-settings.mjs [<dir for ps-settings.png, ps-settings-phone.png>]

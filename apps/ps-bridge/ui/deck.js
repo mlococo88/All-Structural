@@ -49,7 +49,7 @@
         ['Distribution steel A<sub>s,d</sub>', `${f(D.distPct / 100 * D.pos.As, 3)} in²/ft ${wk('dk.distAs')}`]] : []))
       + (dd ? `<p class="note">min(220/√S<sub>eff</sub>, 67 %), S<sub>eff</sub> = S − b<sub>tf</sub>/12 + (b<sub>tf</sub> − b<sub>w</sub>)/24 in ft: the distance between the flange tips plus one flange overhang (flange tip to the face of the web). Bottom bars parallel to the girders. The old app takes S = the girder spacing${dd.changed ? ` (${f(dd.pct0, 1)} % here)` : ''}.</p>` : '<p class="note">min(220/√S, 67 %), S in ft, bottom bars parallel to the girders (as the old app).</p>'), 'card-dkdist');
     h += K().gcard('Deck graphic: section', 'gfx_dksec');
-    h += k.card('Worked steps: deck', `<p class="note">${A}(2024) 4.6.2.1, Table A4-1, 5.6.3, 9.7. Every result is the engine's value (the moved Prestressed Bridge Design engine). Inputs: <a href="#" data-goin="dd">Diaphragms / deck tab</a>.</p>${k.steps(ctx.W.deck.steps, TOPICS, OPEN)}`);
+    h += k.card('Worked steps: deck', `<p class="note">${A}(2024) 4.6.2.1, Table A4-1, 5.6.3, 9.7. Every result is the engine's value (the moved Prestressed Bridge Design engine). Inputs: <a href="#" data-goin="dd">Diaphragms / deck tab</a>; the covers, bar f<sub>y</sub>, design section and wearing surface: <a href="#" data-psset="deck">Settings › Deck design</a>.</p>${k.steps(ctx.W.deck.steps, TOPICS, OPEN)}`);
     return h;
   }
   /* the deck over the design girder (inches; x from the deck edge): the overhang with the barrier and the design wheel, the girder ℄,
