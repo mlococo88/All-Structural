@@ -364,6 +364,8 @@
     const R = B.shear, SB = window.SBDStiffeners, all = X.detail === 'all', subs = [], gl = [];
     const pk = i => 'sh.pan@' + i, sk = i => 'sh.st@' + i, tk = i => 'sh.ts@' + i, bk = i => 'sh.bs@' + i;
     const stS = (k, o) => window.SBDShearUI.stepsOf(R, k, o);   // the worked steps (with custom demands the step that names them first; ui/shear.js)
+    // sb-panel-eta PR (CLAUDE.md §6): the γ of the panel and station V_u steps carry the owner's η and m, worked in Project and owner (Owner load rules)
+    const ownN = on => (on && X.on('proj') ? note('Strength I load factors in the $V_{u}$ steps below: $\\gamma_{DC}$ = 1.25η, $\\gamma_{DW}$ = 1.50η, $\\gamma_{LL}$ = 1.75ηm (minimum 0.90/η, 0.65/η where a permanent load relieves the extreme), with η (see [[own.eta]]) and m (see [[own.m]]) of the owner load rules.') : null);
     if (R.panels.gov && R.gm.dem) gl.push({ g: 'Web panels', it: `Panel ${f(R.panels.gov.p, 2)}–${f(R.panels.gov.q, 2)} ft${R.panels.gov.end ? ' (end panel)' : ''}: $V_{u}$ ≤ $\\phi_{v}V_{n}$ (6.10.9)`, r: R.panels.gov.r, key: K(pk(R.panels.gov.i), 'pn.ok') });
     if (R.stGov) gl.push({ g: 'Stations', it: `${R.stGov.name}: ${R.stGov.gov.id} ${tt(R.stGov.gov.title)}`, r: R.stGov.gov.ratio, key: K(sk(R.stations.indexOf(R.stGov)), R.stGov.gov.step) });
     if (R.tsGov) gl.push({ g: 'Transverse stiffeners', it: `${R.tsGov.it.loc}: ${R.tsGov.c.id} ${tt(R.tsGov.c.title)}`, r: R.tsGov.it.r, key: K(tk(R.tsGov.i), R.tsGov.it.step) });
@@ -378,12 +380,14 @@
     subs.push(sub('pan', `Web panels (D = ${f(R.D, 2)} in, $F_{yw}$ = ${f(R.Fyw, 0)} ksi)`, [
       tbl(['Panel (ft)', '$d_{o}$ (in)', 'Type', 'k', 'C', '$\\phi V_{n}$ (kip)', '$V_{u}$ (kip)', 'Ratio'], (all ? pans : pSel).map(q => ({ cells: [`${f(q.p, 2)}–${f(q.q, 2)}`, N(q.d, 2), q.end ? 'end' : q.stiff ? 'interior' : 'unstiffened', N(q.k, 3), N(q.C, 4), N(q.phVn, 1),
         R.gm.dem ? N(q.Vu, 1) : '—', R.gm.dem ? R3(q.r, K(pk(q.i), 'pn.ok')) : '—'], cls: q === R.panels.gov ? 'gov' : '' }))),
+      ownN(pSel.length && R.gm.dem),   // sb-panel-eta PR
       ...pSel.map(q => gsteps('pan', pk(q.i), stS('pan', q), { lazy: all && q !== R.panels.gov, title: `Panel ${f(q.p, 2)}–${f(q.q, 2)} ft${q === R.panels.gov ? ' (governing)' : ''}` }))]));
     // stations
     const st = R.stations, sSel = all ? st : R.stGov ? [R.stGov] : [];
     const cell = (r, id) => { const q = r.checks.find(c => c.id === id); return q && q.inUse ? R3(q.ratio, sSel.includes(r) ? K(sk(st.indexOf(r)), q.step) : null) : { t: 'n/a', cls: 'na' }; };
     subs.push(sub('st', 'Shear at the stations (GS11, GS16, GS18)', [
       tbl(['Station', '$d_{o}$ (in)', '$V_{u}$ (kip)', '$\\phi V_{n}$ (kip)', 'GS11', 'GS16', 'GS18'], sSel.map(r => ({ cells: [`${r.name}${r.end ? ' (end panel)' : ''}`, r.do > 0 ? N(r.do, 2) : '—', N(r.VuP != null ? r.VuP : r.Vu, 1), N(r.sh.Vn, 1), cell(r, 'GS11'), cell(r, 'GS16'), cell(r, 'GS18')], cls: r === R.stGov ? 'gov' : '' }))),
+      ownN(sSel.length),   // sb-panel-eta PR
       ...sSel.map(r => gsteps('loc', sk(st.indexOf(r)), stS('loc', r), { lazy: all && r !== R.stGov, title: `${r.name}${r === R.stGov ? ' (governing)' : ''}` }))]));
     // transverse stiffeners
     if (R.TS && !R.TS.errors.length) { const T = R.TS.rows, tSel = all ? T.map((r, i) => i) : R.tsGov ? [R.tsGov.i] : [];
