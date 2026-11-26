@@ -33,7 +33,9 @@ function proj(owner, o = {}) {
   P.ownerRules = { owner, eta: { D: 'no', R: 'auto', I: 'yes', eD: 1, eR: 1, eI: 1 } }; P.project.owner = owner;
   P.girders.forEach(g => { g.segments = [{ x0: 0, x1: 80, D: 42, tw: 0.4375, topB: 14, topT: 0.75, botB: 16, botT: 1.0 }]; g.beff = 96; });
   P.stiffeners.layout = { web: 'stiffened', mode: 'uniform', doRatio: 1.5, bays: [], frames: { Lb: 20 } };
-  if (o.ped) { P.xs.sidewalks.L = { w: 6, t: 8, fence: null, fenceX: null }; P.xs.sidewalks.ped = 75; }
+  // 12 in thick: not mountable by the app's 12 in rule, so the pedestrian load acts with the vehicles (AASHTO 3.6.1.6) on this branch and
+  // with claude/sb-ridot-curb (RIDOT BDM 3.4.1.1.1 two cases apply to a mountable sidewalk only); an 8 in sidewalk there takes case 1, no PL
+  if (o.ped) { P.xs.sidewalks.L = { w: 6, t: 12, fence: null, fenceX: null }; P.xs.sidewalks.ped = 75; }
   return P;
 }
 const memo = new Map(), build = (owner, o = {}, gi = 0) => { const k = JSON.stringify([owner, o, gi]); if (!memo.has(k)) { const P = proj(owner, o), B = W.SBDShearUI.build({ P, g: gi, src: 'analysis' }); assert.ok(!B.err, B.err); memo.set(k, { P, B }); } return memo.get(k); };
