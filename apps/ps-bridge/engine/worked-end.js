@@ -49,7 +49,7 @@
       add({ id: `${o.P}.p${i}`, label: `Tension zone, part ${i}: ${q.name}, ${n(q.da, 2)} to ${n(q.db, 2)} in ${w}`, sym: `F_{${i}}`, eq: `A_{${i}}\\,f_{${i}}`, sub: `${n(q.A, 2)}(${n(q.f, 4)})`, value: q.F, unit: 'kip', d: 2,
         note: `${aTxt}; ${yTxt}; ${fEq(q, i)} = ${n(q.f, 4)} ksi (tension at the centroid). F = A f(centroid) is exact for a stress linear over the depth.` }, q.A * q.f); });
     add({ id: o.P, label: o.label, sym: o.sym, eq: tp.parts.map((q, j) => `F_{${j + 1}}`).join(' + '), sub: tp.parts.map(q => n(q.F, 2)).join(' + '), value: o.T, unit: 'kip', d: 1, ref: o.ref,
-      note: 'The sum of the parts is the engine\'s value (EZX, 2026-11-25: summed exactly by parts, engine/reltension.js). Gross outline: voids ignored, which over-states T.' }, tp.T, o.path);
+      note: 'The sum of the parts is the engine\'s value (EZX, 2026-11-25: summed exactly by parts, engine/reltension.js). ' + (G.isNext ? 'NEXT: the flange and the two stems; the gap between the stems is not concrete (EZN, 2026-11-25).' : 'Gross outline: voids ignored, which over-states T.') }, tp.T, o.path);
     void par;
     return tp;
   }

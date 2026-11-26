@@ -56,13 +56,14 @@ for (const [name, P] of Object.entries(designs())) {
       assert.ok(Math.abs(tp.T - Te) <= 1e-9 * Math.max(1, Te), `${id}: EZX: the engine's T = the parts ${tp.T} vs ${Te}`);
       // the engine's former strip value (R.relT.strip) within 0.05 kip + 0.1 % of the exact sum
       const sk = id === 'ez.rel.Ttop' ? 'Ttop' : id === 'ez.rel.Tbot' ? 'Tbot' : 'pier';
-      assert.ok(R.relT && Math.abs(R.relT.strip[sk] - Te) <= 0.05 + 1e-3 * Te, `${id}: strip ${R.relT && R.relT.strip[sk]} vs exact ${Te}`);
+      if (!R.g.isNext) assert.ok(R.relT && Math.abs(R.relT.strip[sk] - Te) <= 0.05 + 1e-3 * Te,   // EZN: a NEXT's width counts the stems only (not the engine's strips' width)
+ `${id}: strip ${R.relT && R.relT.strip[sk]} vs exact ${Te}`);
       nT++;
     }
   });
 }
 test('EZNI: by parts = a fine strip sum of the outline (the parts are exact for a linear stress)', () => {
-  const SW = vm.runInContext('sectionWidthAt', W);
+  const SW = (G, y) => W.PSBRelTension.widthAt(G, y);   // EZN: the tension force's width (NEXT: the stems only; every other shape sectionWidthAt)
   for (const g of ['PCI BT-72', 'MassDOT NEDBT 48', 'NEXT 36F', 'AASHTO Type I']) {
     const P = W.PSBModel.defaultProject(); P.base.girder = g; const R = W.computeAll(W.PSBDesign.inputs(P)), G = R.g;
     for (const [ft, fb] of [[-0.631, 4.696], [3.2, -0.45], [-0.2, -0.1], [-0.05, 2.0]]) {
