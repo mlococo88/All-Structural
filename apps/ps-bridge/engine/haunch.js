@@ -25,6 +25,7 @@
 
    apply(inp, R) -> R; R.hp = { th, d (Δ_deck), neg (Δ_deck < 0), mid, brg (t_h(x) at midspan and at the left bearing), min, max, xMax,
      owner, lim (4 for RIDOT, else null), warn (the warning text or null), sag (the sag warning text or null) }.
+   R.hp.tol: HCT (camber tolerance, below; null when none is entered).
    profile(th, d, psi) -> t_h(x).   anchors() -> the anchor texts (for the tests).   WARN_RE: matches the RIDOT warning; SAG_RE: the sag warning. */
 (function () {
   'use strict';
@@ -43,6 +44,23 @@
   // t_h at midspan for every Δ_deck (engineer 2026-11-26; was, pending review: t_h kept at the bearings when Δ_deck < 0)
   const profile = (th, d, psi) => Math.max(th + d * (1 - psi), 0.5);
   const f2 = v => (+v).toFixed(2);
+  /* HCT (engineer 2026-11-26, "camber tolerance: YES, as a Settings input (± % of predicted camber), showing haunch at bearings and midspan
+     for high and low camber"; §4 review; a reported value only, no check, load or ratio): base.opt.camTol = p, ± % of the predicted camber
+     (optional field; blank or 0: none, the result as before). The predicted camber C = R.cam.erect (the girder's camber at deck placement
+     before the deck load, PCI erection multipliers): the fabricated camber may be C ± p C (Decision (pending engineer review): the tolerance
+     on the erection camber, not on the deck deflection). dC = p |C| / 100. For each of high (+dC) and low (−dC) camber:
+       d        = Δ_deck ± dC                       the camber at deck placement
+       mid      = t_h ∓ dC                          the haunch at midspan when the seats and the haunch at the bearings are set for the predicted
+                                                    camber (t_h + Δ_deck at the bearings): high camber thins it (below 0: the girder top is
+                                                    above the deck soffit); no floor (a geometric value)
+       brgKeep  = max(t_h + Δ_deck ± dC, 0.5)       the haunch at the bearings that keeps t_h at midspan (the #1722 rule with that camber)
+     → null, or { p, C, dC, hi: { d, mid, brgKeep }, lo: { d, mid, brgKeep } } */
+  function tolOf(inp, R, th, d) {
+    const v = inp && inp.opt ? inp.opt.camTol : null, p = v === '' || v == null ? 0 : +v;
+    if (!(p > 0) || !R.cam || !isFinite(+R.cam.erect)) return null;
+    const C = +R.cam.erect, dC = p * Math.abs(C) / 100, one = s => ({ d: d + s * dC, mid: th - s * dC, brgKeep: Math.max(th + d + s * dC, 0.5) });
+    return { p, C, dC, hi: one(1), lo: one(-1) };
+  }
   function apply(inp, R) {
     if (!R || R.error || !Array.isArray(R.haunch) || !R.haunch.length || !R.cam) return R;
     if (R.hp) return R;   // already applied (the same result object)
@@ -63,7 +81,7 @@
     const brg = H[0].buildup, sag = hasH && d < 0
       ? `Girder sags at deck placement: Δ_deck = ${f2(d)} in (the camber at deck placement is downward). t_h stays the haunch at midspan, so the haunch at the bearings is ${brg > th + d + 1e-9 ? `the 0.5 in floor (t_h + Δ_deck = ${f2(th + d)} in)` : `t_h + Δ_deck = ${f2(brg)} in`}, thinner than the entered t_h = ${f2(th)} in. Review the prestress, the camber and the haunch (Camber & deflection tab).`
       : null;
-    R.hp = { th, d, neg: d < 0, mid: mid.buildup, brg, min, max, xMax, owner, lim, warn, sag };
+    R.hp = { th, d, neg: d < 0, mid: mid.buildup, brg, min, max, xMax, owner, lim, warn, sag, tol: tolOf(inp, R, th, d) };
     if (warn && Array.isArray(R.warns)) R.warns.push(warn);
     if (sag && Array.isArray(R.warns)) R.warns.push(sag);
     return R;
