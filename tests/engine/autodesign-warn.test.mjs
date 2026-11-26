@@ -56,7 +56,8 @@ test('ADWN evaluate(): with propWarn a flexure GS2 failure is a warning (not a f
 });
 
 test('ADWN example (§4): default project, Check one change D = 40 in: rejected before, listed with the WARNING now', () => {
-  const runIt = P => { const it = AD.run(P, {}); let s; while (!(s = it.next()).done); return s.value; };
+  const runIt = P => { const it = AD.run(P, { current: false }); let s;   // current: false (test time): no closing full check of the current design (R.current.full, not read here); the candidates as before
+    while (!(s = it.next()).done); return s.value; };
   const P = M.defaultProject(); P.autodesign = { mode: 'check', change: { D: 40 }, limits: { depthWarn: false } };
   const R0 = runIt(P); assert.equal(R0.cands.length, 0, 'enforced (the behaviour before): no candidate');
   P.autodesign.limits = {}; const R1 = runIt(P);

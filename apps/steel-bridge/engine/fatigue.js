@@ -35,7 +35,6 @@
   const ES = 29000, ED = 'AASHTO LRFD 10th Ed.';
   const St = () => window.SharedSteps, SEC = () => window.SBDSections, SH = () => window.SBDShear;
   const n0 = x => St().g(x, 0), n2 = x => St().n(x, 2), n3 = x => St().n(x, 3);
-  const pa = x => (x < 0 ? `(${n2(x)})` : n2(x));
   const GRADES = { '36': { Fy: 36, Fu: 58 }, '50': { Fy: 50, Fu: 65 }, '50W': { Fy: 50, Fu: 70 }, 'HPS50W': { Fy: 50, Fu: 70 }, 'HPS70W': { Fy: 70, Fu: 85 } };   // GirderDetail GD_GR
   const RANK = { na: 0, pass: 1, adv: 2, warn: 3, fail: 4 };
   const ge = (a, b) => a >= b - 1e-9;
@@ -305,7 +304,7 @@
       w.add({ id: 'y', label: `Height of the detail above the bottom of the steel (${locT.toLowerCase()})`, sym: 'y', eq: '', sub: '', value: r.y, unit: 'in', d: 3, ref: `${ED} Art. 6.6.1.2.1`,
         note: `Sections: b_eff = ${n2(dkR.beff)} in, n = ${n3(R.MR.n)}, haunch ${n2(R.dk.hh)} in${dkR.Ar > 0 ? `, A_r = ${n2(dkR.Ar)} in² at ${n2(dkR.dr)} in below the top of the deck` : ''}. Short-term composite ȳ = ${n3(r.S.cn.yb)} in, I = ${n0(r.S.cn.I)} in⁴; negative-moment section (${neg}) ȳ = ${n3(r.negS.yb)} in, I = ${n0(r.negS.I)} in⁴.` });
       w.add({ id: 'fP', label: 'Stress at the detail from the positive fatigue moment (short-term composite section; tension +)', sym: 'f_{+}', eq: '-\\frac{12M_{f+}(y - \\bar{y}_{n})}{I_{n}}', sub: `-\\frac{12(${n2(r.MfP)})(${n3(r.y)} - ${n3(r.S.cn.yb)})}{${n0(r.S.cn.I)}}`, value: r.fP, unit: 'ksi', d: 2, ref: `${ED} Art. 6.6.1.2.1` });
-      w.add({ id: 'fN', label: `Stress at the detail from the negative fatigue moment (${neg}; tension +)`, sym: 'f_{-}', eq: '-\\frac{12M_{f-}(y - \\bar{y}_{neg})}{I_{neg}}', sub: `-\\frac{12${pa(r.MfN)}(${n3(r.y)} - ${n3(r.negS.yb)})}{${n0(r.negS.I)}}`, value: r.fN, unit: 'ksi', d: 2, ref: `${ED} Art. 6.6.1.2.1` });
+      w.add({ id: 'fN', label: `Stress at the detail from the negative fatigue moment (${neg}; tension +)`, sym: 'f_{-}', eq: '-\\frac{12M_{f-}(y - \\bar{y}_{neg})}{I_{neg}}', sub: `-\\frac{12(${n2(r.MfN)})(${n3(r.y)} - ${n3(r.negS.yb)})}{${n0(r.negS.I)}}`, value: r.fN, unit: 'ksi', d: 2, ref: `${ED} Art. 6.6.1.2.1` });
       w.add({ id: 'df', label: 'Unfactored fatigue stress range at the detail', sym: '\\Delta f', eq: '|f_{+}| + |f_{-}|', sub: `|${n2(r.fP)}| + |${n2(r.fN)}|`, value: r.df, unit: 'ksi', d: 2, ref: `${ED} Art. 6.6.1.2.1` });
       if (r.hasDL) w.add({ id: 'fDL', label: 'Stress at the detail from the unfactored permanent loads (tension +)', sym: 'f_{DL}', eq: '-\\frac{12M_{D1}(y - \\bar{y}_{s})}{I_{s}} - \\frac{12M_{D2}(y - \\bar{y}_{2})}{I_{2}}', sub: `${n2(r.fD1)} + ${n2(r.fD2)}`, value: r.fDL, unit: 'ksi', d: 2, ref: `${ED} Art. 6.6.1.2.1`,
         note: `M_D1 = ${n2(r.MD1)} kip-ft on the steel section; M_D2 = ${n2(r.MD2)} kip-ft on the ${r.MD2 >= 0 ? 'long-term (3n) composite section' : 'steel + reinforcement section'}.${r.fD1c != null ? ` The steel-section term includes the utilities: ${n2(r.fD1c)} (DC1) + ${n2(r.fUT)} (UT, M = ${n2(r.MUT)}) + ${n2(r.fUF)} (UF, M = ${n2(r.MUF)}, only where it adds tension).` : ''}` });
