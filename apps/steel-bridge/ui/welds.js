@@ -131,9 +131,9 @@
   /* gamHtml(P): the project's load factors, read-only, with links to where they are set; the no-longer-used saved values of this tab */
   function gamHtml(P, file) {
     const G = projGam(P), O = oldGam(P), ro = (lbl, v, d, where) => `<div class="fRow"><label>${lbl}</label><span style="display:inline-block;min-width:5em;font-weight:600">${fmt(v, d)}</span><span class="unit">${where}</span></div>`;
-    const fl = '<a href="#" data-gotab="flex">Table 3.4.1-1 (as Flexure, Shear)</a>', ow = file ? "owner η and m: the hand-off file's" : '<a href="#" data-goin="proj">owner η and m: Project tab</a>';
+    const fl = '<a href="#" data-gotab="flex">Table 3.4.1-1 (as Flexure, Shear)</a>', ow = file ? "owner η and m: the hand-off file's" : '<a href="#" data-goin="proj" data-sbset="own">owner η and m: Settings › Owner and load modifiers</a>';
     return `<p class="note"><b>Load factors</b> (the project's, AASHTO LRFD 10th Ed.; read-only here, × the ${ow}, worked in the steps):</p>
-      ${ro(GAM_L.dc, G.dc, 2, fl)}${ro(GAM_L.dw, G.dw, 2, fl)}${ro(GAM_L.ll, G.ll, 2, fl)}${ro(GAM_L.fat, G.fat, 2, '<a href="#" data-goin="fs" data-gofld="fatigue.gam.fI">Fatigue &amp; studs inputs</a>')}
+      ${ro(GAM_L.dc, G.dc, 2, fl)}${ro(GAM_L.dw, G.dw, 2, fl)}${ro(GAM_L.ll, G.ll, 2, fl)}${ro(GAM_L.fat, G.fat, 2, '<a href="#" data-goin="fs" data-gofld="fatigue.gam.fI">Settings › Analysis and limit states</a>')}
       ${O.length ? `<div class="alert">This project has load factors saved from this tab's former inputs that differ from the project's and are <b>no longer used</b>: ${O.map(q => `${q.label} ${esc(q.was)} (now ${fmt(q.now, 2)})`).join('; ')}. They stay in the project file unchanged.</div>` : ''}`;
   }
   function render(host, ctx) {

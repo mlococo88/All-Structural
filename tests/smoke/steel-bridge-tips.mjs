@@ -49,8 +49,9 @@ try {
   await p.evaluate(t => { localStorage.setItem('sbd2.project.current', t); }, before); await p.reload(); await p.waitForSelector('#tabBar [data-otab="loads"]'); await p.waitForTimeout(1500);
 
   // 2-3. the Loads tab: hover, keyboard, tap
-  await p.click('#inTabs [data-itab="loads"]'); await p.waitForTimeout(400);
-  const lab = 'label[for="i_xs.lldf.skewVx"]', btn = `${lab} > .sbtip`, inp = '[id="i_xs.lldf.skewVx"]';
+  // SET (2026-11-26): the input moved to the Settings window (Live-load distribution); its copy there carries the same button
+  await p.click('#sbGear'); await p.click('[data-sbsg="lldf"]'); await p.waitForTimeout(400);
+  const lab = 'label[for="sbs-i_xs.lldf.skewVx"]', btn = `${lab} > .sbtip`, inp = '[id="sbs-i_xs.lldf.skewVx"]';
   assert.equal(await p.$eval(lab, l => l.textContent), 'Shear skew correction along the girder', 'label text unchanged by the button');
   assert.equal(await p.$eval(btn, b => b.textContent), '');
   const s0 = await saved(p), box0 = await p.$eval(inp, e => { const r = e.getBoundingClientRect(); return [r.x, r.y]; });
@@ -74,8 +75,9 @@ try {
   await p.click(btn); await p.mouse.move(5, 5); await p.waitForTimeout(100); assert.equal(await p.$eval('#sbTipPop', e => e.hidden), false, 'click pins');
   assert.equal(await p.inputValue(inp), 'whole', 'the click does not change the input');
   await p.click(btn); assert.equal(await p.$eval('#sbTipPop', e => e.hidden), true, 'second click hides');
-  await p.click(btn); await p.click('#inTabs [data-itab="loads"]'); assert.equal(await p.$eval('#sbTipPop', e => e.hidden), true, 'click elsewhere hides');
+  await p.click(btn); await p.click('#sbSetH'); assert.equal(await p.$eval('#sbTipPop', e => e.hidden), true, 'click elsewhere hides');
   assert.equal(await saved(p), s0, 'nothing saved by the tooltips');
+  await p.click('#sbSetSave');
   // a rating group heading (the vehicle check boxes are not toggled by the button)
   await p.click('#tabBar [data-otab="rt"]'); await p.waitForTimeout(1500);
   const vb = '.rt-vg:has([data-rtveh="Type3"]) .rt-vt > .sbtip';
