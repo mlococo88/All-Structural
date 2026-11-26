@@ -9931,6 +9931,98 @@ Before (main, src midas) and after (converted table): every engine result, worke
 ### Other tools with MCT / MIDAS links (not changed, one tool per PR)
 lldf.html ("Send DL to MCT Loads" and its MCT links), apps/steel-bridge ("Import MIDAS (.lga)" / "Export to MIDAS (.lga)", demand-file notes), apps/midas-model-inspector, tools.html, the old "Prestressed Bridge Design.html" (frozen), the root index.html (the MCT Generator).
 
+## 2026-11-25 — PR: claude/ps-ez-exact (PR #1720: https://github.com/mlococo88/All-Structural/pull/1720) (EZX) — the concrete tensile force of 5.9.2.3.1b summed exactly by parts instead of 240 strips (§4 calculation change; approved by the engineer 2026-11-25)
+### Request (engineer, 2026-11-25: "Merge, then exact")
+After PR #1714 (EZNI) showed the by-parts sum beside the engine's 240-strip value, make the exact by-parts sum the value the engine uses: the tension force at release, top and bottom (bonded release-tension steel), and the tension force in the girder top near an interior support.
+### Where
+- New `apps/ps-bridge/engine/reltension.js` (`window.PSBRelTension`): `parts(G, fTop, fBot)` (moved unchanged from `engine/worked-end.js` `tensionParts`, PR #1714) and `apply(inp, R)`.
+- `apps/ps-bridge/engine/holddown.js`, anchor `const compute0 = inp =>`: before: `apply(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp))`; after: `apply(inp, relT(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp)))` with `relT = (inp, R) => (window.PSBRelTension ? window.PSBRelTension.apply(inp, R) : R)`: on each engine result, before the PS-10 check and before the stages that run the chain more than once (UT-N `engine/ut.js` and PL-A `engine/pl.js` compare their present / absent states on the same values).
+- `apps/ps-bridge/index.html`: `'engine/reltension.js'` loaded before `'engine/holddown.js'`.
+- The frozen `engine/pbd-section.js` `releaseTensionForce` and `engine/pbd-compute.js` (`relSteel`, `cont.svc`) are unchanged byte for byte; the exact value replaces the strip value in R after `computeAll`, in the app's engine call (`PSBHoldDown.compute`). The frozen optimizer `pbd-optimize.js` (it calls `computeAll` directly) still uses the strip sum.
+- `engine/worked-end.js`: `tensionParts` now calls `PSBRelTension.parts`; the T step's note "Sum of the parts X kip; the result used is the engine's value Y kip (… 240 horizontal strips …)" is replaced by "The sum of the parts is the engine's value (EZX …). Gross outline: voids ignored, which over-states T.", and the step's shown value is the parts' sum (pair-tested = the engine to 1e-9). `ui/endzone.js` `partsTbl`: the rows "Sum ΣF_i" and "T used (the engine's, 240 strips)" replaced by one row "T = ΣF_i" (the engine's value, §).
+### Before / After (expressions)
+- Before (`pbd-section.js` `releaseTensionForce`, unchanged and still in R as `R.relT.strip`): `T = Σ_{i=1..240} max(0, −f(y_i)) · b(y_i) · h/240`, y_i = (i − ½)h/240, f(y) = f_bot + (f_top − f_bot) y/h, b(y) = `sectionWidthAt`.
+- After (`reltension.js` `parts`): `c = h|f_t| / (|f_t| + |f_c|)` (c = h when both fibres are in tension); the outline cut at its corners and at c into trapezoids; per part `A = (b_a + b_b)/2 · t`, `ȳ = d_a + t(b_a + 2b_b)/(3(b_a + b_b))`, `f = |f_t|(1 − ȳ/c)` (full depth: `|f_t| + (|f_o| − |f_t|) ȳ/h`), `F = A f`; `T = ΣF`. Then, as the engine: `T = T_top if T_top ≥ T_bot else T_bot`, `A_s,req = T / f_s`, `D/C = A_s,req / A_s,prov` (99 with none), PASS at D/C ≤ 1.0001; near an interior support `A_s,req = T / f_s` and its check where the engine has it.
+### Governing provision
+AASHTO LRFD 10th Ed. Art. 5.9.2.3.1b, Table 5.9.2.3.1b-1 (bonded reinforcement for the tensile force in the concrete of an uncracked section, at f_s = 0.5 f_y ≤ 30 ksi); near an interior support Art. 5.12.3.3.5 with the same table. Unchanged; only the summation of that force changes.
+### Check case (by hand)
+MassDOT NEDBT 48 (h = 48 in, top flange 60 × 8 in), f_top = −0.631 ksi, f_bot = 4.696 ksi: c = 48(0.631)/5.327 = 5.686 in; A = 60 × 5.686 = 341.15 in²; ȳ = 2.843 in; f = 0.631(1 − 2.843/5.686) = 0.3155 ksi; T = 341.15 × 0.3155 = 107.63 kip. Before (240 strips): 107.61 kip; after: 107.63 kip. A_s,req = T/30: 3.587 → 3.588 in².
+Reproducible project (the smoke test): MassDOT NEDBT 48, 12 draped strands at y_end = 12 in, third row 12 strands, A_s,prov 0.62 in²: f_top = −0.626, f_bot = 4.732 ksi at x = 3.00 ft; T_top 105.38 kip both (to 0.01), D/C 5.665 both.
+### Changes at displayed precision (T 0.1 kip, A_s,req 0.01 in², D/C 0.001; before → after)
+See the PR description (58 designs + the library sweep of 92 girder types). No verdict changes; no check added or removed; the pier T values change by ≤ 0.005 kip (none at 0.1 kip).
+### How verified
+Node, the branch before vs after on 58 designs (19 tab designs, 10 girder variants, each with the bonded steel off and on) and 184 library designs: every field of R other than `relSteel`, `cont.svc.Ttop / AsTop`, the two checks and the new `R.relT` identical. `tests/engine/psbridge-ez-noint.test.mjs` (T = the parts to 1e-9; the strip value kept in R.relT.strip within 0.05 kip + 0.1 %; the 200,000-strip check; the hand check; R.relSteel and the check carry the exact value); `tests/engine/psbridge-tabs.test.mjs` (the PS-10 test compares with computeAll + PSBRelTension.apply); the psbridge tests, check-syntax, the full engine suite, `tests/smoke/ps-bridge-ez-noint.mjs`.
+### Saved data
+None (no key, no format; R.relT is a computed result only).
+### Other copies
+Engine test file lists: `'reltension'` added next to `'holddown'` in every test that loads it (61 files), so the tests run the app's chain.
+Merge of main with PR #1725 (2026-11-26): its new `tests/engine/psbridge-report-governing.test.mjs` loads `holddown` and `worked-end` without `reltension`, so the End zone steps threw "Cannot read properties of undefined (reading 'parts')" in that test only (the app loads `engine/reltension.js` in index.html). `'reltension'` added after `'lldf-fg'` in its list, as in the other 61 files; RG 1–6 pass. Before: `['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', …]`; after: `['sections', 'model', 'rigid', 'lldf-fg', 'reltension', 'holddown', 'pierblock', …]`. No computed result of the app changes.
+### Decisions
+- EZX-a (approved by the engineer 2026-11-25): the exact sum applies to every engine result inside the app's engine call (`holddown.js` `compute0`), after `computeAll`; the frozen engine keeps its strip function, and its strip values stay in `R.relT.strip`.
+- EZX-b (approved by the engineer 2026-11-25): the frozen optimizer (`pbd-optimize.js`) stays on the strip sum; the app does not call it.
+- The change table of PR #1720 (no verdict changes; last-digit changes only) approved by the engineer 2026-11-25 with the merge.
+### Open items
+- EZNI-2 (NEXT: the gap between the stems counted as concrete) is not touched here.
+- The frozen optimizer (pbd-optimize.js `optimizeStrands`, `sweepDesign`) still uses the strip sum; the app's Compare tab uses the app's engine call (engine/compare.js).
+
+## 2026-11-25 — PR: claude/ps-report-governing (PR #1725: https://github.com/mlococo88/All-Structural/pull/1725) (RG) — Report: each girder type's governing line with a summary of the other lines; the rating's governing stations; the full rating table as an appendix (display only; no value or verdict changed)
+### Request (engineer, 2026-11-25, approved)
+A 4-line NEXT project printed 289 pages: every girder line worked in full (G3 = G2, G4 = G1) and a 179-row rating table per line. Work each girder type's governing line in full (state the rule), summarise every other line in a compact linked table (flag a line that differs), add "Work every girder line in full" to restore the long report; show the rating's governing stations and critical sections only (state how many were evaluated), with "Full rating table (appendix)"; every link must resolve; the contents and numbering stay consistent.
+### Where
+1. `apps/ps-bridge/report/builders.js`
+   - `tabSec()`, anchor `const html = U.output({ P: B.P, inp: B.inp, R: B.R, W: B.W, ui:`. Before: `ui: X.every ? { every: true } : {}`. After: `ui: Object.assign(X.every ? { every: true } : {}, k === 'rt' && !X.full ? { rtGov: true } : {})`; before `if (!subs.length)` the line `if (k === 'rt' && !X.full) { try { rtApp(B, X, U, FT, subs); } catch (e) { … } }`.
+   - New after `tabSec()`: `APP_KEY(u)` (`'rs.rtapp@u' + u`), `rtApp(B, X, U, FT, subs)` (note under the governing-stations card: "The table of every location: see [[rs.rtapp@u<i>]] (appendix)." or "…is on the [[tab:rt|Rating tab]]…"; with X.rtApp the tab's card "Rating factors at every location" from `U.output({…, ui: { every: true } })` read by `FT.cards` with a throw-away `vals`, as a sub `{ id: 'app', key: APP_KEY(X.u), app: true }` with a note "…the governing stations: see [[rs.rt]]"), `appSec(B, secs)` (moves the `app` subs out of the Rating sections into `{ id: 'rtapp', key: 'rs.rtapp', title: 'Appendix: rating factors at every station' }`).
+   - New before "2. project, basis and assumptions": `linesSub(B, X, M)` ("Girder lines not worked in full": null when `B.mode === 'all'`, one line, or no other line).
+   - `summary()`, anchor `if (B.all && B.all.n > 1 && window.PSBSummaryUI)`: before `subs.splice(1, 0, allSub(B, X, null));` after `{ subs.splice(1, 0, allSub(B, X, null)); const ln = linesSub(B, X, null); if (ln) subs.splice(2, 0, ln); }`.
+   - `multiSecs()`, after `subs.unshift(allSub(B, X, M)); { const el = elevSub(X); … }`: `{ const ln = linesSub(B, X, { unit: k => U.findIndex(u => u.k === k), range }); if (ln) subs.splice(1, 0, ln); }`.
+   - `model()`: `X` gets `full: opt.full != null ? !!opt.full : B.mode === 'all' && !!(B.all && B.all.n > 1), rtApp: !!opt.rtApp`; after the executive summary line `{ const ap = appSec(B, secs); if (ap) secs.push(ap); }`.
+2. `apps/ps-bridge/ui/rating.js` `along()`, anchor `const rows = A.rows, sel = SEL.key`: new line after it `if (inRpt && ctx.ui && ctx.ui.rtGov) return h + govCard(ctx.R, A);`; new `govRows(R)` and `govCard(R, A)` before `const esc2`; `window.PSBUiRating` exports `govRows`. The Rating tab (not the Report) is unchanged.
+3. `apps/ps-bridge/ui/report.js` `controls()`: the radio group "Worked sections: each type's governing line | every girder line" (`data-rpworked="gov"|"all"`) replaced by a "Scope:" row with the checkbox `data-rpworked="all"` "Work every girder line in full" (shown with more than one girder line, as before) and `data-rprtapp` "Full rating table (appendix)" (disabled when every line is worked in full); listener `o.worked = el.checked ? 'all' : 'gov'` and `o.rtApp = el.checked`; `fullOf(o, B)`; `model(…)` gets `full: fullOf(o, B), rtApp: !!o.rtApp`; the cache key gets `!!o.rtApp`.
+### Governing provision
+None changed. The rating rows are those of `engine/rating-along.js` (MBE 4th Ed. (2026) Art. 6A.4.2.1: the lowest rating factor governs; this table holds it); the governing-line rule is the existing PS-25 rule (`report/data.js` `units()`), now stated in §1.
+### Check case (the made-up bridge of the tests)
+NEXT 24F, L = 50 ft, 4 lines at 8 ft, 14 + 10 (4 debonded 10 ft) + 4 strands, Interior S1 on G2, G3, Exterior S1 (f′c 9 ksi) on G1, G4. Governing lines: G2 and G1 (full ties: the first line). §1 "Girder lines not worked in full": G2 worked (§5–§16), G3 "as G2", G1 worked (§17–§28), G4 "as G1"; every group PASS, governing check Confinement steel (5.9.4.4.2) 1.000. Rating: 179 ratings at 61 stations; the governing-stations table has 52 rows: lowest inventory RF flexure 1.448 at x = 22.50 ft, shear 2.387 at x = 19.17 ft, Service III 1.472 at x = 24.17 ft (= the engine's governing rows), plus the bearings (x = 0.83 / 49.17 ft), shear critical sections (2.45 → 2.50 ft), transfer points (3.00 / 47.00 ft), tenth points, debond points (10 / 40 ft) and their transfer points (13.00 → 13.33 ft, 37.00 → 36.67 ft), midspan. Printed pages (Letter): every line in full 284 / 244 (Detail every station / tab stations) = main; default 142 / 134 (main 148 / 128); with the appendix 155 / 147.
+### How verified
+- Engine results: SHA-256 of the whole result (computeAll + PS-10 + E1, every girder type × line, the rating at every station) of 58 PS test designs identical on origin/main and this branch (`2094b942…d7f3`).
+- Full mode ("Work every girder line in full"): the printed report text (Print report, `#rp-print`) byte-identical to main for both Detail settings.
+- `tests/engine/psbridge-report-governing.test.mjs` (6 tests), `tests/smoke/ps-bridge-report-governing.mjs` (page counts in print emulation in three modes, every printed link and § target present, the summary links, the appendix, the storage, 0 console errors), `tests/smoke/ps-bridge-types.mjs` (the checkbox), `node tests/engine/run.mjs psbridge`, the full engine suite, every ps-bridge smoke, `tests/check-syntax.mjs`.
+### Saved data
+No key or format changed. The existing `psb2.ui` → `rpt.worked` ('gov' | 'all') is the box "Work every girder line in full" (a saved 'all' stays ticked). New, additive, in the same object: `rpt.rtApp` (true when ticked; absent = off, the new default). Nothing is written into the project.
+### Decisions (pending engineer review)
+- RG-a. The new box uses the existing `rpt.worked` (the task: use existing report-settings storage): a user who chose "every girder line" before keeps the long report until the box is unticked.
+- RG-b. The line summary gives each check group's governing ratio and verdict (not each of the ~40 checks), the governing check and the verdict; a line is flagged "differs from G<n>: see values (…)" when its verdict, governing check or a group's verdict differs.
+- RG-c. "Each limit state and vehicle": each rating group (flexure +, flexure − over the pier, shear, Service III) with the HL-93 inventory and operating RF; the legal / permit vehicles have no station and stay in their card.
+- RG-d. A critical section that is not a rated station: the nearest rated station, the reason naming it; the bearing (x = 0, no rating there) by the first station.
+- RG-e. In the default mode the governing-stations table replaces the table of every location whatever the Detail choice; with every line in full the tables are as before and the appendix box is greyed.
+### Open items
+- None (no calculation issue found).
+
+## 2026-11-25 — PR: claude/ps-ez-next-stems (PR #1721: https://github.com/mlococo88/All-Structural/pull/1721) (EZN) — NEXT beams: the concrete tensile force of 5.9.2.3.1b counts the two stems only, not the gap between them (§4 calculation change; approved by the engineer 2026-11-25)
+### Request (engineer, 2026-11-25: "Fix NEXT stems only")
+EZNI open item 2: for a NEXT beam below the flange the engine's width (`sectionWidthAt`, the outermost edge of the outline at y) counts the gap between the two stems as concrete (NEXT 36F: 73 in instead of 2 × 13 = 26 in), over-stating the tension force there. NEXT shapes only; box beams and voided slabs keep their voids-ignored (conservative) basis.
+### Where
+- `apps/ps-bridge/engine/reltension.js` (EZX): new `chordWidth(G, y)` (the length of the horizontal line at y inside the closed outline `halfPolygon(G)`, × 2) and `widthAt(G, y) = G.isNext ? chordWidth(G, y) : sectionWidthAt(G, y)`; `parts()` reads `widthAt` instead of `sectionWidthAt`; the NEXT part below the flange is named "stems (the two stems; the gap between them not counted)" (was "stems (outline to the outer stem faces, as the engine)").
+- NEXT = `G.isNext`: the library's NEXT 24F–36F and MassDOT's NEXT F (24–36) and D (28–40) (sections.js gives both the engine's NEXT object; MassDOT's outline has tapered stems and fillets, read as drawn).
+- Frozen `engine/pbd-*.js` unchanged byte for byte. `sectionWidthAt` is read only by the engine's `releaseTensionForce` (release T top / bottom and the pier T, now replaced in R by reltension.js); `halfPolygon` (the outline) also feeds the drawings, the strand / input checks and the 3D view, which are not changed. Section properties (A, I, y_b) come from the shape tables, not from the outline width.
+### Before / After
+- Before (EZX): width b(y) = `sectionWidthAt(G, y)` = 2 × (the largest x of the half outline at y). NEXT below the flange: 2 × (outer stem face) = 2(stemCC/2 + B/2) (NEXT 36F: 2(30 + 6.5) = 73 in).
+- After: NEXT: b(y) = 2 × Σ(x_out − x_in) over the outline's crossings at y = the two stems (NEXT 36F: 2 × 13 = 26 in); every other shape as before. The sum T = Σ A_i f_i (EZX) is otherwise unchanged.
+### Governing provision
+AASHTO LRFD 10th Ed. Art. 5.9.2.3.1b, Table 5.9.2.3.1b-1 (the tensile force in the concrete computed on the uncracked section, carried by bonded reinforcement at 0.5 f_y ≤ 30 ksi); near an interior support Art. 5.12.3.3.5 with the same table. Unchanged; the section's concrete width is corrected for NEXT.
+### Check case (by hand): NEXT 36F, bottom tension at midspan (default project with this girder, 10 strands at y = 2 in, no draped strands)
+f_top = 2.158 ksi, f_bot = −2.542 ksi at x = 60 ft. c = 36(2.542)/(2.542 + 2.158) = 19.474 in (below the 28 in stems' top: one part, the stems).
+- Before: b = 73 in; A = 73 × 19.474 = 1421.6 in²; ȳ = 9.737 in; f = 2.542(1 − 9.737/19.474) = 1.2712 ksi; T = 1421.6 × 1.2712 = 1807.1 kip; A_s,req = 1807.1/30 = 60.24 in².
+- After: b = 26 in; A = 26 × 19.474 = 506.32 in²; same ȳ and f; T = 506.32 × 1.2712 = 643.6 kip; A_s,req = 643.6/30 = 21.45 in².
+### Changes at displayed precision
+See the PR description: every NEXT design tried (library and MassDOT NEXT F and D, simple and 2 × 80 ft continuous, the tab design NEXT 36F with a topping). With A_s,prov = 0.62 in² no verdict changes (D/C stays above 1); a verdict can change NG → OK where A_s,prov lies between the new and old A_s,req (test: NEXT 36F with 25 in²).
+### How verified
+`tests/engine/psbridge-ez-next-stems.test.mjs` (the widths; NEXT only; the hand check; other shapes unchanged; the NG → OK case); `tests/engine/psbridge-ez-noint.test.mjs` (the fine strip check on `widthAt`); before / after in Node: only R.relSteel, R.cont.svc.Ttop / AsTop, their checks and R.relT differ, on NEXT designs only; psbridge tests, check-syntax, the full engine suite, `tests/smoke/ps-bridge-ez-noint.mjs`.
+### Decisions
+- EZN-a (approved by the engineer 2026-11-25): "NEXT" is `G.isNext` (the library NEXT and MassDOT NEXT F and D); the MassDOT stems are read from the drawn outline (tapered, with fillets and the 0.75 in bottom chamfers).
+- The change table of PR #1721 (the NEXT reductions; a NEXT verdict can change NG → OK) approved by the engineer 2026-11-25 with the merge.
+### Saved data
+None.
+
 ## 2026-11-25 — PR: claude/ps-shear-spacing (SH-SP) — Shear: the stirrup spacing check counted in the verdict; β by Eq. 5.7.3.4.2-2 where A_v < A_v,min (§4 calculation change, approved by the engineer 2026-11-25)
 ### Request (engineer, 2026-11-25, found while reviewing a real project)
 1. The station table of the Shear tab marked the stirrup spacing FAIL (18 in provided against 9.47 in at two runs of stations) while the Shear check, the check summary and the overall verdict said PASS 0.540: the engine's `spOK` never reached `checks`.

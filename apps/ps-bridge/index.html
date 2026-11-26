@@ -56,6 +56,7 @@
     '../../shared/deck.js',  // DD (2026-11-24): the deck strip design written once (shared with the Steel Bridge app); here only its distEff (9.7.2.3 / 9.7.3.2)
     'engine/deckdist.js',    // DD (2026-11-24): the deck distribution reinforcement on the effective span length of 9.7.2.3, applied after computeAll (§4)
     'engine/shear-sp.js',    // SH-SP (2026-11-25): the stirrup spacing check and β of Eq. 5.7.3.4.2-2 where A_v < A_v,min (a copy of computeAll with 4 edits, §4)
+    'engine/reltension.js',  // EZX (2026-11-25): the concrete tensile force of 5.9.2.3.1b summed exactly by parts, applied after computeAll (§4)
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
     'engine/pierblock.js',   // PS-34: the pier compression block against the family's thickness (NEXT stems, box bottom slab, slabs; a warning only)
     'engine/demands.js',     // batch D1 (2026-11-15): the demand source of each girder type (this app / custom table; NOMCT 2026-11-25: saved imported demands converted or kept read only)
