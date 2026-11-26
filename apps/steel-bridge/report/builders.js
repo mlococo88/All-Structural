@@ -109,7 +109,7 @@
     const LT = M.lineTypes(P), list = LT.map((t, j) => (t.length ? { ...M.beffStep(P, P.girders[t[0]], j), label: `${gName(P.girders[t[0]])} on line G${j + 1}: ${M.beffStep(P, P.girders[t[0]], j).label.replace(/^Effective flange width b_eff, line G\d+:? ?/, '')}` } : null)).filter(Boolean);
     if (!list.length) return null;
     return sub('beff', 'Effective flange width (4.6.2.6.1)', [note(`${ED} Art. 4.6.2.6.1: the tributary width of each girder line (exterior: one-half the spacing to the adjacent girder plus the full overhang; interior: one-half the spacing to the adjacent girder on each side), unless "Override b_eff" is ticked for the girder type (the entered value on every line of the type). Every section that uses $b_{eff}$ takes the value of its girder line from here.`),
-      steps('', list)]);
+      steps('', [...list, ...(P.studs && P.studs.beffMode === 'bridge' && M.beffBridgeStep ? [M.beffBridgeStep(P, P.girders[0])] : [])])]);   // BEFF-1 (2026-11-26): the studs' bridge-wide b_eff, worked
   }
 
   /* ---------- 2. project and owner ---------- */
@@ -440,7 +440,7 @@
     if (!R.SR.errors.length) { const Sr = R.SR, C = R.SCC, cc = id => C.find(c => c.id === id) || { items: [] };
       subs.push(sub('sc', `Shear connectors (6.10.10): ${Sr.zones.length} pitch zones, ${Sr.regions.length} strength regions`, [
         note(window.SBDFatigueUI.SC_ED_TXT),   // F5 (2026-11-23): the stud checks follow the 10th Ed. only
-        kv([['Studs', `${f(Sr.d, 3)} × ${f(Sr.h, 2)} in`], ['$Q_{r}$', `${f(Sr.Qr, 2)} kip`, K('sc', 'sc.Qr')], ['$Z_{r}$ (Fatigue I)', `${f(Sr.Zr, 3)} kip`, K('sc', 'sc.ZrI')], ['$b_{eff}$', `${f(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? "this girder's own" : 'bridge-wide'})`, window.SBDModel && window.SBDModel.beffStep && B.P.xs && (!X.on || X.on('proj')) ? K('', `beff.G${(Sr.beffMode === 'girder' ? (window.SBDAnalysis ? window.SBDAnalysis.lineOf(B.P, B.girder) : 0) : 0) + 1}`) : K('sc', 'sc.beff')]]),
+        kv([['Studs', `${f(Sr.d, 3)} × ${f(Sr.h, 2)} in`], ['$Q_{r}$', `${f(Sr.Qr, 2)} kip`, K('sc', 'sc.Qr')], ['$Z_{r}$ (Fatigue I)', `${f(Sr.Zr, 3)} kip`, K('sc', 'sc.ZrI')], ['$b_{eff}$', `${f(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? "this girder's own" : 'bridge-wide'})`, window.SBDModel && window.SBDModel.beffStep && B.P.xs && (!X.on || X.on('proj')) ? (Sr.beffMode === 'girder' ? K('', `beff.G${(window.SBDAnalysis ? window.SBDAnalysis.lineOf(B.P, B.girder) : 0) + 1}`) : K('', 'beff.bridge')) : K('sc', 'sc.beff')]]),
         tbl(['Zone', 'Studs', '$V_{f}$ (kip)', 'Limit state', '$V_{sr}$ (kip/in)', '$p_{max}$ (in)', 'SC1'], Sr.zones.map((z, i) => { const a = cc('SC1').items[i] || {}; return [z.name, `${z.nr} @ ${f(z.p, 2)} in`, N(z.Vfr, 1), `Fatigue ${z.fat.lim}`, N(z.Vsr, 3), N(z.preq, 2), R3(a.r, K('sc', `scz${z.i}.ok`))]; })),
         tbl(['Region', 'P (kip)', 'n required', 'n provided', 'SC2'], Sr.regions.map((r, i) => { const a = cc('SC2').items[i] || {}; return [r.name, N(r.P, 1), N(r.nreq, 2), `${r.nprov}${r.lost ? ` − ${r.lost}` : ''}`, R3(a.r, K('sc', `scr${r.i}.ok`))]; })),
         gsteps('SBDFatigueUI:x', 'sc', window.SBDFatigueUI.stepsOf(R, 'sc'), { lazy: all, title: 'Worked steps, shear connectors' })])); }

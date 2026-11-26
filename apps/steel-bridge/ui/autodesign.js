@@ -329,7 +329,7 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     on('#ad_run', 'click', () => { const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): no run while an input error exists
       if (IE.length) { alert(`Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.\n\n${IE.slice(0, 12).map(e => '- ' + e.msg).join('\n')}`); return; }
       { const RLt = rolledTypes(P); if (RLt.length) { alert(`Auto design sizes plate girders. ${RLt.map(t => tyLab(P, t)).join(', ')} ${RLt.length > 1 ? 'have' : 'has'} a rolled shape, which it does not size.\n\nFor a rolled shape: Girders & plates tab, "Find the lightest W shape that passes". To size plates here instead, set the segments to Plate girder first.`); return; } }   // ROLL (2026-11-23)
-      S.running = true; S.stop = false; S.err = ''; S.R = null; S.RT = null; S.J = null; S.selT = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
+      S.running = true; S.stop = false; S.err = ''; S.note = ''; S.R = null; S.RT = null; S.J = null; S.selT = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
       const sc = scopeOf(P);
       if (sc !== 'together' && joint(P)) {   // SBJD (SB-4, SB-11): the joint run of every type with one common web depth
         AD().jointRun(JSON.parse(JSON.stringify(P)), p => { S.prog = p; document.querySelectorAll('.ad-bar>div').forEach(b => { b.style.width = Math.round(100 * (p.f || 0)) + '%'; }); document.querySelectorAll('.ad-bar + .note').forEach(nt => { nt.textContent = p.msg || ''; }); }, () => S.stop)
@@ -357,6 +357,7 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     let h = `<p class="note"><a href="#" data-adin="ad">Settings: Auto design input tab</a> (mode, objective, prices, limits, the design variables with Auto / Lock / Range, Run).</p>`;
     if (S.running || S.prog) h += `<section class="sec"><div class="secBody"><div class="fRow"><button type="button" id="ad_stop2"${S.running ? '' : ' disabled'}>Stop</button></div>${bar()}</div></section>`;
     if (S.err) h += `<div class="alert err">${esc(S.err)}</div>`;
+    if (S.note) h += `<div class="alert" id="ad-beffnote">${esc(S.note)}</div>`;   // BEFF-3 (2026-11-26): after Apply, until the next run
     if (P.autodesign && P.autodesign.undo) h += '<div class="fRow"><button type="button" id="ad_undo">Undo the last Apply</button></div>';
     S.wty = null;
     if (S.RT && S.J && !S.running) {   // SBJD (SB-4, SB-11): the joint run, its last pass per type; one Apply for every type
@@ -402,8 +403,8 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     on('[data-adapt]', 'click', e => { const q = (S.RT || []).find(z => z.t === +e.currentTarget.dataset.adapt); if (q && q.R.cands[0]) applyT([{ q, c: q.R.cands[0] }]); });
     on('#ad_apply', 'click', () => { if (S.RT) { const q = S.RT.find(z => z.t === S.selT) || S.RT[0], c = q && q.R.cands[S.sel]; if (c) applyT([{ q, c }]); return; }
       const c = S.R && S.R.cands[S.sel]; if (!c) return; if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
-      const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null; if (ctx.changed) ctx.changed(true); else redraw(); });
-    on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (Q[k] === undefined) delete P[k]; else P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
+      const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null; S.note = r.notes ? r.notes.join(' ') : ''; if (ctx.changed) ctx.changed(true); else redraw(); });   // BEFF-3: the b_eff note
+    on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; S.note = ''; ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (Q[k] === undefined) delete P[k]; else P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
   }
   /* lastWarns(P) (Summary tab, 2026-11-09; display only): the WARNING flags (c.propWarns) of the last Auto design run of this page view that
      is not applied: [{ i (candidate index), warns: [{ label, r }] }], stale = the project changed since the run; null when there is none */

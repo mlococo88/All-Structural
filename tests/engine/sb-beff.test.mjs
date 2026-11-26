@@ -7,7 +7,9 @@
 // 4. Migration (§5), both cases: a stored b_eff within 0.5 in of every line's tributary width -> calculated (no notice); otherwise the
 //    override is ticked, with a one-time notice listing the type, its entered and its calculated widths; the stored beff is never changed;
 //    the exported file is still schema version 1 with girders[i].beff, and the previous version of the model (git history) reads it.
-// 5. Studs, beffMode 'bridge' (as GirderDetail): one b_eff for every girder, the first exterior type's on G1.
+// 5. Studs, beffMode 'bridge' (as GirderDetail): one b_eff for every girder, the smallest b_eff of the girder lines (BEFF-1, engineer's
+//    decision 2026-11-26; before: the first exterior type's on G1).
+// 7. BEFF-3 (engineer's decision 2026-11-26): Auto design changing the girder count turns "Override b_eff" off, with a note.
 // 6. Hash proof: a project whose stored b_eff equals the tributary width of each of its lines gives the same results calculated as with
 //    the override ticked (= the rule before this change), module by module (SBDSummary.run).
 import assert from 'node:assert/strict';
@@ -21,7 +23,7 @@ const E = f => path.join(ROOT, 'apps/steel-bridge', f);
 const FILES = ['units.js', 'steps.js', 'vehicles.js', 'moving-load.js', 'lldf.js', 'report.js'].concat(['engine/model.js', 'engine/sections.js', 'engine/proportions.js', 'engine/flexure.js', 'engine/owners.js',
   'engine/lldf.js', 'engine/loads.js', 'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js',
   'engine/constructibility.js', 'engine/splices.js', 'engine/rating.js', 'ui/flexure.js', 'ui/loads.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/rating.js', 'ui/splices.js', 'ui/constructibility.js', 'engine/welds.js', 'ui/welds.js',
-  'report/data.js', 'report/builders.js', 'report/summary.js'].map(E));
+  'report/data.js', 'report/builders.js', 'report/summary.js', 'engine/autodesign.js'].map(E));
 const W = loadShared(...FILES);
 W.SBDReportData.install();
 const M = W.SBDModel, SEC = W.SBDSections, J = o => JSON.parse(JSON.stringify(o));
@@ -120,7 +122,7 @@ test('round trip: the exported file stays version 1 with girders[i].beff, and th
   assert.equal(ctx.SBDModel.exportJSON(q.project).includes('"beffOv": false'), true, 'and keeps the new field when it saves');
 });
 
-test('studs, bridge-wide b_eff (as GirderDetail): the first exterior type on G1, for every girder', () => {
+test('studs, bridge-wide b_eff (as GirderDetail): the smallest line b_eff (here G1, 96 in), for every girder', () => {
   const P = unequalOh(); P.studs.beffMode = 'bridge';
   assert.equal(M.beffBridge(P, P.girders[0]), 96, 'the interior type: G1 96 in');
   assert.equal(M.beffBridge(M.atLine(P, 1, 4), M.atLine(P, 1, 4).girders[1]), 96, 'G5 too: one width for the bridge');
@@ -158,4 +160,37 @@ test('hash proof: stored b_eff = the tributary width of each line -> the same re
     const a = hashAll(P), b = hashAll(Q); assert.ok(a.length > 0);
     assert.deepEqual(a, b, `${nm}: every module of every line identical`);
   });
+});
+
+test('BEFF-1 (2026-11-26): bridge-wide studs take the smallest line b_eff: an interior line narrower than the exterior lines', () => {
+  // newProject, bays 9.5 / 7.0 / 7.0 / 9.5 ft, overhangs 3.25 ft: G1 12(9.5/2 + 3.25) = 96, G2 12(9.5 + 7.0)/2 = 99, G3 12(7.0 + 7.0)/2 = 84,
+  // G4 99, G5 96 in. Before: the first exterior type on G1, 96 in. After: min = 84 in on G3 (the interior type).
+  const P = M.newProject(); P.xs.bays = [9.5, 7.0, 7.0, 9.5]; P.studs.beffMode = 'bridge';
+  assert.deepEqual([0, 1, 2, 3, 4].map(j => M.beffOf(P, P.girders[j === 0 || j === 4 ? 1 : 0], j)), [96, 99, 84, 99, 96]);
+  const B = M.beffBridgeOf(P, P.girders[1]); assert.equal(B.v, 84); assert.equal(B.j, 2); assert.equal(B.gi, 0); assert.equal(M.beffBridge(P, P.girders[1]), 84);
+  const st = M.beffBridgeStep(P, P.girders[1]); assert.equal(st.id, 'beff.bridge'); assert.equal(st.value, 84); assert.match(st.sub, /^\\min\(96\.00,\\ 99\.00,\\ 84\.00,\\ 99\.00,\\ 96\.00\)$/); W.SharedSteps.step(st);
+  const F = W.SBDFatigueUI, a1 = F.fromAnalysis(P, 1); assert.equal(a1.pl.girderDetail.details.studs.results.beff, 84, 'the payload'); assert.equal(a1.pl.girderDetail.deck.beff, 96, 'G1 own');
+  const R1 = F.build({ P, g: 1, src: 'analysis' }); assert.ok(!R1.err, R1.err); assert.equal(R1.SR.dk.beff, 84); assert.equal(R1.alt.beff, 96, 'the comparison: G1 own');
+  // a tie takes the lower line; an override enters with its value on every line of the type
+  const T = M.newProject(); T.studs.beffMode = 'bridge'; assert.deepEqual(J(M.beffBridgeOf(T, T.girders[0])), { ...J(M.beffBridgeOf(T, T.girders[0])), v: 96, j: 0, gi: 1 });
+  const O = M.newProject(); O.studs.beffMode = 'bridge'; O.girders[0].beffOv = true; O.girders[0].beff = 80; assert.equal(M.beffBridge(O, O.girders[1]), 80, 'interior override 80 < 96');
+  // the report: the Shear connectors b_eff row links to the worked minimum (Project and owner, step beff.bridge); no dangling link
+  const Bd = W.SBDReportData.compute(P, 1, { src: 'analysis' }), Md = W.SBDReportBuild.model(Bd, { detail: 'gov' }), doc = W.SharedReport.build(Md); assert.deepEqual(J(doc.unresolved), []);
+  assert.ok(JSON.stringify(Md).includes('beff.bridge'));
+  const Md2 = W.SBDReportBuild.model(Bd, { detail: 'gov', include: { proj: false } }); assert.deepEqual(J(W.SharedReport.build(Md2).unresolved), []);
+});
+
+test('BEFF-3 (2026-11-26): Auto design changing the girder count turns Override b_eff off (calculated), with a note; otherwise unchanged', () => {
+  const AD = W.SBDAutoDesign, P = M.defaultProject(); P.girders[0].beffOv = true; P.girders[0].beff = 120;
+  const L6 = { ...AD.layoutOf(P), nb: 6 }, Q = AD.projectWith(P, L6), S = P.xs.bays.reduce((a, v) => a + v, 0) / 5;
+  assert.equal(Q.girders[0].beffOv, false, 'override off'); assert.equal(Q.girders[0].beff, +(12 * S).toFixed(4), 'the stored value rewritten as before');
+  assert.equal(M.beffOf(Q, Q.girders[0], 2), M.tribBeff(Q.xs, 2), 'calculated: the line\'s tributary width');
+  const n = AD.beffResetNote(P, L6); assert.match(n, /girder count \(5 → 6\).*Override b_eff" is turned off for .*entered 120\.0 in/);
+  const A = AD.apply(P, { L: L6, cost: { w: 0 } }); assert.deepEqual(J(A.notes), [n]); assert.equal(A.project.girders[0].beffOv, false);
+  assert.equal(P.girders[0].beffOv, true, 'the project itself untouched until Apply is written'); assert.equal(A.undo.girders[0].beffOv, true, 'Undo puts the override back');
+  // the same girder count: nothing changes, no note
+  const L5 = AD.layoutOf(P), Q5 = AD.projectWith(P, L5); assert.equal(Q5.girders[0].beffOv, true); assert.equal(Q5.girders[0].beff, 120); assert.equal(AD.beffResetNote(P, L5), null);
+  assert.equal(AD.apply(P, { L: L5, cost: { w: 0 } }).notes, undefined);
+  // a calculated type: stays calculated, no note
+  const C = M.defaultProject(); C.girders[0].beffOv = false; assert.equal(AD.beffResetNote(C, { ...AD.layoutOf(C), nb: 6 }), null); assert.equal(AD.projectWith(C, { ...AD.layoutOf(C), nb: 6 }).girders[0].beffOv, false);
 });

@@ -329,12 +329,26 @@
     if (!g) return NaN; if (beffOvOf(P, g)) return +g.beff;
     const t = P && P.xs ? tribBeff(P.xs, Number.isInteger(j) ? j : designLine(P, g)) : NaN; return isNum(t) ? t : +g.beff;
   }
-  /* beffBridge(P, g): the one bridge-wide b_eff of the studs' option "Bridge-wide, as GirderDetail" (studs.beffMode 'bridge'). Decision
-     (pending engineer review, 2026-11-25): as before, the first girder type of position 'exterior' (none: g), now on line G1 when that type is
-     on G1, else on its design line: its b_eff there (calculated: that exterior line's tributary width; override: the entered value, as before). */
-  function beffBridge(P, g) {
+  /* beffBridge(P, g): the one bridge-wide b_eff of the studs' option "Bridge-wide, as GirderDetail" (studs.beffMode 'bridge').
+     BEFF-1, decided by the engineer 2026-11-26 (CLAUDE.md §4 change): the SMALLEST b_eff of the girder lines: min over every line j that has a
+     girder type of beffOf(P, type of j, j) (calculated: the line's tributary width; Override ticked: the type's entered value); a tie takes the
+     lower line. Before (2026-11-25): the first girder type of position 'exterior', on G1 when that type is on G1 (else its design line).
+     A project with no line assigned to a type (no cross-section): the rule before (the first exterior type, or g). beffBridgeOf(P, g):
+     { v, j (the governing line, 0-based; null for the fallback), gi (its type), list: [{ j, gi, v }] }; beffBridgeStep(P, g): its worked step
+     (id 'beff.bridge'). */
+  function beffBridgeOf(P, g) {
+    const LT = P && P.xs ? lineTypes(P) : [], list = LT.map((t, j) => (t.length ? { j, gi: t[0], v: beffOf(P, P.girders[t[0]], j) } : null)).filter(q => q && isNum(q.v));
+    if (list.length) { const m = list.reduce((a, q) => (q.v < a.v - 1e-9 ? q : a)); return { v: m.v, j: m.j, gi: m.gi, list }; }
     const q = ((P && P.girders) || []).find(t => t && t.position === 'exterior') || g, k = giOf(P, q), L = k >= 0 ? typeLines(P, k) : [];
-    return beffOf(P, q, L.includes(0) ? 0 : undefined);
+    return { v: beffOf(P, q, L.includes(0) ? 0 : undefined), j: null, gi: k, list: [] };
+  }
+  function beffBridge(P, g) { return beffBridgeOf(P, g).v; }
+  function beffBridgeStep(P, g) {
+    const B = beffBridgeOf(P, g), ref = 'AASHTO LRFD 10th Ed. Art. 4.6.2.6.1', fm = v => (+v).toFixed(2);
+    if (B.j == null) return { id: 'beff.bridge', label: 'Studs, bridge-wide b_eff (no girder line has a type): the first exterior girder type\'s b_eff', sym: 'b_{eff}', eq: '', sub: '', value: B.v, unit: 'in', d: 2, ref };
+    return { id: 'beff.bridge', label: `Studs, bridge-wide b_eff ("Bridge-wide, as GirderDetail"): the smallest b_eff of the girder lines, on line G${B.j + 1}`, sym: 'b_{eff}', eq: '\\min_{j}\\,b_{eff,j}',
+      sub: `\\min(${B.list.map(q => fm(q.v)).join(',\\ ')})`, value: B.v, unit: 'in', d: 2, ref,
+      note: `${B.list.map(q => `G${q.j + 1} ${fm(q.v)} in`).join(', ')} (each line's b_eff, steps beff.G<j>). One width for every girder's studs (engineer's decision BEFF-1, 2026-11-26: the smallest line b_eff; before, the first exterior type's b_eff on G1).` };
   }
   function beffStep(P, g, j) {
     const xs = (P && P.xs) || {}, n = Math.round(+xs.nb), B = xs.bays || [], ov = beffOvOf(P, g), jj = Number.isInteger(j) ? j : designLine(P, g), G = 'G' + (jj + 1);
@@ -755,5 +769,5 @@
      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
     return t || (o && o !== 'AASHTO' ? o : ''); };
-  window.SBDModel = { hideRec, carryRec, setRec, clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, BEFF_TOL, beffOvOf, beffOf, beffBridge, beffStep, migrateBeff, setLines, assignLine, renumberLines, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { hideRec, carryRec, setRec, clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, BEFF_TOL, beffOvOf, beffOf, beffBridge, beffBridgeOf, beffBridgeStep, beffStep, migrateBeff, setLines, assignLine, renumberLines, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();
