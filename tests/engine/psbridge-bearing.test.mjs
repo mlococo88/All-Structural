@@ -14,7 +14,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', 'handoff-store.js', 'handoff-stale.js', 'bearing-loads.js', ...PBDF, ...['sections', 'model', 'rigid', 'lldf-fg', 'lldf-opt', 'ut', 'pl', 'applicability', 'holddown', 'pierblock', 'rating-along', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'handoffs', 'bearing', 'hostale'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared('steps.js', 'handoff-store.js', 'handoff-stale.js', 'bearing-loads.js', ...PBDF, ...['sections', 'model', 'rigid', 'lldf-fg', 'lldf-opt', 'ut', 'pl', 'applicability', 'reltension', 'holddown', 'pierblock', 'rating-along', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'handoffs', 'bearing', 'hostale'].map(n => path.join(APP, `engine/${n}.js`)));
 W.BridgeBeam = { get: () => null }; W.BridgeXfer = { sharedProject: () => null };
 const M = W.PSBModel, BR = W.PSBBridge, H = W.PSBHandoffs, B = W.PSBBearing, SB = W.SharedBearingLoads, DM = W.PSBDemands;
 const J = v => JSON.parse(JSON.stringify(v));

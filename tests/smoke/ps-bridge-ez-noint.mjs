@@ -27,8 +27,8 @@ try {
   let r = await p.evaluate(() => { const c = document.querySelector('#card-ezrel'), rows = [...c.querySelectorAll('table.tbl tbody tr')].map(tr => tr.innerText.replace(/\s+/g, ' ').trim());
     return { rows, txt: c.innerText }; });
   assert.ok(r.rows.some(t => /^1\. top flange 0\.00 to \d+\.\d\d \d/.test(t)), JSON.stringify(r.rows));
-  assert.ok(r.rows.some(t => /^Sum ΣFi/.test(t)) && r.rows.some(t => /^T used \(the engine's, 240 strips\)/.test(t)), JSON.stringify(r.rows));
-  ok('card: the parts table (top flange), the sum and the engine\'s T');
+  assert.ok(r.rows.some(t => /^T = ΣFi \d/.test(t)) && !/240 strips/.test(r.txt), JSON.stringify(r.rows));
+  ok('card: the parts table (top flange) and T = ΣF_i (EZX: the engine\'s value)');
   const det = await p.$('details.sg-t[data-sgk="rel"]'); assert.ok(det, 'topic rel');
   await p.evaluate(() => { const d = document.querySelector('details.sg-t[data-sgk="rel"]'); d.open = true; d.dispatchEvent(new Event('toggle')); });
   await p.waitForTimeout(400);
@@ -43,7 +43,7 @@ try {
     await (await p.$('#card-ezrel')).screenshot({ path: SHOT.replace(/\.png$/, '-card.png') });
     ok('screenshots ' + SHOT); }
   await tab('rpt'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 180000 }); await p.waitForTimeout(600);
-  r = await p.evaluate(() => { const t = (document.querySelector('.rp-doc') || document.body).textContent.replace(/\s+/g, ' '); return { steps: /Tension zone, part 1: top flange/.test(t), tbl: /Sum ΣF/.test(t), int: /∫|\\int/.test(t), t: t.slice(t.indexOf('Bonded release'), t.indexOf('Bonded release') + 1500) }; });
+  r = await p.evaluate(() => { const t = (document.querySelector('.rp-doc') || document.body).textContent.replace(/\s+/g, ' '); return { steps: /Tension zone, part 1: top flange/.test(t), tbl: /T = ΣF/.test(t), int: /∫|\\int/.test(t), t: t.slice(t.indexOf('Bonded release'), t.indexOf('Bonded release') + 1500) }; });
   assert.ok(r.steps && r.tbl, 'report has the by-parts steps and table: ' + JSON.stringify(r)); assert.ok(!r.int, 'report: no integral');
   ok('Report: the by-parts steps, no integral');
   assert.deepEqual(errs, [], 'console errors'); ok('0 console errors');

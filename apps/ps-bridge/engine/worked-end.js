@@ -23,43 +23,13 @@
   const rowAt = (R, x) => R.grid.reduce((b, r) => Math.abs(r.x - x) < Math.abs(b.x - x) ? r : b, R.grid[0]);
 
   /* EZNI (2026-11-25, engineer: "no calculus in the app output"): the concrete tensile force of 5.9.2.3.1b worked by parts instead of
-     as an integral. Fibre stresses are linear over the depth (+ = compression), so the tension zone runs from the tension fibre to the
-     depth c = h|f_t| / (|f_t| + |f_c|) (the whole depth where both fibres are in tension). The girder outline (halfPolygon, the one
-     sectionWidthAt reads; voids ignored, as the engine) is cut into horizontal layers at its corners and at c; each layer is a trapezoid
-     of widths b_a (tension-fibre side) and b_b, so A = (b_a + b_b)/2 · t, its centroid is at a depth d_a + t(b_a + 2b_b)/(3(b_a + b_b)),
-     and F = A · f(centroid): exact for a linear stress over a trapezoid. T = ΣF. Display only: the step's result stays the engine's
-     releaseTensionForce (240 strips); tests/engine/psbridge-ez-noint.test.mjs checks the two agree to the displayed precision.
-     tensionParts(G, fTop, fBot) -> { from: 'top' | 'bottom' | null, ft, fo, c, full, parts: [{ name, da, db, ba, bb, t, A, dbar, f, F, k }], T }
-       (da, db, dbar: depths below the tension fibre, in; consecutive pieces of one named part, e.g. a curved fillet, merged: A summed,
-       dbar their area centroid, k the number of pieces)
+     as an integral. EZX (2026-11-25, engineer: "Merge, then exact"): the parts are the engine's value now; they are computed by
+     engine/reltension.js (PSBRelTension.parts, moved there from this file unchanged), which also puts their sum into R. tensionParts
+     here is that function (kept under this name for the tests and callers of PR #1714).
      tensionSteps(add, o) adds the steps: the tension depth (o.P + '.c'), one per part (o.P + '.p1' …: F_i = A_i f_i, the area, centroid
        and stress at the centroid worked in the note) and the total (o.P: T = F_1 + F_2 + …, value o.T the engine's, o.path its R path);
        o = { P, G, fTop, fBot, T, sym, label, x, src (where the fibre stresses are worked: a sentence), what (default 'Release fibre stresses'), ref, path }. Returns the parts. */
-  function tensionParts(G, fTop, fBot) {
-    const h = G.h, top = fTop <= fBot, ft = top ? fTop : fBot, fo = top ? fBot : fTop;   // ft: the tension fibre (most negative); fo: the other
-    if (!(ft < 0)) return { from: null, ft, fo, c: 0, full: false, parts: [], T: 0 };
-    const full = fo < 0, c = full ? h : h * (-ft) / (-ft + fo);
-    const yOf = u => top ? h - u : u, fAt = u => -ft - (fo - ft) * u / h;   // f(u): tension magnitude at depth u below the tension fibre
-    const ys = [...new Set(halfPolygon(G).map(p => +p[1]).filter(y => y > 1e-9 && y < h - 1e-9))];
-    const us = [0, ...ys.map(y => top ? h - y : y).filter(u => u < c - 1e-9), c].sort((a, b) => a - b);
-    const wAt = (ua, ub) => { const e = 1e-6 * (ub - ua), w1 = sectionWidthAt(G, yOf(ua + e)), w2 = sectionWidthAt(G, yOf(ub - e)), s = (w2 - w1) / (ub - ua - 2 * e);
-      return [w1 - s * e, w2 + s * e]; };   // the layer's widths at its two edges (read just inside it, where the outline is straight)
-    const [ttf, ttf2, tbf, tbf2] = G.d || [0, 0, 0, 0], isI = !G.isNext && !G.isBox && !G.isDeck;
-    const nameOf = (y0, y1) => { const m = (y0 + y1) / 2;
-      if (G.isNext && G.next) return m > h - G.next.ft ? 'flange' : 'stems (outline to the outer stem faces, as the engine)';
-      if (!isI) return 'full width (voids ignored, as the engine)';
-      return m > h - ttf ? 'top flange' : m > h - ttf - ttf2 ? 'top flange taper' : m < tbf ? 'bottom flange' : m < tbf + tbf2 ? 'bottom flange taper' : 'web'; };
-    const parts = [];
-    for (let i = 0; i < us.length - 1; i++) {
-      const da = us[i], db = us[i + 1], t = db - da; if (t < 1e-9) continue;
-      const [ba, bb] = wAt(da, db), A = (ba + bb) / 2 * t, dbar = da + (ba + bb > 0 ? t * (ba + 2 * bb) / (3 * (ba + bb)) : t / 2), f = fAt(dbar);
-      const name = nameOf(Math.min(yOf(da), yOf(db)), Math.max(yOf(da), yOf(db))), q = parts[parts.length - 1];
-      if (q && q.name === name) { const A2 = q.A + A; q.dbar = (q.A * q.dbar + A * dbar) / A2; q.A = A2; q.db = db; q.t = db - q.da; q.bb = bb; q.k++; q.f = fAt(q.dbar); q.F = q.A * q.f; }
-      else parts.push({ name, da, db, ba, bb, t, A, dbar, f, F: A * f, k: 1 });   // k: the outline's straight-sided pieces in the part (a curved fillet: several)
-    }
-    return { from: top ? 'top' : 'bottom', ft, fo, c, full, parts, T: parts.reduce((s, q) => s + q.F, 0) };
-  }
-
+  const tensionParts = (G, fTop, fBot) => window.PSBRelTension.parts(G, fTop, fBot);
   function tensionSteps(add, o) {
     const { n, par } = PW(), tp = tensionParts(o.G, o.fTop, o.fBot), G = o.G, h = G.h, fib = tp.from, w = fib === 'top' ? 'below the top' : 'above the soffit';
     const stress = `f_top = ${n(o.fTop, 3)} ksi, f_bot = ${n(o.fBot, 3)} ksi (+ = compression)`;
@@ -79,7 +49,7 @@
       add({ id: `${o.P}.p${i}`, label: `Tension zone, part ${i}: ${q.name}, ${n(q.da, 2)} to ${n(q.db, 2)} in ${w}`, sym: `F_{${i}}`, eq: `A_{${i}}\\,f_{${i}}`, sub: `${n(q.A, 2)}(${n(q.f, 4)})`, value: q.F, unit: 'kip', d: 2,
         note: `${aTxt}; ${yTxt}; ${fEq(q, i)} = ${n(q.f, 4)} ksi (tension at the centroid). F = A f(centroid) is exact for a stress linear over the depth.` }, q.A * q.f); });
     add({ id: o.P, label: o.label, sym: o.sym, eq: tp.parts.map((q, j) => `F_{${j + 1}}`).join(' + '), sub: tp.parts.map(q => n(q.F, 2)).join(' + '), value: o.T, unit: 'kip', d: 1, ref: o.ref,
-      note: `Sum of the parts ${n(tp.T, 2)} kip; the result used is the engine's value ${n(o.T, 2)} kip (the gross outline cut into 240 horizontal strips; voids ignored, which over-states T).` }, undefined, o.path);
+      note: 'The sum of the parts is the engine\'s value (EZX, 2026-11-25: summed exactly by parts, engine/reltension.js). Gross outline: voids ignored, which over-states T.' }, tp.T, o.path);
     void par;
     return tp;
   }
