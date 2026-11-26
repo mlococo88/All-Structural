@@ -10002,3 +10002,38 @@ Only designs that sag at deck placement (Δ_deck < 0) on a section with a haunch
 `tests/engine/psbridge-haunch.test.mjs` (the sag test rewritten: the profile at every tenth point, the warning text, the 0.5 in floor, no warning without sag; every tab case: only the haunch values and the RIDOT / sag warnings differ from the page without the module); `psbridge-drawings-h` (bearing haunch max(t_h + Δ_deck, 0.5)); harness B (`tests/psbridge-compare.mjs`, the profile worked from the old app's Δ_deck of either sign); smoke `tests/smoke/ps-bridge-haunch.mjs` (the banner on a sagging design, none otherwise).
 ### Open items
 Camber tolerance (± % of the predicted camber, a Settings input): the follow-up PR (claude/ps-haunch-camber-tol). Cross slope: not now.
+
+## 2026-11-26 — PR: claude/ps-haunch-camber-tol (HCT) — the camber tolerance: the haunch at midspan and at the bearings for high and low camber (§4 review; a reported value only, no check, load or ratio) — NOT MERGED, engineer review; based on PR #1722
+### Request (engineer answers, 2026-11-26)
+"#1722 camber tolerance: YES, as a Settings input (± % of predicted camber), showing haunch at bearings and midspan for high and low camber. Follow-up PR, §4 review."
+### Where
+- New input `base.opt.camTol` (%, optional: blank or 0 = none; 0 to 100), in `apps/ps-bridge/engine/fields.js`, Cross-section tab, card "Deck and haunch" (anchor `F('base.haunchInProps'`): put there for now; the Settings window (claude/ps-settings) is to list it. Saved data: an optional field of the base design (and so of a girder type's overrides); a project without it reads as none; no key renamed, nothing migrated (§5).
+- `apps/ps-bridge/engine/haunch.js`: new `tolOf(inp, R, th, d)` (before `function apply`), `R.hp.tol`.
+- `apps/ps-bridge/engine/worked-end.js` camber() (anchor `const T = R.hp.tol;`): steps `cb.tolC`, `cb.tol.hi.mid`, `cb.tol.hi.brg`, `cb.tol.lo.mid`, `cb.tol.lo.brg`.
+- `apps/ps-bridge/ui/camber.js`: the card `#card-cbtol` (predicted, high, low: Δ_deck, the haunch at midspan, the haunch at the bearings) with § links; the topic ids.
+### Before
+No camber tolerance.
+### After
+```
+δ_C = p |Δ_erect| / 100                         // Δ_erect = R.cam.erect, the predicted girder camber at deck placement (PCI erection multipliers)
+high / low:  Δ_deck ± δ_C
+  haunch at midspan, the seats and bearing haunch set for the predicted camber:  t_h ∓ δ_C   (no floor; below 0: the girder top above the deck soffit)
+  haunch at the bearings that keeps t_h at midspan:                            max(t_h + Δ_deck ± δ_C, 0.5)
+```
+### Decisions (pending engineer review)
+- HCT-1. The tolerance is on the predicted erection camber Δ_erect (what the fabricator controls), not on the deck deflection; Δ_deck shifts by the same δ_C.
+- HCT-2. Two readings are shown for each case: the midspan haunch with the seats and bearing haunch set for the predicted camber (what the plans give), and the bearing haunch that would keep t_h at midspan.
+- HCT-3. Default: none (blank). No owner value was found (RIDOT BDM 5.6.1 and 9.4.6 ask that the haunch at the supports allow for the camber with its tolerance, without a number).
+- HCT-4. Display only: no warning is added when the high-camber midspan haunch is below 0 or below t_h (the card says so in red when below 0).
+### Governing provision
+Geometry. AASHTO LRFD 10th Ed. (2024) Art. 5.6.3.5.2 (camber); RIDOT BDM (April 2026) 5.6.1 and 9.4.6 (the haunch at the supports set with the estimated camber and its tolerance; cited, not quoted).
+### Check case (by hand), tests/engine/psbridge-camtol.test.mjs
+NEXT 24F, L 45 ft, flange 120 in, t_s 8 in, t_h 2 in, strands 16 / 16 / 12 straight, w_NC 0, w_DC2 0.5, w_DW 0.3 klf; p = 10 %: Δ_erect = 3.748 in, δ_C = 0.1(3.748) = 0.375 in; Δ_deck = 3.346 in.
+| Camber | Δ_deck (in) | Haunch at midspan (in) | Haunch at the bearings to keep t_h (in) |
+|---|---|---|---|
+| Predicted | 3.346 | 2.00 | 2 + 3.346 = 5.35 |
+| High | 3.721 | 2 − 0.375 = 1.63 | 2 + 3.346 + 0.375 = 5.72 |
+| Low | 2.971 | 2 + 0.375 = 2.37 | 2 + 3.346 − 0.375 = 4.97 |
+Before: none. No other value changes (with or without the input, the result is the same but R.hp.tol).
+### How verified
+`tests/engine/psbridge-camtol.test.mjs` (new: hand check; blank / 0 / absent: the whole result as before; p > 0: only R.hp.tol; the steps; the field); smoke `tests/smoke/ps-bridge-camtol.mjs` (new: the input, the card's rows and § links, no card without it, 0 console errors).

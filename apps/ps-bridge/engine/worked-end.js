@@ -208,6 +208,17 @@
       add({ id: 'haunch', label: 'Haunch at midspan', sym: 't_{h,mid}', eq: eqOf(1), sub: subOf(1, 1), value: hM.buildup, unit: 'in', d: 2, note: nt }, HP.profile(+inp.th, c.afterDeck, hM.par), 'haunch.5.buildup');
       add({ id: 'haunchBrg', label: 'Haunch at the bearings', sym: 't_{h,brg}', eq: eqOf(0), sub: subOf(0, 0), value: h0.buildup, unit: 'in', d: 2,
         note: [R.hp.sag ? 'Thinner than t_h: the girder sags at deck placement (Δ_deck < 0; the design warning).' : '', R.hp.warn ? 'Thicker than 4 in: RIDOT BDM 9.4.6 (reinforce the haunch where it is thicker than 4 in).' : ''].filter(Boolean).join(' ') }, HP.profile(+inp.th, c.afterDeck, h0.par), 'haunch.0.buildup');
+      const T = R.hp.tol;
+      if (T) {   // HCT (engineer 2026-11-26; engine/haunch.js tolOf): the camber tolerance, ± p % of the predicted (erection) camber
+        add({ id: 'tolC', label: `Camber tolerance: ± ${n(T.p, 1)} % of the predicted camber`, sym: '\\delta_{C}', eq: '\\frac{p}{100}\\,|\\Delta_{erect}|', sub: `\\frac{${n(T.p, 1)}}{100}\\,|${n(T.C, 3)}|`, value: T.dC, unit: 'in', d: 3,
+          note: 'p: the Cross-section input (Deck and haunch); Δ_erect: the erection camber (§cb.erect), the girder camber at deck placement before the deck load. The fabricated camber may be Δ_erect ± δ_C.' }, T.p * Math.abs(T.C) / 100);
+        [['hi', 'High', '-', '+'], ['lo', 'Low', '+', '-']].forEach(([k, L, sm, sb]) => {
+          add({ id: `tol.${k}.mid`, label: `${L} camber: haunch at midspan (the seats and the bearing haunch set for the predicted camber)`, sym: `t_{h,mid,${k}}`, eq: `t_{h} ${sm} \\delta_{C}`, sub: `${n(+inp.th, 2)} ${sm} ${n(T.dC, 3)}`, value: T[k].mid, unit: 'in', d: 2,
+            note: k === 'hi' ? `The girder top rises by δ_C at midspan against a deck soffit set for the predicted camber.${T.hi.mid < 0 ? ' Below 0: the girder top is above the deck soffit.' : ''}` : 'The girder top is δ_C lower at midspan than predicted.' }, +inp.th + (k === 'hi' ? -1 : 1) * T.dC);
+          add({ id: `tol.${k}.brg`, label: `${L} camber: haunch at the bearings that keeps t_h at midspan`, sym: `t_{h,brg,${k}}`, eq: `\\max(t_{h} + \\Delta_{deck} ${sb} \\delta_{C},\\ 0.5)`, sub: `\\max(${n(+inp.th, 2)} + ${neg ? '(' + n(c.afterDeck, 3) + ')' : n(c.afterDeck, 3)} ${sb} ${n(T.dC, 3)},\\ 0.5)`, value: T[k].brgKeep, unit: 'in', d: 2 },
+            Math.max(+inp.th + c.afterDeck + (k === 'hi' ? 1 : -1) * T.dC, 0.5));
+        });
+      }
     } else
     add({ id: 'haunch', label: 'Haunch build-up at midspan', sym: 't_{h,mid}', eq: '\\max(t_{h} + \\Delta_{deck},\\ 0.5)', sub: `\\max(${n(+inp.th, 2)} + ${n(c.afterDeck, 3)},\\ 0.5)`, value: hM.buildup, unit: 'in', d: 2,
       note: 'Shaped along the girder by 4x(L − x)/L² (the tenth-point table).' }, Math.max(+inp.th + c.afterDeck * hM.par, 0.5), 'haunch.5.buildup');
