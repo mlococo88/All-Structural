@@ -4,7 +4,7 @@
 //   1. hand check: NEXT 24F, L = 45 ft, S = 10 ft, t_h = 2 in, 44 straight strands (Δ_deck = 3.346 in): midspan 5.35 -> 2.00 in, bearings
 //      2.00 -> 5.35 in, 0.1L 3.20 -> 4.14 in; only R.haunch[i].buildup changes (and buildup0, R.hp are added): the page's whole result with
 //      and without the correction, value by value;
-//   2. Δ_deck < 0 (decision pending engineer review): the minimum t_h at the bearings, t_h + |Δ_deck| at midspan;
+//   2. Δ_deck < 0 (engineer 2026-11-26): t_h stays at midspan, the haunch at the bearings max(t_h + Δ_deck, 0.5) < t_h, and the sag warning;
 //   3. RIDOT BDM 9.4.6: one warning when the haunch is thicker than 4 in (RIDOT only; not at 4 in or less; not for box beams);
 //   4. the anchors in the frozen engine's computeAll; a changed engine value is an error, not a silent second correction;
 //   5. the worked steps (midspan, bearings) carry the result's values; every tab case: only the haunch values and the RIDOT warning differ.
@@ -51,14 +51,24 @@ test('hand check: NEXT 24F 45 ft, t_h = 2 in: midspan 5.35 -> 2.00, bearings 2.0
   assert.deepEqual(diff(R, R0).filter(p => !isHP(p)), [], 'nothing else of R changes');
 });
 
-test('Δ_deck < 0 (decision pending engineer review): t_h kept at the bearings, t_h + |Δ_deck| at midspan', () => {
+test('Δ_deck < 0 (engineer 2026-11-26): t_h stays at midspan, max(t_h + Δ_deck, 0.5) at the bearings, and the sag warning', () => {
   const P = next45(P => { P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; }), { R, R0 } = both(P), d = R.cam.afterDeck, H = R.haunch;
   assert.ok(d < 0, 'sag at deck placement: ' + d);
-  near(H[0].buildup, 2, 1e-12, 'bearings'); near(H[5].buildup, 2 - d, 1e-12, 'midspan'); assert.equal(R.hp.neg, true); assert.equal(R.hp.min, 2);
-  H.forEach(r => assert.ok(r.buildup >= 2 - 1e-12, 'never thinner than t_h'));
-  assert.deepEqual(diff(R, R0).filter(p => !isHP(p)), []);
+  near(H[5].buildup, 2, 1e-12, 'midspan'); near(H[0].buildup, Math.max(2 + d, 0.5), 1e-12, 'bearings'); assert.ok(H[0].buildup < 2, 'thinner than t_h at the bearings');
+  H.forEach(r => near(r.buildup, Math.max(2 + d * (1 - r.par), 0.5), 1e-12, 'x = ' + r.x));
+  assert.equal(R.hp.neg, true); assert.equal(R.hp.mid, 2); assert.equal(R.hp.max, 2);
+  const w = R.warns.filter(x => W.PSBHaunch.SAG_RE.test(x)); assert.equal(w.length, 1); assert.equal(w[0], R.hp.sag);
+  assert.ok(w[0].includes(`Δ_deck = ${d.toFixed(2)} in`) && w[0].includes(`t_h + Δ_deck = ${H[0].buildup.toFixed(2)} in`), w[0]);
+  const wi = R.warns.indexOf(R.hp.sag);
+  assert.deepEqual(diff(R, R0).filter(p => !isHP(p)), [`warns.${wi}`], 'only the haunch and the sag warning');
   const st = W.PSBWorkedEnd.camber(W.PSBDesign.inputs(P), R).steps;
-  assert.ok(/the conservative choice/.test(st.find(s => s.id === 'cb.haunch').note));
+  assert.ok(/girder sags at deck placement/.test(st.find(s => s.id === 'cb.haunch').note));
+  assert.ok(/Thinner than t_h/.test(st.find(s => s.id === 'cb.haunchBrg').note));
+  // the 0.5 in floor: t_h = 0.5 in, the bearings at 0.5 in, the warning names the floor
+  const Q = next45(P => { P.base.rows = [{ n: 6, y: 2.875, dbnd: 0, nd: 0 }]; P.base.th = 0.5; }), Rq = W.PSBHoldDown.compute(W.PSBDesign.inputs(Q));
+  assert.ok(Rq.cam.afterDeck < 0); assert.equal(Rq.haunch[0].buildup, 0.5); assert.ok(/the 0\.5 in floor/.test(Rq.hp.sag), Rq.hp.sag);
+  // no sag: no warning
+  const Rn = W.PSBHoldDown.compute(W.PSBDesign.inputs(next45())); assert.equal(Rn.hp.sag, null); assert.ok(!Rn.warns.some(x => W.PSBHaunch.SAG_RE.test(x)));
 });
 
 test('RIDOT BDM 9.4.6: one warning when the haunch is thicker than 4 in (RIDOT only, not at 4 in or less, not for box beams)', () => {
@@ -86,7 +96,7 @@ test('the anchors in the frozen computeAll; a changed engine haunch value is an 
   assert.equal(R2.haunch[5].buildup, v, 'applied once');
 });
 
-test('worked steps: midspan and bearings carry the result; every tab case: only the haunch and the RIDOT warning differ', () => {
+test('worked steps: midspan and bearings carry the result; every tab case: only the haunch and the RIDOT / sag warnings differ', () => {
   const P = next45(), inp = W.PSBDesign.inputs(P), R = W.PSBHoldDown.compute(inp), E = W.PSBWorkedEnd.camber(inp, R);
   assert.ok(Object.is(E.steps.find(s => s.id === 'cb.haunch').value, R.haunch[5].buildup)); assert.ok(Object.is(E.steps.find(s => s.id === 'cb.haunchBrg').value, R.haunch[0].buildup));
   assert.equal(E.paths['cb.haunchBrg'], 'haunch.0.buildup'); assert.equal(E.paths['cb.haunch'], 'haunch.5.buildup');
@@ -94,8 +104,8 @@ test('worked steps: midspan and bearings carry the result; every tab case: only 
   let n = 0;
   for (const [name, Pc] of Object.entries(TAB_CASES(() => W.PSBModel.defaultProject()))) {
     const { R: Rc, R0 } = both(Pc); if (Rc.error) continue; n++;
-    const d = diff(Rc, R0).filter(p => !isHP(p)), wi = (Rc.warns || []).findIndex(x => W.PSBHaunch.WARN_RE.test(x));
-    assert.deepEqual(d, wi >= 0 ? [`warns.${wi}`] : [], name);
+    const d = diff(Rc, R0).filter(p => !isHP(p)), wi = [...(Rc.warns || [])].map((x, i) => W.PSBHaunch.WARN_RE.test(x) || W.PSBHaunch.SAG_RE.test(x) ? `warns.${i}` : null).filter(Boolean);
+    assert.deepEqual(d, wi, name);
   }
   assert.ok(n >= 7, 'cases ' + n);
 });
