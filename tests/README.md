@@ -4,6 +4,8 @@ The tools stay single, self-contained HTML files with no build step and no npm (
 
 **Engine tests (Node only, no browser):** `node tests/engine/run.mjs` loads the classic scripts in `shared/` into a Node `vm` context and runs every `tests/engine/*.test.mjs` (add a name fragment to run some: `node tests/engine/run.mjs moving-load`). See `shared/README.md`.
 
+**Only the affected tests (2026-11-26):** `node tests/engine/affected.mjs [<git range>]` (default `origin/main...HEAD`) prints the engine test files a branch's changes affect, worked out from what each test file actually loads (its `loadShared` / `path.join` paths and its local helper modules), not from file names. For a PR that touches one app only, the pre-merge full run is `node tests/engine/run.mjs $(node tests/engine/affected.mjs)`. A change to shared code (`shared/**`), to `tests/engine/harness.mjs` / `run.mjs` / `affected.mjs`, to `tests/libs/**`, or to any path it cannot place prints every file, so it runs everything (CLAUDE.md §3). `--why` lists on stderr how each changed path was mapped. A full file name given to `run.mjs` (ending `.test.mjs`) now runs that file only (`legacy.test.mjs` no longer also runs `psbridge-legacy.test.mjs`); a name fragment still matches every file containing it. The mapping rules are in the header of `tests/engine/affected.mjs`. Browser smokes are not covered: run the changed tool's smokes as before.
+
 **Steel Bridge Design (2026-11-19, SBDA):** the old single-file app is archived as `archive/Steel Bridge Design (archived 2026-11-19).html`; the GirderDetail / Preliminary sizing / ST-Girder tests and scripts below read that file (constant `SBD_ARCHIVE_FILE` in `tests/engine/harness.mjs`, re-exported by `tests/lib.mjs`), and a git ref older than the archiving is read under its old name. `Steel Bridge Design.html` is now a redirect page to `apps/steel-bridge/index.html`.
 
 ## Requirements
@@ -77,6 +79,10 @@ node tests/smoke/steel-bridge-rating-vehicles.mjs [--shots <dir>]
 # Steel Bridge, decisions of 2026-11-23: the "Shear skew correction along the girder" drop-down (whole length / tapered, 4.6.2.2.3c), its notes
 # and steps, the stud edition note, the live load deflection on the bridge stiffness (2.5.2.6.2); 0 console errors
 node tests/smoke/steel-bridge-skewv-defl.mjs
+
+# Steel Bridge Settings window (SET, 2026-11-26): the gear button, moved rows hidden on their tabs, edit / Save / Undo / Redo / Cancel / Esc,
+# focus trap, Auto design and owner fields, links from the output tabs and the error banner to the window, phone width, 0 console errors
+node tests/smoke/steel-bridge-settings.mjs [<dir for sb-settings.png, sb-settings-phone.png>]
 
 # Steel Bridge rolled-beam (AISC W-shape) girder segments (ROLL, 2026-11-23): the "Section type" card (search, grouped list, read-only plate
 # fields, Undo, back to Plate girder), a 60 ft simple span of W36X135 (Section properties names the shape and works the three plates; Welds
@@ -611,3 +617,7 @@ Each folder has the package's `LICENSE`. Not included: Pyodide and ezdxf (Girder
 - Results are compared exactly (no rounding). A pure refactor must give `all sections identical`. A deliberate result change shows up as the listed values. Put those in the PR's §4 callout with a hand check.
 - Running A and B in parallel roughly doubles CPU load. GirderDetail cases take about 2 min each; with `--jobs` (default: one case per CPU) a matrix takes about as long as its slowest cases. Use `--jobs 1` on a slow machine if idle waits time out.
 - Never commit licensed references (owner manuals, AASHTO text) here or anywhere in the repo.
+
+# PS Bridge Settings window (SET, 2026-11-26): the gear button, moved rows hidden on their tabs, edit / Save / Undo / Redo / Cancel / Esc, focus
+# trap, per-girder-type values under the "Entered values for" selector, owner and Auto design fields, links and the error banner, phone width
+node tests/smoke/ps-bridge-settings.mjs [<dir for ps-settings.png, ps-settings-phone.png>]

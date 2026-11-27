@@ -105,7 +105,9 @@ for (const [vw, vh] of SIZES) {
           const ok = await p.evaluate(([sel, i]) => { const P = document.getElementById('outputPanel'); P.scrollTop = P.scrollHeight;
             const a = [...document.querySelectorAll('#out ' + sel)].filter(x => x.offsetParent)[i]; if (!a) return false; a.click(); return true; }, [sel, i]);
           if (!ok) continue;
-          nLinks++; await afterAction(p, `${t}: link ${sel} #${i}`);
+          nLinks++;
+          if (await p.evaluate(() => !!(window.SBDSettings && window.SBDSettings.isOpen()))) { await p.waitForTimeout(200); await p.click('#sbSetSave'); }   // SET (2026-11-26): a link to a moved input opened the Settings window (modal: the wheel scrolls it, not the page); closed before the scroll checks
+          await afterAction(p, `${t}: link ${sel} #${i}`);
           const cur = await p.$eval('#tabBar [aria-selected="true"]', x => x.dataset.otab).catch(() => t);
           if (cur !== t) await showTab(p, t);
         }

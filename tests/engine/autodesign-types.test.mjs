@@ -56,10 +56,11 @@ test('the run project works each line as the Summary does (atLine), the other ty
   // layout (every girder) read the other type, so it stays in the run
   const P = M.newProject(); P.girders[0].segments.forEach(s => { s.botT = +s.botT + 0.25; s.D = +s.D - 6; });
   const Q = AD.typeProject(P, 1), QI = AD.typeProject(P, 0);
-  [[1, 0], [2, 4]].forEach(([k, j]) => assert.equal(anKey(AN.analyzeGirder(Q, k)), anKey(AN.analyzeGirder(M.atLine(P, 1, j), 1)), `Exterior on G${j + 1}`));
+  const kQ = {};   // anKey of the run project's analysis of each copy, worked once and compared twice (test time; the same call, the same project)
+  [[1, 0], [2, 4]].forEach(([k, j]) => assert.equal(kQ[k] = anKey(AN.analyzeGirder(Q, k)), anKey(AN.analyzeGirder(M.atLine(P, 1, j), 1)), `Exterior on G${j + 1}`));
   assert.equal(anKey(AN.analyzeGirder(QI, 2)), anKey(AN.analyzeGirder(M.atLine(P, 0, 3), 0)), 'Interior on G4');
   const Q1 = J(Q); Q1.girders = Q1.girders.slice(1);   // without the other type, Exterior's cross-frame weight would change (the shallower Interior sets the bays' depth)
-  assert.notEqual(anKey(AN.analyzeGirder(Q1, 1)), anKey(AN.analyzeGirder(Q, 2)), 'Exterior alone differs');
+  assert.notEqual(anKey(AN.analyzeGirder(Q1, 1)), kQ[2], 'Exterior alone differs');
 });
 
 function runAD(P, settings, opt) { const it = AD.run(P, { settings, maxIt: 5, trimTries: 2, ...(opt || {}) }); let s; while (!(s = it.next()).done); return s.value; }

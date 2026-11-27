@@ -202,7 +202,7 @@
     const VuE = xs.map((_, e) => { const VDC = VDC1[e] + VDC2[e], vf = s => (s * VDC >= 0 ? G.dc : gDCn) * VDC + (s * VDW[e] >= 0 ? G.dw : gDWn) * VDW[e] + (s * VUT[e] >= 0 ? G.dw : gDWn) * VUT[e] + (s * VUF[e] >= 0 ? G.dc * VUF[e] : 0);
       return Math.max(Math.abs(vf(1) + G.ll * (Vp[e] - Qp[e] + Qp[e] / mO)), Math.abs(vf(-1) + G.ll * (Vn[e] - Qn[e] + Qn[e] / mO))); });
     const idx = (a, b) => { const out = []; xs.forEach((x, i) => { if (x >= a - 1e-9 && x <= b + 1e-9) out.push(i); }); if (!out.length) { let i = 0; const m = (a + b) / 2; xs.forEach((x, j) => { if (Math.abs(x - m) < Math.abs(xs[i] - m)) i = j; }); out.push(i); } return out; };
-    const mx = (ids, arr) => Math.max(0, ...ids.map(i => Math.abs(arr[i])));
+    const mx = (ids, arr) => { let r = 0; for (const i of ids) { const v = Math.abs(arr[i]); if (v !== v) return NaN; if (v > r) r = v; } return r; };   // ADSP (2026-11-26, speed): = Math.max(0, …|arr[i]|), NaN as Math.max
     // plLL: the pedestrian part of LL (that of the station and envelope giving the largest |V_LL+IM|, as GirderDetail V_PLq), 0 without one
     const plOf = ids => { let b = -1, q = 0; ids.forEach(i => [[Vp, Qp], [Vn, Qn]].forEach(([V, Q]) => { const v = Math.abs(V[i]); if (v > b) { b = v; q = Math.sign(V[i]) * Q[i]; } })); return Math.abs(q) > 1e-12 ? q : 0; };
     const pack = ids => ({ DC1: mx(ids, VDC1), DC2: mx(ids, VDC2), DW: mx(ids, VDW), LL: Math.max(mx(ids, Vp), mx(ids, Vn)), UT: mx(ids, VUT), UF: mx(ids, VUF), CL: mx(ids, VCL), f: mx(ids, Vf), plLL: plOf(ids) });
@@ -227,7 +227,10 @@
     opt = opt || {};
     const g = pl.girderDetail || {}, m = g.materials || {}, sup = (pl.member || {}).supports || [], Lend = sup[sup.length - 1], G = factors(opt.G), dem = demands(pl, G);
     const ts = ((g.details || {}).transverseStiffener || {}), doIn = opt.do != null ? +opt.do : (ts.spacings && +ts.spacings[0]) || 0, doFt = doIn / 12, cont = sup.length > 2;
-    const list = []; const add = x => { if (!list.some(o => Math.abs(o - x) < 0.005)) list.push(x); };
+    // ADSP (2026-11-26, speed): add(x) keeps x unless an earlier location lies within 0.005 ft (as list.some(|o − x| < 0.005)); the earlier ones
+    // also kept sorted (srt), so only the nearest below and above x are compared (|o − x| is monotonic in o on each side). Same list, same order.
+    const list = [], srt = []; const add = x => { if (x !== x) { list.push(x); return; } let lo = 0, hi = srt.length; while (lo < hi) { const md = (lo + hi) >> 1; if (srt[md] < x) lo = md + 1; else hi = md; }
+      if ((lo < srt.length && Math.abs(srt[lo] - x) < 0.005) || (lo > 0 && Math.abs(srt[lo - 1] - x) < 0.005)) return; srt.splice(lo, 0, x); list.push(x); };
     dem.xs.forEach(x => { const sp = sup.find(v => Math.abs(v - x) < 0.011); add(sp != null ? (sp < 0.02 ? 0.01 : sp > Lend - 0.02 ? Lend - 0.01 : sp - 0.01) : Math.min(Math.max(x, 0.01), Lend - 0.01)); });
     sup.slice(1, -1).forEach(v => add(v + 0.01)); list.sort((a, b) => a - b);
     const ends = cont ? [sup[0], sup[sup.length - 1]] : sup;

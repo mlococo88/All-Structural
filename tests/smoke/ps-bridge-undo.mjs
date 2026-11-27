@@ -32,7 +32,7 @@ const until = async (f, ms, w) => { const t0 = Date.now(); for (;;) { if (await 
 try {
   await p.waitForSelector('[data-sp=chip]'); await p.waitForTimeout(500);
   // 1.
-  assert.equal(await p.evaluate(() => [...document.querySelectorAll('#hdrBtns button')].map(x => x.dataset.sp || x.id).join()), 'chip,bUndo,bRedo');
+  assert.equal(await p.evaluate(() => [...document.querySelectorAll('#hdrBtns button')].map(x => x.dataset.sp || x.id).join()), 'chip,bUndo,bRedo,psGear');   // SET (2026-11-26): + the Settings gear
   assert.equal(await dis('bUndo'), true); assert.equal(await dis('bRedo'), true);
   ok('header: chip · Undo · Redo; both disabled on open');
   // 2. results follow Undo / Redo
