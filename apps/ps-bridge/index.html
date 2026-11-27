@@ -134,7 +134,8 @@
     'ui/compare.js',  // batch G4 (2026-11-15): the Compare output tab (the old app's design sweep; table and bar graphic)
     'ui/autodesign.js', // item A (2026-11-14): the Auto design input tab (settings, Run) and output tab (candidates, Apply as one Undo step)
     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
-    'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
+    'ui/splitter.js',  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
+    'ui/settings.js'  // SET (2026-11-26): the Settings window (gear button): the moved inputs' rows, copied from their tabs (display and layout only)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -562,21 +563,25 @@
   /* the blocking input errors (engine/inputcheck.js collect: the model, the design girder, every field of the input cards): their fields
      marked with their message (ui/inputcheck.js, the steel app's pattern), counted on their input tab; no results while one exists */
   const tabOf = p => window.PSBFields.tabOf(p) || 'proj';
-  const icO = () => ({ P, ui, tabOf });
+  /* SET (2026-11-26): an input moved to the Settings window (ui/settings.js has) is counted and named there, not on the tab it was drawn on */
+  const SET = () => window.PSBSettings, tabOfS = p => (SET() && SET().has(p) ? 'Settings' : tabOf(p));
+  const icO = () => ({ P, ui, tabOf: tabOfS });
   function markErrors() {
     errs = window.PSBInputCheck.collect(P).errors;
     const sc = (scopeK() >= 0 && P.types[scopeK()].id) || '';   // PR 3a-1: a girder type's own errors are marked in its scope only
     window.PSBInputCheckUI.mark(errs.filter(e => !e.scope || e.scope === sc), icO());
     const cnt = {};
-    errs.forEach(e => { const t = tabOf(e.path); cnt[t] = (cnt[t] || 0) + 1; });
+    errs.forEach(e => { const t = tabOfS(e.path); cnt[t] = (cnt[t] || 0) + 1; });
     document.querySelectorAll('#inTabs [data-itab]').forEach(b => { const n = cnt[b.dataset.itab] || 0, d = b.querySelector('.inDot');
       b.classList.toggle('has-err', n > 0); if (d) d.textContent = n ? String(n) : ''; if (n) b.title = `${n} input${n > 1 ? 's' : ''} to fix on this tab`; else b.removeAttribute('title'); });
     // GSUB (2026-11-25): the same dot on the Girders & strands sub-tab that holds the field
     const sc2 = GS.count(errs, tabOf);
     document.querySelectorAll('#gSubs [data-gsub]').forEach(b => { const n = sc2[b.dataset.gsub] || 0, d = b.querySelector('.inDot');
       b.classList.toggle('has-err', n > 0); if (d) d.textContent = n ? String(n) : ''; if (n) b.title = `${n} input${n > 1 ? 's' : ''} to fix on this sub-tab`; else b.removeAttribute('title'); });
+    if (SET()) SET().sync(errs);   // SET: the moved rows hidden on their tabs, copied into the open window
   }
-  function gotoErr(i) { const e = errs[i]; if (!e) return; ui.itab = tabOf(e.path); if (ui.itab === 'gird') ui.gsub = GS.subOf(e.path) || ui.gsub; if (/^base\./.test(e.path) && TY.SCOPED.includes(ui.itab)) ui.scope = e.scope || ''; saveUi(); drawInputs(); window.PSBInputCheckUI.focus(e, icO()); }
+  function gotoErr(i) { const e = errs[i]; if (!e) return; if (SET() && SET().goErr(e)) return;   // SET: a moved input: the Settings window at its row
+    ui.itab = tabOf(e.path); if (ui.itab === 'gird') ui.gsub = GS.subOf(e.path) || ui.gsub; if (/^base\./.test(e.path) && TY.SCOPED.includes(ui.itab)) ui.scope = e.scope || ''; saveUi(); drawInputs(); window.PSBInputCheckUI.focus(e, icO()); }
   /* GSUB (2026-11-25): goIn(spec, top): a link to an input tab, spec = data-goin 'tab' or 'tab@target' (a card id or a project path, ui/girdsubs.js):
      the tab (and on Girders & strands the sub-tab that holds the target), then the target scrolled to (a field also focused); top() = the
      link's earlier scroll when there is no target */
@@ -1015,6 +1020,15 @@
     if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
   });
   snap = JSON.stringify(P);   // PR 6: the project as opened is the start of the history
+  /* SET (2026-11-26): the Settings window. mark(): the undo state when it opens; revert(m): Cancel puts the project back to it (the undo steps
+     made since then dropped, as if never made; if Undo went further back meanwhile, one undoable step instead) */
+  if (SET()) SET().init({ redraw: () => drawInputs(),
+    editOn: (t, fire) => { const t0 = ui.itab; if (!t || t === t0) { fire(); return; } ui.itab = t; try { fire(); } finally { ui.itab = t0; saveUi(); drawInputs(); } },   // an edit as on the input's own tab (the per-type scope follows ui.itab)
+    scopeOf: e => { if (/^base\./.test(e.path) && TY.SCOPED.includes(tabOf(e.path)) && (e.scope || '') !== (ui.scope || '')) { ui.scope = e.scope || ''; saveUi(); drawInputs(); } },   // a girder type's own error: its values shown
+    mark: () => ({ n: undoS.length, snap, redo: redoS.slice() }),
+    revert: m => { if (JSON.stringify(P) === m.snap) return; const exact = undoS.length > m.n && undoS[m.n] === m.snap;
+      P = window.PSBHoStale.carrySent(P, JSON.parse(m.snap));
+      if (exact) { undoS.length = m.n; redoS = m.redo; snap = JSON.stringify(P); document.querySelectorAll('#notices .nUndo').forEach(u => u.remove()); changed(true); } else changed(); } });
 
   drawInputs(); drawOut(); syncBar();
   WI.init({ changed: on => { drawInputs(); if (!on) drawOut(); } });   // WIDE (2026-11-25): "Widen inputs"; the figures redrawn at the new width

@@ -72,7 +72,7 @@ test('SBALLOW: Analysis settings card: the box only when the setting is used; el
   const UI = W.SBDAnalysisUI;
   { const P = base(); P.xs.allow = 3; P.analysis = { ...(P.analysis || {}), steelAllowPct: 5 }; const h = UI.inputs(P, 0);
     assert.ok(!/data-k="steelAllowPct"/.test(h), 'no editable box'); assert.ok(/id="an_a_steelAllowPct_used" value="3" disabled/.test(h), 'read-only 3');
-    assert.ok(/from the loads module: Steel detail allowance \(<a href="#" data-itgo="loads">/.test(h), 'link to the entry'); assert.ok(/entered before \(5 %\) is kept/.test(h), 'the stored setting is named'); }
+    assert.ok(/from the loads module: Steel detail allowance \(<a href="#" data-itgo="loads" data-sbset="xs.allow">Settings › Superimposed dead load<\/a>/.test(h), 'link to the entry (SET, 2026-11-26: the field is in the Settings window)'); assert.ok(/entered before \(5 %\) is kept/.test(h), 'the stored setting is named'); }
   { const P = base(); P.xs.nb = 0; P.analysis = { ...(P.analysis || {}), steelAllowPct: 6 }; const h = UI.inputs(P, 0);
     assert.ok(/data-an="a" data-k="steelAllowPct" value="6"/.test(h), 'editable box with 6'); assert.ok(!/steelAllowPct_used/.test(h)); }
   { const P = payload(); const h = UI.inputs(P, 0); assert.ok(/steelAllowPct_used" value="5" disabled/.test(h) && /girder loads of the imported hand-off/.test(h), 'hand-off'); }

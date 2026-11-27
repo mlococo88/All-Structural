@@ -71,7 +71,7 @@
       ['Effective flange width b<sub>eff</sub>', `${ev('cp.beff', 2, 'in')} ${wk('sec.beff')}`], ['A<sub>c</sub>', `${ev('cp.Ac', 1, 'in²')} ${wk('sec.Ac')}`], ['y<sub>bc</sub>', `${ev('cp.ybc', 3, 'in')} ${wk('sec.ybc')}`],
       ['I<sub>c</sub>', `${ev('cp.Ic', 0, 'in⁴')} ${wk('sec.Ic')}`], ['Composite depth h<sub>c</sub>', `${ev('cp.hc', 2, 'in')} ${wk('sec.hc')}`], ['S<sub>bc</sub> (girder bottom)', `${ev('cp.Sbc', 0, 'in³')} ${wk('sec.Sbc')}`],
       ['S<sub>tg</sub> (girder top)', `${ev('cp.Stg', 0, 'in³')} ${wk('sec.Stg')}`], ['S<sub>td</sub> (deck top, ÷ n)', `${ev('cp.Std', 0, 'in³')}${+inp.ts > 0 ? ' ' + wk('sec.Std') : ''}`]])
-      + `<p class="note">Deck t<sub>s</sub> = ${k.fx(+inp.ts, 2)} in, haunch ${k.fx(+inp.th, 2)} in (${R.cp.incHaunch ? 'included in' : 'excluded from'} the section properties; its weight is in DC1, <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>). Inputs: <a href="#" data-goin="xsec">Cross-section tab</a>.</p>`, 'card-comp');
+      + `<p class="note">Deck t<sub>s</sub> = ${k.fx(+inp.ts, 2)} in, haunch ${k.fx(+inp.th, 2)} in (${R.cp.incHaunch ? 'included in' : 'excluded from'} the section properties; its weight is in DC1, <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>). Inputs: <a href="#" data-goin="xsec">Cross-section tab</a>; b<sub>eff</sub> automatic or entered and the haunch in the properties: <a href="#" data-psset="comp">Settings › Composite section</a>.</p>`, 'card-comp');
     const dr = ss.nh > 0;
     h += k.card('Prestressing strands', k.kv([
       ['Strands N (straight + draped)', `${ev('ss.Ntot', 0)} (${ev('ss.Nbond', 0)} + ${ev('ss.nh', 0)}) ${wk('sec.N')}`], ['A<sub>ps</sub>', `${ev('ss.Aps', 3, 'in²')} ${wk('sec.Aps')}`],

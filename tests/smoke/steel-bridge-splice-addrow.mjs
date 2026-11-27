@@ -17,7 +17,8 @@ const saved = p => p.evaluate(() => JSON.parse(localStorage.getItem('sbd2.projec
 const fs1 = async p => (await p.evaluate(() => [...document.querySelectorAll('#out .sp-list tbody tr')].map(r => r.innerText.replace(/\s+/g, ' '))))[0] || '';
 const allErrs = [];
 const one = async (fn) => { const o = await openPage(FILE, { vw: 1400, vh: 1000 }); try { await o.p.waitForSelector('#tabBar [data-otab="spl"]'); await o.p.click('#inTabs [data-itab="spl"]'); await fn(o.p); allErrs.push(...o.errs); } finally { await o.b.close(); } };
-const entered = async p => { await p.selectOption('#inPanes [data-path="splices.auto"]', 'false'); await p.waitForSelector('#inPanes [data-spladd]'); };
+// SET (2026-11-26): "Plates and bolts" moved to the Settings window (Detailing standards); its copy edits the same input
+const entered = async p => { await p.evaluate(() => window.SBDSettings.open('splices.auto')); await p.selectOption('#sbSet [data-path="splices.auto"]', 'false'); await p.waitForTimeout(300); await p.click('#sbSetSave'); await p.waitForSelector('#inPanes [data-spladd]'); };
 let msg = [];
 try {
   await one(async p => {

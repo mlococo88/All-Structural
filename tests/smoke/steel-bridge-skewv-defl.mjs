@@ -26,16 +26,19 @@ const otab = async (p, k, sel) => { await p.click(`#tabBar [data-otab="${k}"]`);
 const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { 'sbd2.project.current': JSON.stringify(P0, null, 2) } });
 try {
   await p.waitForSelector('#inTabs [data-itab="loads"]'); await p.click('#inTabs [data-itab="loads"]');
-  const S = '[id="i_xs.lldf.skewVx"]'; await p.waitForSelector(S);
+  // SET (2026-11-26): the drop-down moved to the Settings window (Live-load distribution); the window's copy edits the same input
+  const S = '[id="sbs-i_xs.lldf.skewVx"]'; await p.waitForSelector('[id="i_xs.lldf.skewVx"]', { state: 'attached' });
+  const setOpen = async () => { await p.click('#sbGear'); await p.click('[data-sbsg="lldf"]'); await p.waitForSelector(S); };
+  await setOpen();
   // 1. the drop-down
   const d = await p.$eval(S, s => ({ opts: [...s.options].map(o => [o.value, o.textContent]), val: s.value, label: s.closest('.fRow').querySelector('label').textContent }));
   assert.deepEqual(d.opts, [['whole', 'Whole length'], ['taper', 'Tapered: full at the support, 1.0 at mid-span']]); assert.equal(d.val, 'whole'); assert.equal(d.label, 'Shear skew correction along the girder');
   const note = await p.$eval('#ld-skewvx-note', n => n.textContent); assert.match(note, /4\.6\.2\.2\.3c/); assert.match(note, /end region only/);
   assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('sbd2.project.current')).xs.lldf.skewVx), undefined, 'nothing written before a change');
-  await otab(p, 'an', '#out table'); assert.equal(await p.$('#an-skewvx'), null, 'whole length: no taper note');
-  if (shots) { await p.$eval(S, s => s.scrollIntoView({ block: 'center' })); await p.screenshot({ path: path.join(shots, 'skewvx-whole.png') }); }
+  await p.click('#sbSetSave'); await otab(p, 'an', '#out table'); assert.equal(await p.$('#an-skewvx'), null, 'whole length: no taper note');
+  if (shots) { await setOpen(); await p.$eval(S, s => s.scrollIntoView({ block: 'center' })); await p.screenshot({ path: path.join(shots, 'skewvx-whole.png') }); await p.click('#sbSetSave'); }
   // 2. tapered
-  await p.selectOption(S, 'taper'); await settle(p);
+  await setOpen(); await p.selectOption(S, 'taper'); await p.click('#sbSetSave'); await settle(p);
   await p.waitForFunction(() => (JSON.parse(localStorage.getItem('sbd2.project.current') || '{}').xs || { lldf: {} }).lldf.skewVx === 'taper', null, { timeout: 60000 });
   await otab(p, 'an', '#an-skewvx');
   assert.match(await p.$eval('#an-skewvx', n => n.textContent), /tapered/); assert.ok(await p.$('[id="st-an.gVx.s1"]'), 'step an.gVx.s1 on the Analysis tab');
