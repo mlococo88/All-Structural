@@ -171,3 +171,16 @@ Tests: `node tests/engine/run.mjs lldf` (hash harness against lldf.html before t
 - `apps/steel-bridge` (type a): unchanged — 1,920-case step dump 293fb98c…; `node tests/engine/run.mjs lldf loads report` pass.
 - `lldf.html`: type (d) exterior fatigue g_M on the sheet, D11 print, Report tab and the DF hand-off; other types identical.
 - `Prestressed Bridge Design.html`, `index.html`: no shared/lldf.js; only a type (d) hand-off would carry the new value.
+
+## 2026-11-26 — PR: claude/sb-ridot-curb (PR #1730) (PEDM) — option p.pedLane: the pedestrian load counted as a loaded lane for the multiple presence factor (CALCULATION CHANGE for apps/steel-bridge only, engineer's answer 2026-11-26 Q3; lldf.html unchanged)
+- **Why:** the engineer's answer to #1730 Q3: in the RIDOT two-case check (apps/steel-bridge engine/loads.js `cases`, case 2: lanes curb to curb with the pedestrian load) the pedestrian load counts as one loaded lane for m (RIDOT BDM 3.4.1.1.2; AASHTO LRFD 10th Ed. Art. 3.6.1.1.2, which allows it, and C3.6.1.1.2).
+- **Where / before / after** (search `PEDM`):
+  - New `const pedM=p=>(p&&p.pedLane)?1:0;` after `function multiplePresence(nLanes)`.
+  - `leverConfig`: `const m=multiplePresence(N);` → `const m=multiplePresence(N+pedM(p));`, and the result adds `mLanes: N+1` when the option is on.
+  - `rigidMethod`: `m=multiplePresence(n)` → `m=multiplePresence(n+pedM(p))`; each trial adds `mLanes: n+1` when on.
+  - `memberDF(p,geo,Kg,skew,j)` renamed `memberDF0`; the new `memberDF` returns `memberDF0` unchanged without the option; with it, the factors of `memberDF0(p)` with the fatigue fields (`fatM`, `fatV`, `fatOneM`, `fatOneV`, `fatNote`) of `memberDF0({...p, pedLane:false})` (one fatigue truck, no pedestrian load), plus `pedLane: true` and `u` (that member without the option).
+  - `STEPS.lever` / `STEPS.rigid`: the label says "and the pedestrian load as one more loaded lane (m for N + 1 lanes)" and cites Art. 3.6.1.1.2, C3.6.1.1.2 when `mLanes` is set. `STEPS.member` / `finalSteps`: the fatigue steps take the values without the option (`fl1`, `fr1`).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.6.1.1.2 (the pedestrian load may be taken as one loaded lane), Table 3.6.1.1.2-1, C3.6.1.1.2; RIDOT BDM (April 2026) 3.4.1.1.2. m is applied explicitly only in the lever rule and the rigid cross-section (the approximate equations contain it), so only those change.
+- **Check case:** apps/steel-bridge, `tests/engine/sb-ridot-curb.test.mjs` (40 ft deck, 10 girders at 3.889 ft, RIDOT, case 2 with 2 lanes): exterior G1 rigid cross-section, 2 lanes: R = 2/10 + 17.5(8.5 − 3.5)/1,247.7 = 0.27013; m = 1.00 → 0.85 (2 lanes + the pedestrian lane): g = 0.27013 → 0.22961; 1 lane: m 1.20 → 1.00. G1 g_M (case 2) = max(lever 1 lane, e·g_int = 0.66011 × 0.39028 = 0.25763, rigid) = 0.27013 → **0.25763** (the e-factor now governs). Fatigue g_fat (one lane, ÷1.2): 0.21922 before and after.
+- **Who loads it, tests run (CLAUDE.md §3):** `lldf.html` (never sets `pedLane`: `node tests/engine/run.mjs lldf`, the hash harness against lldf.html before the move, passes: bit-identical); `apps/steel-bridge/index.html` (sets it only through engine/lldf.js `pedJ`, which only engine/loads.js `cases` sets, owner RIDOT with a mountable sidewalk: the steel engine tests and smokes, see the PR).
+- **Other copies:** none.

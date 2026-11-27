@@ -81,3 +81,11 @@ Not an engineering calculation tool: no formulas, load or resistance factors, un
 - **Assumptions (stated in the tool):** furniture, decor and light fixtures are illustrative, not from the permit set (the fireplace breast is drawn to the ceiling and the TV over the mantel, pendants over the island and dining table are placeholders).
 - **Governing provision:** n/a (display only; no computed values).
 - **How verified:** headless renders (jsdom + headless-gl) of the start, front, aerial, 1st and 2nd floor, kitchen, living, bedroom, bath, mudroom, evening, walk, section-cut and x-ray views, all three basement presets and every basement library item; no page errors. Draw calls in the whole-house view went from 2,856 to 3,063 and triangles from about 246k to 341k. The aerial photo could not be loaded in the test renders.
+
+## 2026-11-26 — Page back online
+
+- **What:** Restored `apps/loma-drive/index.html` to the full app as of `5ffcb38` (more realistic furniture, materials, sky light and shadows), replacing the "temporarily offline" notice from `3f42dec`. The engineer asked for this.
+- **Before:** the offline notice page (title "Temporarily offline").
+- **After:** byte-for-byte the file from `5ffcb38` (`git show 5ffcb38:apps/loma-drive/index.html`).
+- **Governing provision:** n/a (display only).
+- **How verified:** the file matches `5ffcb38` exactly; the page loads on GitHub Pages after deploy.

@@ -1,7 +1,6 @@
 // engine/legacy.js (import of old Steel Bridge Design projects, CLAUDE.md §5) and engine/model.js importLegacy / importJSON.
 //
-// 1. The 20 recorded projects (tests/projects/gd seeds xsA, curb, util and the built-in project, builtin28 = every skew 28°; owners AASHTO,
-//    RIDOT, MassDOT, CTDOT; the same steps as tests/engine/record-*.mjs): Preliminary sizing's project (pl-source.mjs DEFAULT or the seed's
+// 1. One recorded project (the built-in project, owner AASHTO; the same steps as tests/engine/record-*.mjs): Preliminary sizing's project (pl-source.mjs DEFAULT or the seed's
 //    plateline_autosave_v1, owner set in it) + GirderDetail's (the seed's girderdetail_autosave_v1, or GirderDetail's built-in module
 //    inputs), as one Steel Bridge Design project file. Imported, then computed with this app's analysis and flexure for G1–G5, against
 //    GirderDetail's own results for the same girder (tests/projects/st/gd_<project>_<owner>_G<n>.json, recorded from GirderDetail):
@@ -9,6 +8,10 @@
 //      - the analysis envelopes (largest and smallest M, V of each load over the girder);
 //      - the governing negative flexure per span (girderDetail.checks.negFlex: GS7/GS9 compression flange, GS8 tension flange).
 //    A table of the largest difference per quantity is printed with its cause; the bounds asserted are the documented differences.
+//    Until 2026-11-26 this ran all 20 recorded projects (tests/projects/gd seeds xsA, curb, util, the built-in project and builtin28 = every
+//    skew 28°, × owners AASHTO, RIDOT, MassDOT, CTDOT; about 6 min). The engineer no longer opens projects from the old apps (Preliminary
+//    sizing / PlateLine, GirderDetail, ST-Girder; 2026-11-26), so it is cut to one case (builtin, AASHTO, G1–G5) as a cheap check that the
+//    import still works; engine/legacy.js is unchanged, and the other recorded payloads stay in tests/projects/st (other tests read them).
 // 2. Nothing dropped: every leaf of every part is either mapped or found at its own path under project.legacy.unmapped.
 // 3. Round trip: export → importJSON → identical project. Old autosave keys read only (a storage stand-in that throws on write).
 // 4. ST-Girder alone and the other entry points; refusals.
@@ -62,9 +65,11 @@ const note = (q, ours, ref, where, scale) => { const abs = Math.abs(ours - ref),
 const ext = (arr, f) => arr.reduce((a, v) => f(a, v), f === Math.max ? -Infinity : Infinity);
 const QA = [['M_DC1', 'M_DC1'], ['M_DC2', 'M_DC2'], ['M_DW', 'M_DW'], ['M_LLpos', 'M_LLpos'], ['M_LLneg', 'M_LLneg'], ['M_FATpos', 'M_FATpos'], ['M_FATneg', 'M_FATneg']];
 
-test('import the 20 recorded projects (Steel Bridge Design files), compute G1–G5: the model exact, analysis and negative flexure against GirderDetail', () => {
+// one case since 2026-11-26 (header, 1.): IMPORT_CASES was every PROJECTS × OWNERS pair
+const IMPORT_CASES = [['builtin', 'AASHTO']];
+test('import a recorded project (built-in, AASHTO; Steel Bridge Design file), compute G1–G5: the model exact, analysis and negative flexure against GirderDetail', () => {
   const FX = U.SBDFlexure, FRM = U.SBDFraming, RT = U.SBDRatingUI; let nG = 0;
-  for (const pr of PROJECTS) for (const ow of OWNERS) {
+  for (const [pr, ow] of IMPORT_CASES) {
     const r = M.importJSON(JSON.stringify(sbdFile(pr, ow))); assert.ok(r.ok, r.error); assert.equal(r.errors.map(e => e.msg).join('; '), '', `${pr} ${ow}`);
     const P = r.project; assert.equal(P.girders.length, 5);
     for (let gi = 0; gi < 5; gi++) {
@@ -80,8 +85,12 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
       // LL+IM includes the pedestrian load in both (GirderDetail's hand-off: pedestrianInLL; this app: SBDAnalysis.llPL, sb-ped-owner PR), and M_PL alone
       const A = RT.fromAnalysis(P, gi); assert.ok(!A.err, A.err); const S = A.pl.stations, Sg = pl.stations;
       assert.equal(!!A.pl.pedestrianInLL, !!(pl.pedestrianInLL && Sg.some(s => s.M_PLpos || s.M_PLneg)), `${where} pedestrianInLL`);
+      // xsA RIDOT (mountable sidewalks): RIDOT BDM 3.4.1.1.1's two live-load cases (sb-ridot-curb PR #1730 and the engineer's answers of 2026-11-26: the
+      // mountable curb height 8 in, the fence ignored in case 1, the pedestrian load a loaded lane for m) depart from GirderDetail, which took the lanes
+      // between the fences with the pedestrian load: its live-load quantities are listed apart, not bound (the case check: tests/engine/sb-ridot-curb.test.mjs)
+      const dep = pr === 'xsA' && ow === 'RIDOT', dsx = dep ? ' [xsA RIDOT, two cases]' : ''; if (dep) assert.ok(A.R && A.R.cases, `${where}: the two cases`);
       [...QA, ...(A.pl.pedestrianInLL ? [['M_PLpos', 'M_PLpos'], ['M_PLneg', 'M_PLneg']] : [])].forEach(([k, kg]) => { const val = s => +s[kg] || 0;
-        const ref = Sg.map(val), ours = S.map(s => s[k] || 0), sc = Math.max(...ref.map(Math.abs));
+        const ref = Sg.map(val), ours = S.map(s => s[k] || 0), sc = Math.max(...ref.map(Math.abs)); k = /^M_(LL|FAT|PL)/.test(k) ? k + dsx : k;
         note(k + ' max', ext(ours, Math.max), ext(ref, Math.max), where, sc); note(k + ' min', ext(ours, Math.min), ext(ref, Math.min), where, sc); });
       // negative flexure per span (GS7/GS9 compression, GS8 tension), as the Flexure tab on a file, on this app's analysis
       const nf = gd.checks && gd.checks.negFlex; if (!nf) continue;
@@ -91,7 +100,7 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
       const lf = U.SBDOwners.loadFactors(ow, P.ownerRules.eta, P.xs.nb);
       const F = FX.fromPayload(A.pl, { fl: flS.fl, owner: ow, rebar: P.deck.rebar, braces: frB.braces, lenOf: frB.lenOf, lf }), G = FX.girder(F.locs, F.prj, { supports: F.supports });
       // xsA (sidewalks with a pedestrian load) listed apart
-      const sfx = pr === 'xsA' ? ' [xsA, pedestrian]' : '';
+      const sfx = dep ? ' [xsA RIDOT, two cases]' : pr === 'xsA' ? ' [xsA, pedestrian]' : '';
       for (const sp of nf.spans) { const a = sup[sp.span - 1], b = sup[sp.span];
         // A3 (2026-11-19): a row next to a support takes the unbraced segment on its own side; GirderDetail's row 0.01 ft inside the span took the
         // governing of both segments, i.e. the one this app checks at the row 0.01 ft across the support: those rows (within 0.25 ft) are included
@@ -100,10 +109,11 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
         if (sp.tens) note('negFlex tens. flange (GS8)' + sfx, mx(['GS8']), sp.tens.r, `${where} span ${sp.span}`); }
     }
   }
-  console.log(`       ${nG} girders of 20 imported projects; largest difference per quantity (relative to GirderDetail's largest |value| of the quantity on the girder; flexure: ratio difference / ratio):`);
+  console.log(`       ${nG} girders of ${IMPORT_CASES.length} imported project(s); largest difference per quantity (relative to GirderDetail's largest |value| of the quantity on the girder; flexure: ratio difference / ratio):`);
   Object.entries(big).forEach(([k, o]) => console.log(`       ${k.padEnd(34)} ${(100 * o.rel).toFixed(3).padStart(7)} %  ours ${o.ours.toFixed(3)} vs GirderDetail ${o.ref.toFixed(3)}  (${o.where})`));
-  assert.equal(nG, 100);
-  BOUNDS.forEach(([k, b]) => assert.ok(!big[k] || big[k].rel <= b, `${k}: ${(100 * big[k].rel).toFixed(3)} % > ${100 * b} %`));
+  assert.equal(nG, 5 * IMPORT_CASES.length);
+  // a quantity the case has none of (M_PL, the xsA rows: no pedestrian load on builtin) is skipped, as before (the message read big[k] eagerly)
+  BOUNDS.filter(([k]) => big[k]).forEach(([k, b]) => assert.ok(big[k].rel <= b, `${k}: ${(100 * big[k].rel).toFixed(3)} % > ${100 * b} %`));
 });
 // the documented differences (fixlog/steel-bridge.md, legacy import entry): bounds of the table above
 // - M_DC1 ≤ 1.0 %: the cross-frame point loads. GirderDetail's dead load weighed Preliminary sizing's suggested frame (K-frame, L3x3x3/8 bottom chord and
@@ -112,6 +122,7 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
 // - M_DC2, M_DW ≤ 0.05 %: round-off of the hand-off (0.001 kip-ft) and the station grids (largest 0.006 %).
 // - LL+IM (pedestrian load included on both sides since the sb-ped-owner PR), M_PL and fatigue moments ≤ 0.01 %.
 // - negative flexure ≤ 0.5 %: the M_DC1 above through f_bu, and C_b / L_b from this app's framing (largest 0.32 %, builtin CTDOT G2 span 1).
+// - xsA RIDOT: listed apart, not bound (the RIDOT two live-load cases, see the test).
 // - xsA (sidewalks, 75 psf pedestrian load): ≤ 0.5 %, as the others (sb-ped-owner PR: the pedestrian load in the analysis and the owner η, m in
 //   engine/flexure.js; before: up to 10.4 %, xsA RIDOT G1, 1.040 vs 1.160).
 const BOUNDS = [['M_DC1 max', 0.01], ['M_DC1 min', 0.01], ...['M_DC2', 'M_DW'].flatMap(k => [[k + ' max', 5e-4], [k + ' min', 5e-4]]),

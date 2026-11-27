@@ -38,7 +38,7 @@
      gap (ft, the same gap between every pair of trucks), simple (K_g terms of Table 4.6.2.2.1-3), thM, thV (moment and shear skew) }.
      type 'a': steel I-girders with a concrete deck. */
   const lp = p => ({ type: 'a', Nb: p.Nb, spacings: p.spacings, OL: p.OL, OR: p.OR, rL: p.rL, rR: p.rR, L: p.L, ts: p.ts,
-    skew: p.thM != null ? p.thM : 0, skewV: p.thV != null ? p.thV : 0, truckGaps: new Array(64).fill(p.gap), kgSimple: !!p.simple });
+    skew: p.thM != null ? p.thM : 0, skewV: p.thV != null ? p.thV : 0, truckGaps: new Array(64).fill(p.gap), kgSimple: !!p.simple, ...(p.pedLane ? { pedLane: true } : {}) });   // PEDM: p.pedLane (shared/lldf.js)
 
   /* geometry(p): girder positions and the roadway (SharedLLDF.geometry). p: { Nb, spacings [ft], OL, OR (overhangs, ft), rL, rR
      (deck edge to the live-load traffic face, ft) }. N_L, Art. 3.6.1.1.1: INT(w/12), a 20–24 ft roadway two lanes of w/2. */
@@ -101,7 +101,9 @@
   /* compute(input): every region (span and pier) and every girder.
      input: { Nb, spacings [ft], OL, OR, rL, rR (ft), ts (structural slab, in), haunchP (haunch in the composite properties, in),
               n (modular ratio), gap (ft, ≥ 4), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', skewVx: 'whole' | 'taper' (optional; absent: 'whole'), extMin: 'yes' | 'no',
-              skews (deg, every support line, for the pier rule of 4.6.2.2.2e), regions: [{ id, i, kind: 'span' | 'sup', label, L (ft), skA, skB (support skews, deg), sec: plates { D, tw, topB, topT, botB, botT },
+              skews (deg, every support line, for the pier rule of 4.6.2.2.2e), pedJ (optional, PEDM 2026-11-26: [bool per girder], true = the
+              pedestrian load acts on the girder with the vehicles and counts as a loaded lane for m in the lever rule and the rigid cross-section;
+              set only by the RIDOT two-case check, engine/loads.js cases), regions: [{ id, i, kind: 'span' | 'sup', label, L (ft), skA, skB (support skews, deg), sec: plates { D, tw, topB, topT, botB, botT },
                           segs: [{ L, sec }] (the plate pieces of the region, for kg 'avg') }] }
      Returns { geo, regions: [{ …region, s, eg, Kg, KgAvg, pp, geo, sk, members, lever, mD, gDef, steps }], steps (geometry) }. */
   function compute(q) {
@@ -117,14 +119,15 @@
       if (KgAvg) w.add({ id: 'KgAvg', label: `${rg.label}: length-weighted K_g of the plate pieces`, sym: 'K_{g,avg}', eq: '\\frac{\\sum L_{i}K_{g,i}}{\\sum L_{i}}', sub: `\\frac{${KgAvg.parts.map(x => `${n2(x.L)}(${g0(x.Kg)})`).join(' + ')}}{${n2(KgAvg.Lt)}}`, value: KgAvg.Kg, unit: 'in^{4}', d: 0, ref: `${ED} Art. 4.6.2.2.1` });
       w.add({ id: 'Kg', label: `${rg.label}: K_g used`, sym: 'K_{g}', eq: q.kg === 'avg' && KgAvg ? 'K_{g,avg}' : 'K_{g}', sub: '', value: Kgv, unit: 'in^{4}', d: 0, note: q.kg === 'simple' ? 'Simplified K_g terms of Table 4.6.2.2.1-3 used in the equations.' : '' });
       skewSteps(w, { ...pp, geoSavg: geo.Savg, pier: rg.kind === 'sup' }, sk, Kgv);
+      const ppOf = j => (q.pedJ && q.pedJ[j] ? { ...pp, pedLane: true } : pp);   // PEDM
       const members = []; for (let j = 0; j < q.Nb; j++) { const mw = St().work(`df.${rg.id}.G${j + 1}`);
         const skj = q.skewV === 'ext' && typeOf(pp, j) === 'int' ? { ...sk, scfV: 1 } : sk;
-        members.push(member(pp, geo, Kgv, skj, j, mw)); members[j].steps = mw.steps;
+        members.push(member(ppOf(j), geo, Kgv, skj, j, mw)); members[j].steps = mw.steps;
         members[j].rV = skj.scfV; members[j].rVg = skj.scfV; }   // N3 (2026-11-23): the shear skew correction r_V contained in fatV (rV) and in gV (rVg), for the taper along the girder (engine/analysis.js)
       if (q.extMin === 'yes') { const ints = members.filter(m => m.type === 'int'); if (ints.length) { const iM = Math.max(...ints.map(m => m.gM)), iV = Math.max(...ints.map(m => m.gV));
         members.filter(m => m.type === 'ext').forEach(m => { if (iM > m.gM) { m.gM = iM; m.policyM = true; } if (iV > m.gV) { m.gV = iV; m.policyV = true; m.rVg = ints.find(t => t.gV === iV).rV; } if (m.policyM || m.policyV) { m.method += ', raised to interior (policy)';
           m.steps.push(St().step({ id: `df.${rg.id}.G${m.j + 1}.policy`, label: `${m.label}: exterior factors not less than the interior (owner / engineer policy)`, sym: 'g_{M}, g_{V}', eq: '\\max(g_{ext}, g_{int})', sub: '', value: `${n4(m.gM)}, ${n4(m.gV)}`, unit: '', d: 4 })); } }); } }
-      const lev = members.map((m, j) => leverAll(pp, geo, j)), mD = MPF(geo.NL), gDef = geo.NL * mD / q.Nb;
+      const lev = members.map((m, j) => leverAll(ppOf(j), geo, j)), mD = MPF(geo.NL), gDef = geo.NL * mD / q.Nb;
       w.add({ id: 'gDef', label: `${rg.label}: deflection distribution factor (all lanes loaded, all girders equal)`, sym: 'g_{\\Delta}', eq: '\\frac{N_{L}m}{N_{b}}', sub: `\\frac{${geo.NL}(${n2(mD)})}{${q.Nb}}`, value: gDef, unit: '', d: 4, ref: `${ED} Art. 2.5.2.6.2` });
       // N3 (2026-11-23, engineer's decision): the extent of the shear skew correction along the girder. 'taper' (q.skewVx): the correction is
       // full at each support of the span and decreases linearly to 1.0 at mid-span (4.6.2.2.3c: "may be decreased linearly to a value of 1.0

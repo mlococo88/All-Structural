@@ -96,7 +96,9 @@
     try {
       const { b, p } = LD.fromModel(P, { girder: gi }), R = LD.compute(b, p);
       if (R.errors && R.errors.length) return { errors: R.errors };
-      const j = lineOf(P, P.girders[gi]); return { j, G: LD.girder(R, j), R, allow: b.allow, lf: R.lf };
+      const j = lineOf(P, P.girders[gi]), c2 = R.cases && R.cases.c2 ? { R: R.cases.c2, G: LD.girder(R.cases.c2, j) } : null;   // RCURB: RIDOT BDM 3.4.1.1.1 case 2 (engine/loads.js cases)
+      const c1 = R.cases && R.cases.c1fence ? { R: R.cases.c1 } : null;   // Q2 (2026-11-26): case 1's own faces (the fence ignored): its distribution factors
+      return { j, G: LD.girder(R, j), R, allow: b.allow, lf: R.lf, ...(c2 ? { c2 } : {}), ...(c1 ? { c1 } : {}) };
     } catch (e) { return { errors: [e.message] }; }
   }
 
@@ -318,11 +320,23 @@
       const Wr = window.SBDRolled ? window.SBDRolled.plf(s) : null;   // ROLL: the tabulated weight of a rolled segment (lb/ft); a plate segment has no Wr / shape field
       return { x0: s.x0, x1: s.x1, p, As: st.A, Is: st.I, I3u: c3 ? c3.I : st.I, Inu: cn ? cn.I : st.I, Icr: comp ? cr.I : st.I, c3, cn, ...(Wr != null ? { Wr, shape: window.SBDRolled.label(s) } : {}) }; });
 
-    const LD = loadsOf(P, g, mod), DF = dfOf(P, g, ns, mod), warnings = [];
+    const LD = loadsOf(P, g, mod), DF = dfOf(P, g, ns, mod && mod.c1 ? { ...mod, R: mod.c1.R } : mod), warnings = [];   // Q2: case 1's factors from its own faces (mod.c1, the fence ignored); else the module's, as before
+    /* RCURB (sb-ridot-curb PR, 2026-11-25): RIDOT BDM 3.4.1.1.1, a mountable sidewalk: two live-load cases, the more severe governs (engine/loads.js
+       cases). The loads module's own result (mod, DF, LD) has case 1's lanes and factors (the roadway between the barriers, the mountable
+       sidewalk part of it); case 1 takes no pedestrian load (PL1 = 0). mod.c2 is case 2: the lanes on the curb-to-curb roadway, the
+       pedestrian load on the sidewalks. Below, the live
+       load is worked with each case's distribution factors (and case 2's w_PL), and at every station each effect takes the case with the larger
+       factored live load m·LL+IM + PL (the Strength and Service combinations both take γ_LL·m on LL+IM and γ_LL on PL); fatigue and the LL
+       deflection (no pedestrian load) the larger of the two. Without a case 2 (any other owner, no mountable sidewalk): as before, bit for bit. */
+    const CS = (() => { if (!mod || !mod.c2) return null; const m2 = { ...mod, R: mod.c2.R, G: mod.c2.G }, L2 = loadsOf(P, g, m2);
+      return { mod2: m2, DF2: dfOf(P, g, ns, m2), PL2: L2.PL, srcPL2: L2.src.PL, info: mod.R.cases, mO: own && +own.m > 0 ? +own.m : 1 }; })();
+    const PL1 = CS ? 0 : LD.PL;   // case 1: "pedestrian load on any sidewalks is ignored" (an entered PL override too)
     if (mod && mod.errors) warnings.push(`Loads module: ${mod.errors[0]} The entered loads and factors are used.`);
     if (LD.source === 'none entered') warnings.push('No dead loads for this girder: DC1 wet deck, DC2, DW and construction LL are 0 unless entered on the Loads tab (Override calculated value). Only the girder steel is computed here.');
     if (DF.manual) warnings.push(`Live load distribution factors: ${DF.src}. LL+IM is per girder only with this girder's factors.`);
-    if (LD.src.CL === 'none') warnings.push(LD.cl.on ? 'Construction live load: the tributary deck width needs the loads module (complete cross-section); M_CL is 0.' : 'Construction live load not calculated (a project saved before 2026-11-09) and not entered: M_CL is 0. Loads tab: "Calculate the construction live load".');
+    // SBRF-8 (2026-11-25, wording only): the warning names its condition (the option off, nothing entered); before, "a project saved before
+    // 2026-11-09", which was wrong for a project saved later with the option still off
+    if (LD.src.CL === 'none') warnings.push(LD.cl.on ? 'Construction live load: the tributary deck width needs the loads module (complete cross-section); M_CL is 0.' : 'Construction live load not calculated ("Calculate the construction live load" is off on the Loads tab) and not entered: M_CL is 0.');
     if (LD.src.CL === 'calc' && LD.cl.own && LD.cl.q < LD.cl.own - 1e-9) warnings.push(`Construction live load q_CL = ${LD.cl.q} psf is below the owner's minimum ${LD.cl.own} psf (${LD.cl.ownCite}).`);
     const FM = fmOf(P, mod, mod && mod.j != null ? mod.j : lineOf(P, g));
     if (FM && !isNum(FM.Pj)) warnings.push('Finishing machine: its share to this girder needs the loads module (complete cross-section); it is not applied.');
@@ -455,38 +469,63 @@
         const mu = v.multi || {}, mV = { ...base, axles: v.axles.map(a => [...a]), short: v.short || 'Vehicle', udl: v.udl ? { ...v.udl } : { mode: 'none', w: 0, gap: 0, trunc: false }, vK: 0, vMin: 0, vMax: 0, neglect: !!v.neglect,
           secondary: '', multi: !!mu.on, mScale: mu.scale != null ? mu.scale : 1, mHmin: mu.hmin != null ? mu.hmin : 50, mFixed: mu.fixed || 0, imp: { method: 'const', val: 1 + (+v.im || 0) / 100, S: 6.5, bal: false, onUdl: false } };
         const RV = ML().analyze(mV, { vehicles: pre }), o = { perLane: pick(RV), at: pick(RV, ei => ({ max: RV.res[ei].maxG || null, min: RV.res[ei].minG || null })) }; memo.set(k, o); return o; }; })();
-      const gMat = i => region[i] >= 1 ? DF.piers[region[i] - 1].gM : DF.spans[spanOfX(sup, xs[i])].gM;
       const spR = i => spanOfX(sup, i < N - 1 ? (xs[i] + xs[i + 1]) / 2 : xs[i] - 1e-6), spL = i => spanOfX(sup, i > 0 ? (xs[i - 1] + xs[i]) / 2 : xs[i]);
       // N3 (2026-11-23, engineer's decision): the shear skew correction along the girder (xs.lldf.skewVx). 'taper': the correction contained in
       // g_V and g_fat,V (the loads module's r_V of the span) is full at each support of the span and decreases linearly to 1.0 at mid-span
       // (4.6.2.2.3c), so the factor at station x is g_V × skewTaper; 'whole' / absent: the span's g_V at every station (tp = 1: as before, bit
       // for bit). An entered or pulled g_V has no known r_V and is used over the whole span. The reactions keep the support value.
       const taper = !!(P.xs && P.xs.lldf && P.xs.lldf.skewVx === 'taper');
-      const tp = (k, i, key) => taper ? skewTaper(DF.spans[k][key], xs[i], sup[k], spans[k]) : 1;
+      const tpOf = DFx => (k, i, key) => taper ? skewTaper(DFx.spans[k][key], xs[i], sup[k], spans[k]) : 1;
       skV = taper ? { on: true, spans: DF.spans.map((q, k) => ({ k, rV: isNum(q.rV) ? q.rV : null, rVf: isNum(q.rVf) ? q.rVf : null })) } : null;
       if (skV && skV.spans.some(q => q.rV == null || q.rVf == null)) warnings.push('Shear skew correction along the girder: "tapered" is chosen, but a shear distribution factor of this girder is entered, pulled or from a hand-off, so its skew correction is not known: that factor is used over the whole span (not tapered).');
-      ll = { perLane: h, gM: xs.map((_, i) => gMat(i)), gVR: xs.map((_, i) => DF.spans[spR(i)].gV * tp(spR(i), i, 'rV')), gVL: xs.map((_, i) => DF.spans[spL(i)].gV * tp(spL(i), i, 'rV')) };
-      ll.Mpos = h.Mmax.map((v, i) => ll.gM[i] * v); ll.Mneg = h.Mmin.map((v, i) => ll.gM[i] * v);
-      ll.VRpos = h.VRmax.map((v, i) => ll.gVR[i] * v); ll.VRneg = h.VRmin.map((v, i) => ll.gVR[i] * v);
-      ll.VLpos = h.VLmax.map((v, i) => ll.gVL[i] * v); ll.VLneg = h.VLmin.map((v, i) => ll.gVL[i] * v);
-      fat = { perLane: f, gM: xs.map((x) => DF.spans[spanOfX(sup, x)].fatM), gVR: xs.map((_, i) => DF.spans[spR(i)].fatV * tp(spR(i), i, 'rVf')), gVL: xs.map((_, i) => DF.spans[spL(i)].fatV * tp(spL(i), i, 'rVf')) };
-      fat.Mpos = f.Mmax.map((v, i) => fat.gM[i] * v); fat.Mneg = f.Mmin.map((v, i) => fat.gM[i] * v);
-      fat.VRpos = f.VRmax.map((v, i) => fat.gVR[i] * v); fat.VRneg = f.VRmin.map((v, i) => fat.gVR[i] * v);
-      fat.VLpos = f.VLmax.map((v, i) => fat.gVL[i] * v); fat.VLneg = f.VLmin.map((v, i) => fat.gVL[i] * v);
-      llR = h.R.map((r, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < ns), gV = Math.max(...adj.map(i => DF.spans[i].gV)); return { k, gV, max: gV * r.max, min: gV * r.min, perLane: r, two: r.two }; });
+      // the HL-93 and fatigue truck effects with the distribution factors DFx (RCURB: once per live-load case; one case: as before)
+      const llWith = DFx => { const gMat = i => region[i] >= 1 ? DFx.piers[region[i] - 1].gM : DFx.spans[spanOfX(sup, xs[i])].gM, tp = tpOf(DFx);
+      const ll_ = { perLane: h, gM: xs.map((_, i) => gMat(i)), gVR: xs.map((_, i) => DFx.spans[spR(i)].gV * tp(spR(i), i, 'rV')), gVL: xs.map((_, i) => DFx.spans[spL(i)].gV * tp(spL(i), i, 'rV')) };
+      ll_.Mpos = h.Mmax.map((v, i) => ll_.gM[i] * v); ll_.Mneg = h.Mmin.map((v, i) => ll_.gM[i] * v);
+      ll_.VRpos = h.VRmax.map((v, i) => ll_.gVR[i] * v); ll_.VRneg = h.VRmin.map((v, i) => ll_.gVR[i] * v);
+      ll_.VLpos = h.VLmax.map((v, i) => ll_.gVL[i] * v); ll_.VLneg = h.VLmin.map((v, i) => ll_.gVL[i] * v);
+      const fat_ = { perLane: f, gM: xs.map((x) => DFx.spans[spanOfX(sup, x)].fatM), gVR: xs.map((_, i) => DFx.spans[spR(i)].fatV * tp(spR(i), i, 'rVf')), gVL: xs.map((_, i) => DFx.spans[spL(i)].fatV * tp(spL(i), i, 'rVf')) };
+      fat_.Mpos = f.Mmax.map((v, i) => fat_.gM[i] * v); fat_.Mneg = f.Mmin.map((v, i) => fat_.gM[i] * v);
+      fat_.VRpos = f.VRmax.map((v, i) => fat_.gVR[i] * v); fat_.VRneg = f.VRmin.map((v, i) => fat_.gVR[i] * v);
+      fat_.VLpos = f.VLmax.map((v, i) => fat_.gVL[i] * v); fat_.VLneg = f.VLmin.map((v, i) => fat_.gVL[i] * v);
+      const llR_ = h.R.map((r, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < ns), gV = Math.max(...adj.map(i => DFx.spans[i].gV)); return { k, gV, max: gV * r.max, min: gV * r.min, perLane: r, two: r.two }; });
+      return { ll: ll_, fat: fat_, llR: llR_ }; };
+      ({ ll, fat, llR } = llWith(DF));
       // pedestrian load (AASHTO LRFD 3.6.1.6; GirderDetail GM.sa.compute plRow and vSec, GD45/GD49; added 2026-10-30, sb-ped-owner PR): w_PL of
       // this girder (the loads module's share: already per girder, so no g, no IM and no multiple presence) on the parts of each influence line
       // (live-load stiffness, the same mesh as HL-93) of one sign: max = w_PL × (positive area), min = w_PL × (negative area). Reactions likewise.
       // Kept apart from R.ll (HL-93 only, which the LL deflection and the factors use); every module takes LL+IM + PL once (llPL below).
-      if (LD.PL > 0) {
+      const pedOf = wPL => {   // RCURB: a function of w_PL (case 2 has its own); the arithmetic as before
         const memo = new Map(), area = ei => { if (memo.has(ei)) return memo.get(ei); let lp = 0, ln = 0; const xr = RH.x;
           for (let j = 0; j < xr.length - 1; j++) { const hh = xr[j + 1] - xr[j], [a, b] = RH.ends(ei, j);
             if (a >= 0 && b >= 0) lp += (a + b) / 2 * hh; else if (a <= 0 && b <= 0) ln += (a + b) / 2 * hh;
             else { const t = a / (a - b), A1 = a * t * hh / 2, A2 = b * (1 - t) * hh / 2; if (a > 0) { lp += A1; ln += A2; } else { ln += A1; lp += A2; } } }
-          const v = { max: LD.PL * lp, min: LD.PL * ln, ap: lp, an: ln }; memo.set(ei, v); return v; };
+          const v = { max: wPL * lp, min: wPL * ln, ap: lp, an: ln }; memo.set(ei, v); return v; };
         const q = pick(RH, area);
-        ped = { w: LD.PL, Mpos: q.Mmax, Mneg: q.Mmin, VRpos: q.VRmax, VRneg: q.VRmin, VLpos: q.VLmax, VLneg: q.VLmin, R: q.R.map((r, k) => ({ k, max: r.max, min: r.min })) };
-      }
+        return { w: wPL, Mpos: q.Mmax, Mneg: q.Mmin, VRpos: q.VRmax, VRneg: q.VRmin, VLpos: q.VLmax, VLneg: q.VLmin, R: q.R.map((r, k) => ({ k, max: r.max, min: r.min })) };
+      };
+      if (PL1 > 0) ped = pedOf(PL1);
+      // RCURB: case 2 (curb-to-curb lanes, the pedestrian load) and the envelope of the two cases at every station, effect by effect
+      if (CS) { const c2 = llWith(CS.DF2), p2 = CS.PL2 > 0 ? pedOf(CS.PL2) : null, mO = CS.mO, Z = new Array(N).fill(0);
+        const c1 = { ll, fat, llR }, P1 = ped, sc = (o, q, k, i) => mO * o[k][i] + (q ? q[k][i] : 0);
+        const pk = { }, L = { perLane: h }, Q = p2 || P1 ? { w: CS.PL2 } : null, F = { perLane: f };
+        // HL-93 + PL: the case with the larger factored live load (positive envelopes) or the smaller (negative); a tie keeps case 1
+        [['Mpos', 1, 'gM'], ['Mneg', -1, 'gM'], ['VRpos', 1, 'gVR'], ['VRneg', -1, 'gVR'], ['VLpos', 1, 'gVL'], ['VLneg', -1, 'gVL']].forEach(([k, sg, gk]) => {
+          pk[k] = xs.map((_, i) => (sg * (sc(c2.ll, p2, k, i) - sc(c1.ll, P1, k, i)) > 1e-12 ? 2 : 1));
+          L[k] = xs.map((_, i) => (pk[k][i] === 2 ? c2.ll : c1.ll)[k][i]);
+          L[gk + (sg < 0 ? 'n' : '')] = xs.map((_, i) => (pk[k][i] === 2 ? c2.ll : c1.ll)[gk][i]);
+          if (Q) Q[k] = xs.map((_, i) => { const o = pk[k][i] === 2 ? p2 : P1; return o ? o[k][i] : 0; }); });
+        // fatigue truck (no pedestrian load): the larger magnitude
+        [['Mpos', 1, 'gM'], ['Mneg', -1, 'gM'], ['VRpos', 1, 'gVR'], ['VRneg', -1, 'gVR'], ['VLpos', 1, 'gVL'], ['VLneg', -1, 'gVL']].forEach(([k, sg, gk]) => {
+          pk['fat.' + k] = xs.map((_, i) => (sg * (c2.fat[k][i] - c1.fat[k][i]) > 1e-12 ? 2 : 1));
+          F[k] = xs.map((_, i) => (pk['fat.' + k][i] === 2 ? c2.fat : c1.fat)[k][i]);
+          F[gk + (sg < 0 ? 'n' : '')] = xs.map((_, i) => (pk['fat.' + k][i] === 2 ? c2.fat : c1.fat)[gk][i]); });
+        // reactions: the larger m·R_LL+IM + R_PL (maximum)
+        pk.R = c1.llR.map((r, k) => (mO * c2.llR[k].max + (p2 ? p2.R[k].max : 0) - (mO * r.max + (P1 ? P1.R[k].max : 0)) > 1e-12 ? 2 : 1));
+        const llR2 = c1.llR.map((r, k) => (pk.R[k] === 2 ? c2.llR[k] : r));
+        if (Q) Q.R = c1.llR.map((r, k) => { const o = pk.R[k] === 2 ? p2 : P1; return o ? o.R[k] : { k, max: 0, min: 0 }; });
+        CS.c = [c1, c2]; CS.p = [P1, p2]; CS.pick = pk;
+        ll = L; fat = F; llR = llR2; ped = Q && (p2 || P1) ? Q : null; }
       // LL deflection (SA3): shared deflection() at the 1/20 points, truck with IM or 25 % of it + lane, per lane; × g_Δ of the span.
       // Truck axles that do not add to the deflection sought are neglected (3.6.1.3.1; GirderDetail LL8; SB2-A4, 2026-10-29: neglect).
       // The limit: the owner rule (OWN19, deflOwner) or the entered L/… (2.5.2.6.2, optional criterion).
@@ -501,10 +540,11 @@
       const DL = ML().deflection(RHd, { mode: 'lrfd', DF: 1, useIM: true, neglect: true }), OW = deflOwner(P, g, S), rq = OW ? OW.rq : S.deflLimit;
       lld = spans.map((L, k) => { let best = null;
         DL.secs.forEach((s, si) => { if (s.k !== k) return; const v = -DL.res[si].dn; if (!best || v > best.raw) best = { x: s.x, raw: v, lab: DL.res[si].dnG ? DL.res[si].dnG.lab : '' }; });
-        const gD = DF.spans[k].gDef, dd = best ? best.raw * gD : 0, lim = L * 12 / rq, limP = OW && OW.pref ? L * 12 / OW.pref : 0, ok = dd <= lim + 1e-9;
+        const cD = CS && CS.DF2.spans[k].gDef > DF.spans[k].gDef + 1e-12 ? 2 : 1, DFd = cD === 2 ? CS.DF2 : DF;   // RCURB: the larger g_Δ of the two cases (no pedestrian load)
+        const gD = DFd.spans[k].gDef, dd = best ? best.raw * gD : 0, lim = L * 12 / rq, limP = OW && OW.pref ? L * 12 / OW.pref : 0, ok = dd <= lim + 1e-9;
         const status = OW && OW.rep ? 'na' : !ok ? 'fail' : limP && dd > limP + 1e-9 ? 'warn' : 'pass';
         return { k, L, x: best ? best.x : null, perLane: best ? best.raw : 0, case: best ? best.lab : '', gD, d: dd, lim, ratio: rq, pref: OW ? OW.pref : 0, limP, ok, status, own: OW,
-          dP: DF.spans[k].dP || null, EI: bEI && best ? bEI.at(best.x) : null }; });
+          dP: DFd.spans[k].dP || null, EI: bEI && best ? bEI.at(best.x) : null, ...(CS ? { cs: cD, gD12: [DF.spans[k].gDef, CS.DF2.spans[k].gDef] } : {}) }; });
     }
 
     // deck placement sequence (saSeq): continuous girders, composite deck
@@ -535,11 +575,21 @@
         MDCc: Array.from(MD).map((v, i) => v >= 0 ? Math.max(v, eP[i]) : Math.min(v, eN[i])) };
     }
 
-    const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, plf, wSteel, loads: LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
-      st, camber, ll, fat, llR, lld, seq, pl: ped, fm, wetCorr, wetTot, skV, bEI: bEI ? { nb: bEI.nb, same: bEI.same, sb: bEI.sb, types: bEI.types.map(t => ({ gi: t.gi, label: t.label, lines: t.lines })) } : null };
+    const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, plf, wSteel, loads: CS ? { ...LD, PL: CS.PL2, src: { ...LD.src, PL: CS.srcPL2 } } : LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
+      st, camber, ll, fat, llR, lld, seq, pl: ped, fm, wetCorr, wetTot, skV, cases: CS && CS.c ? casesOut(CS, DF, xs) : null, bEI: bEI ? { nb: bEI.nb, same: bEI.same, sb: bEI.sb, types: bEI.types.map(t => ({ gi: t.gi, label: t.label, lines: t.lines })) } : null };
     R.steps = steps(R);
     if (vehRun) Object.defineProperty(R, 'vehicle', { value: vehRun, enumerable: false });   // not a result: the rating vehicles' runner (above)
     return R;
+  }
+
+  /* casesOut(CS, DF1, xs) (RCURB, sb-ridot-curb PR): the two live-load cases of RIDOT BDM 3.4.1.1.1 for the result (R.cases): the loads module's
+     lane steps (engine/loads.js cases), per case the distribution factors of this girder, w_PL, the per-lane effects × g, and pick[k][i] (1 | 2)
+     the case taken at station i for effect k (Mpos, Mneg, VRpos, VRneg, VLpos, VLneg; 'fat.<k>' the fatigue truck; R the reactions).
+     Only when the live load was run (an analysis with opt.ll false, e.g. constructibility, has R.cases null). */
+  function casesOut(CS, DF1, xs) {
+    const I = CS.info, cnt = k => CS.pick[k].filter(v => v === 2).length;
+    return { cite: I.cite, sides: I.sides, NL: I.NL, w: I.w, mO: CS.mO, PL: [0, CS.PL2], dfs: [DF1, CS.DF2], steps: I.steps,
+      c: CS.c, p: CS.p, pick: CS.pick, n2: Object.fromEntries(Object.keys(CS.pick).map(k => [k, cnt(k)])), N: xs.length };
   }
 
   /* steps(R): the worked steps of the key values (shared/steps.js format). Each FE value is the stiffness-method result of the
@@ -581,10 +631,24 @@
         w.add({ id: `fm.M.s${k + 1}`, label: `Finishing machine moment, span ${k + 1}, at x = ${n2(R.x[ip])} ft (added to M_CL)`, sym: 'M_{fm}', eq: 'P_{j}\\,\\eta_{M}', sub: `${n3(F.Pj)}(${n2(F.M[ip] / F.Pj)})`, value: F.M[ip], unit: kft, d: 1, ref: `${ED} Art. 3.4.2.1`, note: 'η_M: the moment influence-line ordinate (ft) at the machine\'s position, on I_s.' }); } }
     // key moments per span and pier
     const x = R.x, at = (arr, i) => arr[i];
+    /* RCURB (sb-ridot-curb PR): the two live-load cases of RIDOT BDM 3.4.1.1.1, worked: the lanes of each case (the loads module's steps),
+       this girder's factors in each case, and at the governing points the factored live load m·LL+IM + PL of each case and the one taken */
+    const C = R.cases, cs = (lab, k, i, sym) => { if (!C || !R.ll) return; const c1 = C.c[0], c2 = C.c[1], p1 = C.p[0], p2 = C.p[1], gk = /^M/.test(k) ? 'gM' : /^VR/.test(k) ? 'gVR' : 'gVL', ks = k.replace(/(pos|neg)$/, ''), ky = k;
+      const v1 = C.mO * c1.ll[ky][i] + (p1 ? p1[ky][i] : 0), v2 = C.mO * c2.ll[ky][i] + (p2 ? p2[ky][i] : 0), pc = C.pick[ky][i];
+      w.add({ id: `case.${lab}`, label: `RIDOT BDM 3.4.1.1.1, the more severe live-load case: ${sym} at x = ${n2(x[i])} ft (case ${pc} governs)`, sym: `m${ks === 'M' ? 'M' : 'V'}_{LL+IM} + ${ks === 'M' ? 'M' : 'V'}_{PL}`,
+        eq: `\\${/neg$/.test(k) ? 'min' : 'max'}(m\\,g_{1}${ks === 'M' ? 'M' : 'V'}_{HL93},\\ m\\,g_{2}${ks === 'M' ? 'M' : 'V'}_{HL93} + ${ks === 'M' ? 'M' : 'V'}_{PL,2})`,
+        sub: `\\${/neg$/.test(k) ? 'min' : 'max'}(${n2(C.mO)}(${St().n(c1.ll[gk][i], 4)})(${n1(c1.ll[ky][i] / (c1.ll[gk][i] || 1))}),\\ ${n2(C.mO)}(${St().n(c2.ll[gk][i], 4)})(${n1(c2.ll[ky][i] / (c2.ll[gk][i] || 1))}) + ${p2 ? `(${n1(p2[ky][i])})` : '0'})`,
+        value: pc === 2 ? v2 : v1, unit: ks === 'M' ? kft : kip, d: ks === 'M' ? 1 : 2, ref: `${C.cite}; ${ED} Art. 3.6.1.6, Table 3.4.1-1`,
+        note: `Case 1 (lanes between the barriers, N_L = ${C.NL[0]}, no pedestrian load): ${n1(v1)}; case 2 (curb to curb, N_L = ${C.NL[1]}, pedestrian load): ${n1(v2)}. Both cases take γ_LL on LL+IM and on PL with m = ${n2(C.mO)} on LL+IM only (Strength I and Service II alike), so the larger factored live load is the more severe case for every limit state that uses it. The values used at this station: those of case ${pc}.` }); };
+    if (C) { (C.steps || []).forEach(q => w.add({ ...q, id: q.id.replace(/^xs\.case\./, 'case.') }));
+      w.add({ id: 'case.g', label: `This girder's distribution factors in each case (span 1; worked on the Loads & LLDF tab, case 1 and case 2)`, sym: 'g_{M},\\ g_{V},\\ g_{\\Delta}', eq: '',
+        sub: `\\text{case 1: } ${St().n(C.dfs[0].spans[0].gM, 4)},\\ ${St().n(C.dfs[0].spans[0].gV, 4)},\\ ${St().n(C.dfs[0].spans[0].gDef, 4)};\\ \\text{case 2: } ${St().n(C.dfs[1].spans[0].gM, 4)},\\ ${St().n(C.dfs[1].spans[0].gV, 4)},\\ ${St().n(C.dfs[1].spans[0].gDef, 4)}`,
+        value: C.PL[1], unit: 'klf', d: 4, ref: `${C.cite}; ${ED} Art. 4.6.2.2`, note: `Value: w_PL of this girder in case 2 (case 1: 0). Stations where case 2 governs (of ${C.N}): M+ ${C.n2.Mpos}, M− ${C.n2.Mneg}, V+ ${C.n2.VRpos}, V− ${C.n2.VRneg}; fatigue M ${C.n2['fat.Mpos']}; reactions ${C.n2.R}.` }); }
     for (let k = 0; k < R.spans.length; k++) {
       const a = R.supIdx[k], b = R.supIdx[k + 1]; let im = a; for (let i = a; i <= b; i++) if (R.st.DC1.M[i] > R.st.DC1.M[im]) im = i;
       w.add({ id: `M.DC1.s${k + 1}`, label: `Largest DC1 moment, span ${k + 1}, at x = ${n2(x[im])} ft`, sym: 'M_{DC1}', eq: 'M_{steel} + M_{wet}', sub: `${n1(R.st.DC1steel.M[im])} + ${n1(R.st.DC1wet.M[im])}`, value: R.st.DC1.M[im], unit: kft, d: 1, ref: `${ED} Art. 4.5.2.2, 4.6.2`, note: 'Stiffness method on I_s (shared beam engine).' });
       if (R.ll) { let ip = a; for (let i = a; i <= b; i++) if (R.ll.Mpos[i] > R.ll.Mpos[ip]) ip = i;
+        cs(`M.s${k + 1}`, 'Mpos', ip, `largest positive moment, span ${k + 1}`);   // RCURB
         w.add({ id: `M.LL.s${k + 1}`, label: `Largest LL+IM moment, span ${k + 1}, at x = ${n2(x[ip])} ft`, sym: 'M_{LL+IM}', eq: 'g_{M}\\,M_{HL93}', sub: `${n3(R.ll.gM[ip])}(${n1(R.ll.perLane.Mmax[ip])})`, value: R.ll.Mpos[ip], unit: kft, d: 1,
           ref: `${ED} Art. 3.6.1.3.1, 3.6.2.1, 4.6.2.2`, note: `Per lane: design truck (rear spacing 14–30 ft) or tandem, with IM ${S.im} %, + lane 0.64 klf without IM.` }); }
       if (R.pl) { let ip = a; for (let i = a; i <= b; i++) if (R.pl.Mpos[i] > R.pl.Mpos[ip]) ip = i;
@@ -593,12 +657,14 @@
     }
     for (let k = 1; k < R.spans.length; k++) { const i = R.supIdx[k];
       w.add({ id: `M.perm.p${k}`, label: `Permanent-load moments at pier ${k} (x = ${n2(x[i])} ft)`, sym: 'M_{DC1} + M_{DC2} + M_{DW}', eq: '', sub: `${n1(R.st.DC1.M[i])} + ${n1(R.st.DC2.M[i])} + ${n1(R.st.DW.M[i])}`, value: R.st.DC1.M[i] + R.st.DC2.M[i] + R.st.DW.M[i], unit: kft, d: 1, ref: `${ED} Art. 4.6.2` });
-      if (R.ll) w.add({ id: `M.LL.p${k}`, label: `Negative LL+IM moment at pier ${k}`, sym: 'M_{LL+IM}^{-}', eq: 'g_{M}\\,M_{HL93}^{-}', sub: `${n3(R.ll.gM[i])}(${n1(R.ll.perLane.Mmin[i])})`, value: R.ll.Mneg[i], unit: kft, d: 1,
+      cs(`M.p${k}`, 'Mneg', i, `negative moment at pier ${k}`);   // RCURB
+      if (R.ll) w.add({ id: `M.LL.p${k}`, label: `Negative LL+IM moment at pier ${k}`, sym: 'M_{LL+IM}^{-}', eq: 'g_{M}\\,M_{HL93}^{-}', sub: `${n3((R.ll.gMn || R.ll.gM)[i])}(${n1(R.ll.perLane.Mmin[i])})`, value: R.ll.Mneg[i], unit: kft, d: 1,
         ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2`, note: R.ll.perLane.twoM[i] ? 'Includes 90 % of two design trucks (headway ≥ 50 ft) + 90 % of the lane load (negative-moment influence line).' : '' });
       if (R.pl) w.add({ id: `M.PL.p${k}`, label: `Negative pedestrian load moment at pier ${k}`, sym: 'M_{PL}^{-}', eq: 'w_{PL}\\,A^{-}', sub: `${St().n(R.pl.w, 4)}(${n1(R.pl.Mneg[i] / R.pl.w)})`, value: R.pl.Mneg[i], unit: kft, d: 1,
         ref: `${ED} Art. 3.6.1.6`, note: 'A⁻: the negative area of the moment influence line (ft²; live-load stiffness): the sidewalk loaded where it adds to the negative moment.' });
       if (R.pl && R.ll) w.add({ id: `M.LLPL.p${k}`, label: `Negative LL+IM + PL moment at pier ${k} (used by the modules)`, sym: 'M_{LL+IM+PL}^{-}', eq: 'M_{LL+IM}^{-} + M_{PL}^{-}', sub: `${n1(R.ll.Mneg[i])} + (${n1(R.pl.Mneg[i])})`, value: R.ll.Mneg[i] + R.pl.Mneg[i], unit: kft, d: 1,
         ref: `${ED} Art. 3.6.1.6, Table 3.4.1-1`, note: 'The pedestrian load acts with the vehicular live load (3.6.1.6) and takes its load factor; the owner multiplier m is not applied to it (GirderDetail GD45).' }); }
+    if (C && R.ll) R.supIdx.forEach((i, k) => { const end = k === R.supIdx.length - 1; cs(`V.${k}`, end ? 'VLneg' : 'VRpos', i, `shear ${end ? 'just left of' : 'just right of'} support ${k + 1}`); });   // RCURB
     if (R.llR) R.llR.forEach(r => w.add({ id: `R.LL.${r.k}`, label: `LL+IM reaction, support ${r.k + 1}`, sym: 'R_{LL+IM}', eq: 'g_{V}\\,R_{HL93}', sub: `${n3(r.gV)}(${n2(r.perLane.max)})`, value: r.max, unit: kip, d: 2,
       ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2.3a`, note: (r.two ? '90 % of two trucks + lane governs (interior support). ' : '') + 'g_V = the larger of the adjacent spans.' }));
     // N3 (2026-11-23): the shear skew correction tapered along the girder (4.6.2.2.3c): the factor at a station, shown at each span's quarter point
@@ -628,7 +694,7 @@
         w.add({ id: `defl.EI${q.k + 1}`, label: `Bridge stiffness shared equally by the ${B.nb} girders, span ${q.k + 1}, at x = ${n2(q.x)} ft`, sym: 'EI_{avg}', eq: '\\frac{\\sum_{j} E I_{n,j}}{N_{b}}',
           sub: `\\frac{${g0(B.E)}(${B.parts.map(t => `${t.n}(${g0(t.I)})`).join(' + ')})}{${B.nb}}`, value: B.E * B.Iavg, unit: 'kip-in^{2}', d: 0, ref: `${ED} Art. 2.5.2.6.2`,
           note: `ΣEI = ${big(B.E * B.sumI)} kip-in² (${B.parts.map(t => `${t.n} × ${t.label}: I_n = ${big(t.I)} in⁴ on ${t.lines.map(j => 'G' + (j + 1)).join(', ')}`).join('; ')}); I_avg = ${big(B.Iavg)} in⁴. This girder's own I_n here: ${big(B.Iown)} in⁴${many ? '' : ' (every girder line has this girder\'s plates: I_avg = I_n)'}. All design lanes loaded and all girders deflecting equally: the deflection is that of one lane on a girder of the average stiffness at every station (short-term composite I_n of each girder line, I_cr in the cracked zones), × g_Δ. The moments, shears and reactions keep this girder's own stiffness.` }); }
-      if (q.dP) w.add({ id: `defl.g${q.k + 1}`, label: `Deflection distribution factor, span ${q.k + 1}: all lanes loaded, all girders equal (worked on the Loads & LLDF tab)`, sym: 'g_{\\Delta}', eq: '\\frac{m N_{L}}{N_{b}}', sub: `\\frac{${n2(q.dP.m)}(${q.dP.NL})}{${q.dP.Nb}}`, value: q.gD, unit: '', d: 4, ref: `${ED} Art. 2.5.2.6.2, Table 3.6.1.1.2-1`,
+      if (q.dP) w.add({ id: `defl.g${q.k + 1}`, label: `Deflection distribution factor, span ${q.k + 1}: all lanes loaded, all girders equal (worked on the Loads & LLDF tab)${q.cs ? `; RIDOT BDM 3.4.1.1.1 case ${q.cs}, the larger: g_Δ = ${St().n(q.gD12[0], 4)} (case 1), ${St().n(q.gD12[1], 4)} (case 2)` : ''}`, sym: 'g_{\\Delta}', eq: '\\frac{m N_{L}}{N_{b}}', sub: `\\frac{${n2(q.dP.m)}(${q.dP.NL})}{${q.dP.Nb}}`, value: q.gD, unit: '', d: 4, ref: `${ED} Art. 2.5.2.6.2, Table 3.6.1.1.2-1`,
         note: 'N_L design lanes, m the multiple presence factor for N_L lanes, N_b girders.' });
       w.add({ id: `defl.LL${q.k + 1}`, label: `LL deflection, span ${q.k + 1}, at x = ${n2(q.x)} ft`, sym: '\\Delta_{LL}', eq: 'g_{\\Delta}\\max(\\Delta_{truck}(1 + IM),\\ 0.25\\Delta_{truck}(1 + IM) + \\Delta_{lane})', sub: `${n3(q.gD)}(${n3(q.perLane)})`, value: q.d, unit: 'in', d: 3,
         ref: `${ED} Art. 2.5.2.6.2, 3.6.1.3.2`, ok: q.status === 'na' ? undefined : q.ok, note: `${q.ok ? '≤' : '>'} Δ_lim = ${n3(q.lim)} in${q.status === 'na' ? ' (reported, not checked: exterior girder under the owner rule)' : ''}. Governing per-lane case: ${q.case || '—'}. All lanes loaded, all girders deflecting equally (g_Δ)${q.EI ? `; per lane on a girder of the bridge-average stiffness EI_avg (step an.defl.EI${q.k + 1})` : ''}. Truck axles that do not add to the deflection are neglected (3.6.1.3.1).` }); });
@@ -676,6 +742,15 @@
      takes this app's analysis builds its LL+IM from here (ui/rating.js, ui/shear.js, ui/fatigue.js, ui/welds.js fromAnalysis; engine/splices.js
      arraysFromAnalysis), and R.pl gives the pedestrian part (M_PL, V_PL) so that the owner multiplier m is kept off it (GD45).
      Returns { Mpos, Mneg, VRpos, VRneg, VLpos, VLneg, R: [{ max, min }], pl: R.pl } or null (no live load). */
+  /* rateView(R) (RCURB Q6, engineer's answer 2026-11-26; CLAUDE.md §4): the analysis as the load rating takes it. With the RIDOT BDM 3.4.1.1.1
+     two cases (R.cases), where case 2 governs the HL-93 design effect the rating uses case 1's distribution factors (the lanes over the
+     mountable sidewalk, no pedestrian load), and case 1 already governs elsewhere: so the rating takes case 1 at every station: its LL+IM
+     (ll, with gM, gVR, gVL), its fatigue-truck factors (fat), its reactions (llR), and no pedestrian load (pl null). Before: the case taken
+     by the design envelope at each station, with case 2's w_PL where case 2 governed. Without the two cases: R itself (unchanged). */
+  function rateView(R) {
+    const C = R && R.cases; if (!C || !C.c || !C.c[0]) return R;
+    const c1 = C.c[0]; return { ...R, ll: c1.ll, fat: c1.fat, llR: c1.llR, pl: null, rateCase: { case: 1, cite: C.cite, n2: C.n2 } };
+  }
   function llPL(R) {
     if (!R || !R.ll) return null; const L = R.ll, Q = R.pl, add = k => L[k].map((v, i) => v + (Q ? Q[k][i] : 0));
     return { Mpos: add('Mpos'), Mneg: add('Mneg'), VRpos: add('VRpos'), VRneg: add('VRneg'), VLpos: add('VLpos'), VLneg: add('VLneg'),
@@ -728,5 +803,5 @@
     return { level: lv, items, th, wg, Is, steps: w.steps };
   }
 
-  window.SBDAnalysis = { skewTaper, plateOfLine, applicability, DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, allowFor, allowOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
+  window.SBDAnalysis = { skewTaper, plateOfLine, applicability, DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, allowFor, allowOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL, rateView };
 })();

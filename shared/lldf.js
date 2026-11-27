@@ -6,7 +6,9 @@
        it is page text and reads the page's lock state);
      - one read-only output added: rigidMethod returns ecc (the lane eccentricities it already computed);
      - an option p.kgSimple (true = the simplified K_g terms of Table 4.6.2.2.1-3, type (a)), used by apps/steel-bridge;
-       lldf.html never sets it, so its results are unchanged.
+       lldf.html never sets it, so its results are unchanged;
+     - an option p.pedLane (PEDM, 2026-11-26: the pedestrian load counted as a loaded lane for m in the lever rule and the rigid
+       cross-section), used by apps/steel-bridge (RIDOT two-case check); lldf.html never sets it, so its results are unchanged.
    Results are bit-identical to the page's before the move (hash harness, fixlog/shared-lldf.md).
 
    Units: spans, spacings, overhangs, traffic-face offsets, d_e ft; t_s, depth, e_g, b in; I, J, K_g in^4; A in^2; skew degrees.
@@ -28,6 +30,12 @@
 const f1=x=>(+x).toFixed(1), f3=x=>(+x).toFixed(3);   // lldf.html's formatting helpers (designL's TeX, memberDF's fatNote)
 
 function multiplePresence(nLanes){return nLanes<=1?1.20:nLanes===2?1.00:nLanes===3?0.85:0.65;}
+/* PEDM (2026-11-26, apps/steel-bridge RIDOT two-case check; CLAUDE.md §4): option p.pedLane (true = the pedestrian load acts with the
+   vehicles on this member and counts as one loaded lane for the multiple presence factor, AASHTO LRFD 10th Ed. Art. 3.6.1.1.2 and
+   C3.6.1.1.2; RIDOT BDM 3.4.1.1.2). The lever rule and the rigid cross-section (where m is applied explicitly) then take m for N + 1
+   lanes; the approximate equations (m built in) and the fatigue factors (one truck, no pedestrian load) are unchanged. lldf.html never
+   sets it, so its results are unchanged. */
+const pedM=p=>(p&&p.pedLane)?1:0;
 
 const RANGES={
   S:{min:3.5,max:16.0,label:"S",unit:"ft",name:"Average beam spacing"},
@@ -223,8 +231,8 @@ function leverConfig(p,geo,j,N){
       if(!best||R>best.R+1e-9) best={R,s};
     } }
   if(!best) return null;
-  const m=multiplePresence(N);
-  return {N,R:best.R,m,df:best.R*m,wheels:off.map(o=>best.s+o),gaps};
+  const m=multiplePresence(N+pedM(p));   // PEDM: N + 1 loaded lanes with p.pedLane
+  return {N,R:best.R,m,df:best.R*m,wheels:off.map(o=>best.s+o),gaps,...(pedM(p)?{mLanes:N+1}:{})};
 }
 function leverAll(p,geo,j){
   const cfgs=[];
@@ -250,15 +258,22 @@ function rigidMethod(p,geo,side){
   const ecc=[]; for(let i=0;i<NL;i++) ecc.push(curb-(5+i*laneW));
   const trials=[]; let best={g:-Infinity};
   for(let n=1;n<=NL;n++){
-    const sumE=ecc.slice(0,n).reduce((a,b)=>a+b,0), m=multiplePresence(n);
+    const sumE=ecc.slice(0,n).reduce((a,b)=>a+b,0), m=multiplePresence(n+pedM(p));   // PEDM: n + 1 loaded lanes with p.pedLane
     const R=n/Nb+(Xext*sumE)/sumX2, g=m*R;
-    trials.push({n,m,sumE,R,g}); if(g>best.g) best={g,m,sumE,R,nLoaded:n};
+    trials.push({n,m,sumE,R,g,...(pedM(p)?{mLanes:n+1}:{})}); if(g>best.g) best={g,m,sumE,R,nLoaded:n};
   }
   return {g:best.g,m:best.m,nLoaded:best.nLoaded,sumE:best.sumE,R:best.R,Xext,sumX2,trials,de,side,ecc};   // ecc: added 2026-10-29 (read-only output, the lane eccentricities, for apps/steel-bridge's worked steps)
 }
 
 /* ---- per-member design distribution factors ---- */
+/* PEDM: with p.pedLane the design factors count the pedestrian load as a loaded lane (above); the fatigue factors are those without it
+   (one fatigue truck, no pedestrian load: m = 1.2 removed as before), and u is the member without p.pedLane (for the worked steps). */
 function memberDF(p,geo,Kg,skew,j){
+  const md=memberDF0(p,geo,Kg,skew,j); if(!pedM(p)) return md;
+  const u=memberDF0({...p,pedLane:false},geo,Kg,skew,j);
+  return {...md,fatM:u.fatM,fatV:u.fatV,...(u.fatOneM!==undefined?{fatOneM:u.fatOneM,fatOneV:u.fatOneV,fatNote:u.fatNote}:{}),pedLane:true,u};
+}
+function memberDF0(p,geo,Kg,skew,j){
   const type=memberType(p,j), S=memberSpacing(p,j), label="B"+(j+1);
   const fat=(one)=>typeof one==="number"?one/1.2:null;   // fatigue: strip MPF=1.2 from one-lane value (C3.6.1.1.2)
 
@@ -486,12 +501,12 @@ const STEPS=(function(){
   function lever(w, id, L, what) {
     if (!L) return;
     w.add({ id: id + '.R', label: `Lever rule, ${L.N} truck${L.N > 1 ? 's' : ''} (${what}): girder reaction per wheel load pair, wheels at ${L.wheels.map(n2).join(', ')} ft from the left deck edge`, sym: 'R', eq: '\\sum 0.5c_{i}', sub: L.c.map(c => `0.5(${n3(c)})`).join(' + '), value: L.R, unit: 'lanes', d: 4, ref: `${ED} Art. 4.6.2.2.1, C4.6.2.2.1` });
-    w.add({ id: id + '.g', label: `Lever rule with the multiple presence factor, ${L.N} lane${L.N > 1 ? 's' : ''}`, sym: 'g', eq: 'mR', sub: `${n2(L.m)}(${n4(L.R)})`, value: L.df, unit: '', d: 4, ref: `${ED} Table 3.6.1.1.2-1` });
+    w.add({ id: id + '.g', label: `Lever rule with the multiple presence factor, ${L.N} lane${L.N > 1 ? 's' : ''}${L.mLanes ? ` and the pedestrian load as one more loaded lane (m for ${L.mLanes} lanes)` : ''}`, sym: 'g', eq: 'mR', sub: `${n2(L.m)}(${n4(L.R)})`, value: L.df, unit: '', d: 4, ref: L.mLanes ? `${ED} Table 3.6.1.1.2-1, Art. 3.6.1.1.2, C3.6.1.1.2` : `${ED} Table 3.6.1.1.2-1` });   // PEDM: L.mLanes
   }
   function rigid(w, rig, Nb) {
     rig.trials.forEach(t => {
       w.add({ id: `rig${t.n}.R`, label: `Rigid cross-section, ${t.n} lane${t.n > 1 ? 's' : ''} loaded (lane resultants ${rig.ecc.slice(0, t.n).map(n2).join(', ')} ft from the centroid)`, sym: 'R', eq: '\\frac{N_{L}}{N_{b}} + \\frac{X_{ext}\\sum e}{\\sum x^{2}}', sub: `\\frac{${t.n}}{${Nb}} + \\frac{${n2(rig.Xext)}(${n2(t.sumE)})}{${n2(rig.sumX2)}}`, value: t.R, unit: '', d: 4, ref: `${ED} Eq. C4.6.2.2.2d-1` });
-      w.add({ id: `rig${t.n}.g`, label: `Rigid cross-section with the multiple presence factor, ${t.n} lane${t.n > 1 ? 's' : ''}`, sym: 'g', eq: 'mR', sub: `${n2(t.m)}(${n4(t.R)})`, value: t.g, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.2d, Table 3.6.1.1.2-1` });
+      w.add({ id: `rig${t.n}.g`, label: `Rigid cross-section with the multiple presence factor, ${t.n} lane${t.n > 1 ? 's' : ''}${t.mLanes ? ` and the pedestrian load as one more loaded lane (m for ${t.mLanes} lanes)` : ''}`, sym: 'g', eq: 'mR', sub: `${n2(t.m)}(${n4(t.R)})`, value: t.g, unit: '', d: 4, ref: t.mLanes ? `${ED} Art. 4.6.2.2.2d, Table 3.6.1.1.2-1, Art. 3.6.1.1.2, C3.6.1.1.2` : `${ED} Art. 4.6.2.2.2d, Table 3.6.1.1.2-1` });   // PEDM: t.mLanes
     });
     w.add({ id: 'rig', label: 'Rigid cross-section, governing', sym: 'g_{rigid}', eq: '\\max(g)', sub: rig.trials.map(t => n4(t.g)).join(',\\ '), value: rig.g, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.2d`, note: `${rig.nLoaded} lane${rig.nLoaded > 1 ? 's' : ''} loaded governs.` });
   }
@@ -503,17 +518,18 @@ const STEPS=(function(){
       let mom1 = e.mom1, mom2 = e.mom2, shr1 = e.shr1, shr2 = e.shr2;   // the factors before the skew factors (as memberDF forms them)
       if (tooWide) { mom1 = shr1 = alt.l1 ? alt.l1.df : 0; mom2 = shr2 = alt.l2 ? alt.l2.df : 0; }
       else if (n3b) { mom1 = Math.min(mom1, alt.l1 ? alt.l1.df : mom1); mom2 = Math.min(mom2, alt.l2 ? alt.l2.df : mom2); shr1 = alt.l1 ? alt.l1.df : shr1; shr2 = alt.l2 ? alt.l2.df : shr2; }
-      const o = { j, label, type, S, emp: e, alt, r: { ...md.r }, gM: md.gM, gV: md.gV, fatM: md.fatM, fatV: md.fatV, method: tooWide ? 'lever rule (S > 16 ft)' : n3b ? 'N_b = 3 rules' : 'equations' };
+      const o = { j, label, type, S, emp: e, alt, r: { ...md.r }, gM: md.gM, gV: md.gV, fatM: md.fatM, fatV: md.fatV, method: tooWide ? 'lever rule (S > 16 ft)' : n3b ? 'N_b = 3 rules' : 'equations',
+        ...(md.u ? { pedLane: true, fr1: { mom1: md.u.r.mom1, shr1: md.u.r.shr1 } } : {}) };   // PEDM: the fatigue factors without the pedestrian lane
       if (w) memberSteps(w, o, sk, alt, mom1, mom2, shr1, shr2);
       return o;
     }
     const side = md.side, de0 = side === 'L' ? geo.deL : geo.deR, lv = md.lvUsed || md.n3info;
     const alt = lv ? { l2: withC(q, geo, j, lv.lv2), why: tooWide ? 'S > 16 ft: lever rule' : 'N_b = 3' } : null;
     const r = { mom1: md.r.momExt1, mom2: md.r.momExt2, shr1: md.r.shrExt1, shr2: md.r.shrExt2 }, rig = md.rig;
-    const l1 = md.lever1 ? md.lever1.df : 0, rig1 = rig.trials && rig.trials.length ? rig.trials[0].g : 0;
+    const U = md.u || md, l1 = U.lever1 ? U.lever1.df : 0, rig1 = U.rig.trials && U.rig.trials.length ? U.rig.trials[0].g : 0;   // PEDM: fatigue without the pedestrian lane (U = md otherwise)
     const base = r.mom1 >= r.mom2 ? 'lever rule, one lane' : rig.g > md.mE ? 'rigid cross-section' : 'e-factor';
     const o = { j, label, type, S, side, de0, de: md.de, emp: e, lever1: withC(q, geo, j, md.lever1), eM: md.eM, eV: md.eV, mE: md.mE, vE: md.vE, rig, alt, r, gM: md.gM, gV: md.gV,
-      fatM: md.fatM, fatV: md.fatV, rig1, fat1: Math.max(l1, rig1), fatOneM: md.fatOneM, fatOneV: md.fatOneV, method: base };
+      fatM: md.fatM, fatV: md.fatV, rig1, fat1: Math.max(l1, rig1), fatOneM: md.fatOneM, fatOneV: md.fatOneV, method: base, ...(md.u ? { pedLane: true, fl1: l1 } : {}) };
     if (w) extSteps(w, o, sk, q.Nb);
     return o;
   }
@@ -546,15 +562,16 @@ const STEPS=(function(){
     w.add({ id: 'gM', label: `${o.label}: live-load distribution factor for moment (${o.method})`, sym: 'g_{M}', eq: '\\max(g_{M,1}, g_{M,2})', sub: `\\max(${n4(o.r.mom1)}, ${n4(o.r.mom2)})`, value: o.gM, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.2` });
     w.add({ id: 'gV', label: `${o.label}: live-load distribution factor for shear`, sym: 'g_{V}', eq: '\\max(g_{V,1}, g_{V,2})', sub: `\\max(${n4(o.r.shr1)}, ${n4(o.r.shr2)})`, value: o.gV, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.3` });
     if (o.type === 'ext') {   // 4.6.2.2.2d: the exterior factor not less than the rigid cross-section value, also for fatigue (one lane)
-      const sM = o.fatOneM / (o.fat1 || 1), l1 = o.lever1 ? o.lever1.df : 0;
-      w.add({ id: 'fat1', label: `${o.label}: one-lane factor for fatigue: the larger of the lever rule and the rigid cross-section with one lane loaded`, sym: 'g_{1}', eq: '\\max(g_{lever,1}, g_{rigid,1})', sub: `\\max(${n4(l1)}, ${n4(o.rig1)})`, value: o.fat1, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.2d, Eq. C4.6.2.2.2d-1`,
+      const sM = o.fatOneM / (o.fat1 || 1), l1 = o.pedLane ? o.fl1 : o.lever1 ? o.lever1.df : 0;   // PEDM: fatigue without the pedestrian lane (m = 1.2 for one lane)
+      w.add({ id: 'fat1', label: `${o.label}: one-lane factor for fatigue: the larger of the lever rule and the rigid cross-section with one lane loaded${o.pedLane ? ' (one fatigue truck, no pedestrian load: m = 1.20 for one lane, not the pedestrian-lane m above)' : ''}`, sym: 'g_{1}', eq: '\\max(g_{lever,1}, g_{rigid,1})', sub: `\\max(${n4(l1)}, ${n4(o.rig1)})`, value: o.fat1, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.2d, Eq. C4.6.2.2.2d-1`,
         note: o.rig1 > l1 + 1e-9 ? 'The rigid cross-section governs (it exceeds the one-lane lever rule).' : 'The lever rule governs.' });
       w.add({ id: 'fatM', label: `${o.label}: fatigue factor for moment (one lane, multiple presence 1.2 removed)`, sym: 'g_{fat,M}', eq: '\\frac{g_{1}r_{M}}{1.2}', sub: `\\frac{${n4(o.fat1)}(${n4(sM)})}{1.2}`, value: o.fatM, unit: '', d: 4, ref: `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2, Art. 4.6.2.2.2d` });
       w.add({ id: 'fatV', label: `${o.label}: fatigue factor for shear`, sym: 'g_{fat,V}', eq: '\\frac{g_{1}r_{V}}{1.2}', sub: `\\frac{${n4(o.fat1)}(${n4(o.fatOneV / (o.fat1 || 1))})}{1.2}`, value: o.fatV, unit: '', d: 4, ref: `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2, Art. 4.6.2.2.2d` });
       return;
     }
-    w.add({ id: 'fatM', label: `${o.label}: fatigue factor for moment (one lane, multiple presence 1.2 removed)`, sym: 'g_{fat,M}', eq: '\\frac{g_{M,1}}{1.2}', sub: `\\frac{${n4(o.r.mom1)}}{1.2}`, value: o.fatM, unit: '', d: 4, ref: `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2` });
-    w.add({ id: 'fatV', label: `${o.label}: fatigue factor for shear`, sym: 'g_{fat,V}', eq: '\\frac{g_{V,1}}{1.2}', sub: `\\frac{${n4(o.r.shr1)}}{1.2}`, value: o.fatV, unit: '', d: 4, ref: `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2` });
+    const F1 = o.fr1 || o.r;   // PEDM: the one-lane factors without the pedestrian lane
+    w.add({ id: 'fatM', label: `${o.label}: fatigue factor for moment (one lane, multiple presence 1.2 removed${o.fr1 ? '; one fatigue truck, no pedestrian load' : ''})`, sym: 'g_{fat,M}', eq: '\\frac{g_{M,1}}{1.2}', sub: `\\frac{${n4(F1.mom1)}}{1.2}`, value: o.fatM, unit: '', d: 4, ref: `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2` });
+    w.add({ id: 'fatV', label: `${o.label}: fatigue factor for shear`, sym: 'g_{fat,V}', eq: '\\frac{g_{V,1}}{1.2}', sub: `\\frac{${n4(F1.shr1)}}{1.2}`, value: o.fatV, unit: '', d: 4, ref: `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2` });
   }
   /* ---- other cross-section types (added 2026-11-01 for lldf.html's Report tab; the Steel Bridge app does not call these) ----
      other(q, geo, sk, md, w): the worked steps of girder (web, strip) md = memberDF(q, geo, null, sk, j) for types f, g (adjacent
