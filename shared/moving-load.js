@@ -201,9 +201,16 @@ function analyze(m,opt){
   // gives the larger value for the maximum and the smaller for the minimum. Returns [vMin,vMax], or null if not at the cut.
   const vJump=(cutEl,cutL,f,xp,P)=>{const c=cutL?cutEl:cutEl+1;if(Math.abs(xp-x[c])>1e-6)return null;
     const oL=cutL?f[c]:f[c]-1,u=P*oL,w=P*(oL+1);return [Math.min(u,w),Math.max(u,w)];};
+  // MLSP (2026-11-26, speed only; every result unchanged): the nodes c where vJump(…, xp, …) is not null, i.e. !(|xp − x[c]| > 1e-6), worked once
+  // per axle position instead of once per effect: a contiguous run of nodes around xp (|xp − x[c]| is monotonic in c on each side of xp), written
+  // to N0[a] … N1[a] (empty: N0 > N1). lo: the mesh interval of xp (loc). NaN xp: every node, as vJump.
+  const atNodes=(xp,lo,N0,N1,a)=>{if(xp!==xp){N0[a]=0;N1[a]=nn-1;return;}
+    let k=x[lo]<=xp?lo:lo-1;if(lo+1<nn&&x[lo+1]<=xp)k=lo+1;
+    let n0=k+1,n1=k;for(let c=k;c>=0&&!(Math.abs(xp-x[c])>1e-6);c--)n0=c;for(let c=k+1;c<nn&&!(Math.abs(xp-x[c])>1e-6);c++)n1=c;
+    N0[a]=n0;N1[a]=n1;};
   const cfgs=[];function sweep(cfg){cfgs.push(cfg);
     const nA=cfg.offs.length, Lv=cfg.offs[nA-1], tr=cfg.trail, ext=Lv+(tr?tr.gap:0)+m.step;
-    const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA),XP=new Float64Array(nA);
+    const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA),XP=new Float64Array(nA),N0=new Int32Array(nA),N1=new Int32Array(nA);
     const act=[]; effs.forEach((ef,ei)=>{const s=cfg.sel(ef);if(s[0]||s[1])act.push([ei,s[0],s[1],imArr[ei],ef.t==='V'?ef.el:-1,ef.cutL,imMinArr[ei]]);});
     const loc=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return lo;};
     for(const dir of m.dirs){
@@ -211,7 +218,7 @@ function analyze(m,opt){
         let any=false;
         for(let a=0;a<nA;a++){const xp=p-dir*cfg.offs[a];
           if(xp<-1e-9||xp>Lt+1e-9){on[a]=0;continue;}
-          on[a]=1;any=true;XP[a]=xp;const lo=loc(xp);J[a]=lo;T[a]=Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo])));}
+          on[a]=1;any=true;XP[a]=xp;const lo=loc(xp);J[a]=lo;T[a]=Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo])));atNodes(xp,lo,N0,N1,a);}
         let sc=null;
         if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else{if(s0<Lt)sc=Math.max(s0,0);}}
         if(!any&&sc===null)continue;
@@ -221,7 +228,7 @@ function analyze(m,opt){
           for(let a=0;a<nA;a++){if(!on[a])continue;const j=J[a];let fa=f[j],fb=f[j+1];
             if(j===cutEl){if(cutL)fa+=1;else fb-=1;}
             const v=cfg.loads[a]*(fa+(fb-fa)*T[a]);
-            if(cutEl>=0){const vj=vJump(cutEl,cutL,f,XP[a],cfg.loads[a]);if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
+            if(cutEl>=0){const c=cutL?cutEl:cutEl+1,vj=c>=N0[a]&&c<=N1[a]?vJump(cutEl,cutL,f,XP[a],cfg.loads[a]):null;if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
             tot+=v;totN+=v;if(v>0)ps+=v;else ng+=v;}
           const axMax=m.neglect?ps:tot, axMin=m.neglect?ng:totN;
           let uMax=0,uMin=0;
@@ -273,10 +280,10 @@ function analyze(m,opt){
   // Warnings
   // ── Refinement: spacing/headway at 0.5 ft, then each governing position at 0.1 ft ──
   function refineAt(cfg,p,dir,list){   // function declaration (hoisted): also used by sweep() for the shear-jump positions
-    const nA=cfg.offs.length,Lv=cfg.offs[nA-1],tr=cfg.trail,J=[],T=[],Pa=[],pos=[];
+    const nA=cfg.offs.length,Lv=cfg.offs[nA-1],tr=cfg.trail,J=[],T=[],Pa=[],pos=[],N0=[],N1=[];
     for(let a=0;a<nA;a++){const xp=p-dir*cfg.offs[a];if(xp<-1e-9||xp>Lt+1e-9)continue;
       let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=xp)lo=md;else hi=md;}
-      J.push(lo);T.push(Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo]))));Pa.push(cfg.loads[a]);pos.push(xp);}
+      J.push(lo);T.push(Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo]))));Pa.push(cfg.loads[a]);pos.push(xp);atNodes(xp,lo,N0,N1,J.length-1);}
     let sc=null;if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else if(s0<Lt)sc=Math.max(s0,0);}
     if(!J.length&&sc===null)return;
     let jc=0,tc=0;if(sc!==null){let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=sc)lo=md;else hi=md;}jc=lo;tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
@@ -284,7 +291,7 @@ function analyze(m,opt){
       const ef=effs[ei],f=IL[ei],im=imArr[ei],imn=imMinArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0,totN=0;
       for(let a=0;a<J.length;a++){const j=J[a];let fa=f[j],fb=f[j+1];if(j===cutEl){if(ef.cutL)fa+=1;else fb-=1;}
         const v=Pa[a]*(fa+(fb-fa)*T[a]);
-        if(cutEl>=0){const vj=vJump(cutEl,ef.cutL,f,pos[a],Pa[a]);if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
+        if(cutEl>=0){const c=ef.cutL?cutEl:cutEl+1,vj=c>=N0[a]&&c<=N1[a]?vJump(cutEl,ef.cutL,f,pos[a],Pa[a]):null;if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
         tot+=v;totN+=v;if(v>0)ps+=v;else ng+=v;}
       const axMax=m.neglect?ps:tot,axMin=m.neglect?ng:totN;let uMax=0,uMin=0;
       if(sc!==null){const D=DER[ei],CIs=D.CI[jc]+(D.CI[jc+1]-D.CI[jc])*tc;

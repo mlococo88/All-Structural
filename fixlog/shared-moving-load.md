@@ -372,3 +372,18 @@ results unchanged).
 - **Consumers (CLAUDE.md §3; every tool that loads shared/moving-load.js):** Moving Load Generator (shows `warnNL` with `mlNL`, MLNL-3: see `fixlog/Moving Load Generator.md`, same PR; `tests/smoke/phone-layout.mjs --tool mlg`, `tests/smoke/project-library.mjs --tool mlg`) and apps/steel-bridge (not edited: on hold; it reads `warn` only; `tests/smoke/steel-bridge-report.mjs` run).
 ### Other copies
 - None.
+
+## 2026-11-26 — PR: claude/moving-load-speed (PR #1738: https://github.com/mlococo88/All-Structural/pull/1738) (MLSP) — vJump's node test worked once per axle position (speed only; no computed result changed)
+- **Request (engineer, 2026-11-26, approved "Yes, merge once proven" for bit-identical speed changes only).**
+- **Where:** `analyze()`, new `atNodes(xp, lo, N0, N1, a)` (anchor `// MLSP (2026-11-26, speed only;`), right after `vJump`; used in `sweep(cfg)` and `refineAt(cfg, p, dir, list)`.
+- **Before:** in the inner loop over the active effects and the axles, every shear effect called `vJump(cutEl, cutL, f, xp, P)`, which returns null unless `!(Math.abs(xp - x[c]) > 1e-6)` for its cut node `c = cutL ? cutEl : cutEl + 1`:
+  `if(cutEl>=0){const vj=vJump(cutEl,cutL,f,XP[a],cfg.loads[a]);if(vj){…;continue;}}`
+- **After:** per axle position, `atNodes` writes the run of nodes `N0[a] … N1[a]` for which that condition holds (contiguous around xp: |xp − x[c]| is monotonic in c on each side of xp; found from the mesh interval `lo` of xp outward; NaN xp: every node, as vJump); vJump is called only for an effect whose cut node is in that run:
+  `if(cutEl>=0){const c=cutL?cutEl:cutEl+1,vj=c>=N0[a]&&c<=N1[a]?vJump(cutEl,cutL,f,XP[a],cfg.loads[a]):null;if(vj){…;continue;}}` (the same in refineAt with `ef.cutL`, `pos[a]`, `Pa[a]`).
+  vJump returns the same value as before where it is called, and null exactly where it is not, so every sum takes the same terms in the same order.
+- **Problem:** speed only (vJump about 9 % of a steel Auto design run's self time in the profile).
+- **Governing provision:** none (no formula, factor or result changed). §4 pure refactor.
+- **Check case / How verified:** `node tests/engine/run.mjs moving-load` (the 35 recorded parity cases hash identically, rail, HS20, Std. lane and HL-93 cases among them); the steel hash script (62 cases of steel analyses, evaluations, Auto design runs and 15 moving-load runs with their influence lines): every hash byte-identical on origin/main and this branch. CPU of analyze on the built-in steel project's two models (HL-93, fatigue), best of 3: 7379 ms → 6969 ms (−5.6 %).
+- **Consumers (CLAUDE.md §3; every tool that loads shared/moving-load.js):** Moving Load Generator (`tests/smoke/phone-layout.mjs --tool mlg`, `decimal-entry.mjs --tool mlg`, `project-library.mjs --tool mlg`: pass) and apps/steel-bridge (engine suite). No display change.
+### Other copies
+- None.
