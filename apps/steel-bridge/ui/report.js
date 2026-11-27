@@ -22,12 +22,20 @@
    the Report" (ui/view3d.js snapshot) goes to the Project and owner section, with a note when the inputs changed after the capture.
    No drawing code here; no value is computed.
 
-   render(host, ctx), ctx = { P, g, opts (object kept by the page: { inc: { key: bool }, detail, scope }), save(), goto(tab) } */
+   SBGL (2026-11-25, engineer's request; display only; the Prestressed Bridge app's RG design): scope "Selected girder" works the girder type on
+   its GOVERNING line in full (report/summary.js govLine of the Summary cells of each of its lines: each line is run once, one per timer tick,
+   kept in S.rows as for the every-girder report), with a table of the type's other lines in the Summary section (builders.js linesSub).
+   "Work the line chosen above the tab (report of before)" (ctx.opts.full, kept in the page's UI key with the other report choices; absent = off) gives the report of
+   before: the type on the line chosen above the tab, no table of the lines. A type on one line, a hand-off file or "Each tab's choice" (Custom
+   demands): as before. No value is computed here.
+
+   render(host, ctx), ctx = { P, base, g, opts (object kept by the page: { inc: { key: bool }, detail, scope, full }), save(), goto(tab) } */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const S = { src: 'analysis', pl: null, plName: '', B: null, key: '', err: '', busy: false, closed: new Set(), A: null, aKey: '', prog: '', rows: new Map(), run: 0 };
-  const keyOf = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName]);
+  const govMode = ctx => { const M = window.SBDModel, P0 = ctx.base || ctx.P; return !(ctx.opts || {}).full && S.src === 'analysis' && !!M && !!window.SBDSummary && !!window.SBDSummary.govLine && M.typeLines(P0, ctx.g).length > 1; };   // SBGL
+  const keyOf = ctx => (govMode(ctx) ? JSON.stringify(['gov', ctx.base || ctx.P, ctx.g, S.src]) : JSON.stringify([ctx.P, ctx.g, S.src, S.plName]));
   const allKey = ctx => JSON.stringify([ctx.base || ctx.P]);   // SB-2 PR 2: ctx.base, the project itself (ctx.P: the type on the line chosen)
   const rowKey = (P, gi) => JSON.stringify([P, gi]);   // one girder's summary rows (this project's analysis)
   const secOf = P => (window.SBDReportBuild.sectionsOf ? window.SBDReportBuild.sectionsOf(P) : window.SBDReportBuild.SECTIONS);   // DK (2026-11-23): + "Deck slab" where the project has the deck design on
@@ -91,6 +99,7 @@
     if (o.scope === 'all') return `${sc} <span class="note">Demands: this project's analysis of each girder. Each girder's analysis takes a few seconds; results are kept until the project changes.</span>
       <button type="button" id="rp_build"${built ? '' : ' class="primary"'}>${built ? 'Rebuild' : 'Build report'}</button>`;
     return `${sc}<div class="rp-chips" role="group" aria-label="Report sections">${SEC.map(([k, t]) => `<label class="rp-chip"><input type="checkbox" data-rpinc="${k}"${inc[k] ? ' checked' : ''}>${esc(t)}</label>`).join('')}</div>
+      ${window.SBDModel && window.SBDModel.typeLines(ctx.base || ctx.P, ctx.g).length > 1 ? `<label class="rp-chip" title="Unticked: the girder type is worked on its governing line, with a table of its other lines. Ticked: the report of before, the type worked in full on the line chosen above the tab (its design line unless another line is chosen there), with no table of the lines"><input type="checkbox" id="rp_full"${o.full ? ' checked' : ''}>Work the line chosen above the tab (report of before)</label>` : ''}
       <label>Detail <select id="rp_detail">${opt('gov', 'Governing location of each check', o.detail)}${opt('all', 'Every station (steps open on demand)', o.detail)}</select></label>
       <label>Demands <select id="rp_src">${opt('analysis', "This project's analysis", S.src)}${opt('tabs', "Each tab's choice (Custom where entered; else this project's analysis)", S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></label>
       ${S.src === 'file' ? `<input type="file" id="rp_file" accept=".json,application/json" aria-label="Hand-off file"><span class="note">${esc(S.plName)}</span>` : ''}
@@ -110,6 +119,7 @@
       on('rp_detail', 'change', e => { o.detail = e.target.value; if (ctx.save) ctx.save(); S.busy = true; render(host, ctx); setTimeout(() => { S.busy = false; render(host, ctx); }, 30); });
       on('rp_src', 'change', e => { S.src = e.target.value; render(host, ctx); });
       on('rp_scope', 'change', e => { o.scope = e.target.value; if (ctx.save) ctx.save(); render(host, ctx); });
+      on('rp_full', 'change', e => { o.full = e.target.checked; if (ctx.save) ctx.save(); render(host, ctx); });   // SBGL
       on('rp_build', 'click', () => build(host, ctx));
       on('rp_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
         rd.onload = () => { try { const j = JSON.parse(String(rd.result)), ck = window.SBDDemandFile.check(j); if (!ck.ok) throw new Error(ck.error); const pl = ck.pl;   // B1: GirderDetail hand-offs only (engine/demandfile.js)
@@ -118,15 +128,15 @@
     };
     const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis;
     const bar = AUI && AUI.srcBar ? AUI.srcBar({ src: S.src, auto: S.src === 'analysis', rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: g.label || g.id, plName: S.plName }) : '';
-    if (S.busy) { box.innerHTML = `<div class="alert">Building the report of ${esc(g.label || g.id)}… (the analysis takes a few seconds)</div>`; return; }
+    if (S.busy) { box.innerHTML = `<div class="alert">${S.prog ? esc(S.prog) : `Building the report of ${esc(g.label || g.id)}… (the analysis takes a few seconds)`}</div>`; return; }
     if (stale || S.err) {
       box.innerHTML = `${bar}<div class="rp"><div class="rp-bar">${controls(ctx, false)}</div></div>
-        ${S.err ? `<div class="alert err">${esc(S.err)}</div>` : ''}<div class="alert stale"><span>${S.B ? 'The report is out of date: inputs changed.' : 'The report has not been built.'} It shows ${esc(g.label || g.id)} (choose the girder on the Girders &amp; plates tab), every module calculated as on its own tab.</span></div>`;
+        ${S.err ? `<div class="alert err">${esc(S.err)}</div>` : ''}<div class="alert stale"><span>${S.B ? 'The report is out of date: inputs changed.' : 'The report has not been built.'} It shows ${esc(g.label || g.id)} (choose the girder on the Girders &amp; plates tab)${govMode(ctx) ? ` on its governing line: each of its ${window.SBDModel.typeLines(ctx.base || ctx.P, ctx.g).length} lines is run first (a few seconds each) to find it` : ''}, every module calculated as on its own tab.</span></div>`;
       if (!window.SharedReport) box.insertAdjacentHTML('beforeend', '<div class="alert err">shared/report.js is not loaded.</div>');
       wire(); return;
     }
     if (S.figB !== S.B) { S.figs = {}; try { S.figs = figures(S.B); } catch (e) { console.warn(e); } S.figB = S.B; }   // RPX: the tabs' graphics, drawn once per built report
-    const M = window.SBDReportBuild.model(S.B, { detail: o.detail, include: incOf(o, ctx.base || ctx.P), figures: S.figs, snap3d: snap3d(ctx) });
+    const M = window.SBDReportBuild.model(S.B, { detail: o.detail, include: incOf(o, ctx.base || ctx.P), figures: S.figs, snap3d: snap3d(ctx), lines: S.lines || null });   // SBGL: S.lines in the governing-line mode
     const tb = document.getElementById('tabBar');
     window.SharedReport.mount(box, M, { controls: controls(ctx, true), closed: S.closed, stick: tb ? tb.offsetHeight : 0, onGoto: t => { if (ctx.goto) ctx.goto(t); } });
     if (bar) box.insertAdjacentHTML('afterbegin', bar);
@@ -178,9 +188,39 @@
     };
     setTimeout(() => step(0), 30);
   }
+  /* SBGL: the governing-line build: each line of the type (its summary rows kept in S.rows, as buildAll), one per timer tick with progress;
+     the governing line (report/summary.js govLine of the lines' Summary cells); its bundle kept from the run (or computed when the line's
+     rows came from S.rows). S.lines = { gi, j, list: [{ j, rows, sum }], gv } for builders.js linesSub. */
+  function buildGov(host, ctx) {
+    const M = window.SBDModel, P0 = ctx.base || ctx.P, gi = ctx.g, L = M.typeLines(P0, gi), run = ++S.run, list = [], lab = (P0.girders[gi] || {}).label || (P0.girders[gi] || {}).id || '';
+    let best = null; S.busy = true; S.err = ''; S.lines = null; S.prog = `Building the report of ${lab}: line ${'G' + (L[0] + 1)} (1 of ${L.length}), finding the governing line…`; render(host, ctx);
+    const step = k => {
+      if (run !== S.run) return;
+      try {
+        if (k < L.length) {
+          const j = L[k], V = M.atLine(P0, gi, j); let e = S.rows.get(rowKey(V, gi)), B = null;
+          if (!e) { B = window.SBDReportData.compute(V, gi, { src: 'analysis' }); const r = window.SBDReportBuild.govRows(B); e = { rows: r.rows, err: r.err, sum: r.sum, bom: r.bom }; S.rows.set(rowKey(V, gi), e); }
+          list.push({ j, rows: e.rows, sum: e.sum, err: e.err });
+          const gv = window.SBDSummary.govLine(list.filter(q => q.sum).map(q => ({ j: q.j, cells: q.sum.cells })));
+          if (B && gv && gv.j === j) best = { j, B }; else if (best && gv && best.j !== gv.j) best = null;
+          if (S.rows.size > 4 * L.length + 8) S.rows.delete(S.rows.keys().next().value);
+          S.prog = `Building the report of ${lab}: line G${(L[Math.min(k + 1, L.length - 1)] + 1)} (${Math.min(k + 2, L.length)} of ${L.length}), finding the governing line…`; render(host, ctx);
+          setTimeout(() => step(k + 1), 30); return;
+        }
+        const gv = window.SBDSummary.govLine(list.filter(q => q.sum).map(q => ({ j: q.j, cells: q.sum.cells })));
+        const j = gv ? gv.j : M.designLine(P0, P0.girders[gi]);
+        S.B = best && best.j === j ? best.B : window.SBDReportData.compute(M.atLine(P0, gi, j), gi, { src: 'analysis' });
+        if (S.B.err.all) S.err = S.B.err.all;
+        S.lines = { gi, j, list, gv, auto: !!gv };
+      } catch (e) { S.B = null; S.lines = null; S.err = 'Report error: ' + (e && e.message); }
+      S.key = keyOf(ctx); S.busy = false; S.prog = ''; render(host, ctx);
+    };
+    setTimeout(() => step(0), 30);
+  }
   function build(host, ctx) {
     if (S.src === 'file' && !S.pl) { alert('Choose a hand-off file (GirderDetail → ST-Girder demands, .json).'); return; }
-    S.busy = true; S.err = ''; render(host, ctx);
+    if (govMode(ctx)) return buildGov(host, ctx);   // SBGL
+    S.busy = true; S.err = ''; S.lines = null; render(host, ctx);
     setTimeout(() => {
       try { S.B = window.SBDReportData.compute(ctx.P, ctx.g, { src: S.src, pl: S.pl, plName: S.plName }); if (S.B.err.all) S.err = S.B.err.all;
         else if (S.src === 'analysis' && !S.B.custom && window.SBDReportBuild.govRows) { const r = window.SBDReportBuild.govRows(S.B); S.rows.set(rowKey(ctx.P, ctx.g), { rows: r.rows, err: r.err, sum: r.sum, bom: r.bom }); } }

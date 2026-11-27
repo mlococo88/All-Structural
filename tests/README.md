@@ -59,6 +59,11 @@ node tests/smoke/steel-bridge-report.mjs
 # errors, 0 unresolved § links. Engine test: node tests/engine/run.mjs sb-report-fixes (every worked step's substitution scanned)
 node tests/smoke/steel-bridge-report-fixes.mjs
 
+# Steel Bridge Report, governing line (SBGL, 2026-11-26): the made-up 10-girder sidewalk bridge; the Interior type worked on its governing
+# line G9 with the table of its lines, then "Work the line chosen above the tab (report of before)" (G2, no table); 0 unresolved § links,
+# both printed (page counts). Engine test: node tests/engine/run.mjs sb-report-governing
+node tests/smoke/steel-bridge-report-governing.mjs
+
 # shared/report.js: a § link ends with its target at the top of the reading area although the report above it is still being laid out
 # (content-visibility, a figure that grows late), in the window and in a scroll container; a key pressed meanwhile stops it (RGS)
 node tests/smoke/report-go-scroll.mjs [--dir <folder with a shared/ folder, e.g. an origin/main checkout>]
