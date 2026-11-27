@@ -17,6 +17,9 @@ function store(init, quota) {
   return s;
 }
 const proj = (name, number) => { const p = M.defaultProject(); p.project.name = name; p.project.number = number || ''; return p; };
+// BEFF (2026-11-25): a project read back gets the load-time field migration migrateBeff (beffOv of each type without one; g.beff unchanged),
+// so it is compared with the saved project after that same migration; the stored text itself stays byte-identical (asserted below)
+const mig = q => { const c = plain(q); M.migrateBeff(c); return plain(c); };
 const OTHER = { 'stgirder.session': 'x', 'girderdetail_autosave_v1': '{"a":1}', 'sbd2.ui': '{"itab":"proj"}' };
 
 test('keys: library keys are in KEYS and start with sbd2.', () => {
@@ -30,7 +33,7 @@ test('save / open / list round trip; other keys untouched', () => {
   const before = new Map(s.m);
   const r = LIB.save(s, p, null, { now: '2026-11-01T15:30:00.000Z', rnd: 0.5 }); assert.equal(r.ok, true);
   const l = LIB.list(s); assert.equal(l.length, 1); assert.equal(l[0].name, 'Bridge A'); assert.equal(l[0].number, '2026-001'); assert.equal(l[0].saved, '2026-11-01T15:30:00.000Z');
-  const o = LIB.open(s, r.id); assert.equal(o.ok, true); assert.deepEqual(plain(o.project), plain(p));
+  const o = LIB.open(s, r.id); assert.equal(o.ok, true); assert.deepEqual(plain(o.project), mig(p));
   for (const [k, v] of before) assert.equal(s.getItem(k), v, k + ' changed');   // autosave, ui, other tools: byte-identical
   const added = [...s.m.keys()].filter(k => !before.has(k)).sort(); assert.deepEqual(added, ['sbd2.lib.index', 'sbd2.lib.p.' + r.id].sort());
   // saving again with the same id overwrites, no second row
@@ -70,7 +73,7 @@ test('quota: a failed save returns a message, keeps what was stored, and the pro
   const items = [...s.m.keys()].filter(k => k.startsWith('sbd2.lib.p.')); assert.equal(items.length, names.length, 'no orphan item without a list row');
   // overwrite failing keeps the old text
   s.setItem('pad', 'x'.repeat(0)); const big = proj('Big'); big.notes = 'x'.repeat(one * 3);
-  const o = LIB.save(s, big, a.id); assert.equal(o.ok, false); assert.equal(o.error, 'quota'); assert.equal(LIB.open(s, a.id).ok, true); assert.deepEqual(plain(LIB.open(s, a.id).project), plain(p));
+  const o = LIB.save(s, big, a.id); assert.equal(o.ok, false); assert.equal(o.error, 'quota'); assert.equal(LIB.open(s, a.id).ok, true); assert.deepEqual(plain(LIB.open(s, a.id).project), mig(p));
   void snapshot;
 });
 
@@ -91,9 +94,9 @@ test('unreadable index: kept, list rebuilt from the items', () => {
 test('old autosave still loads exactly as before, with and without a library', () => {
   const p = proj('Old autosave'), s = store();
   s.setItem(M.KEYS.current, M.exportJSON(p));
-  const r = M.load(s); assert.equal(r.source, 'saved'); assert.deepEqual(plain(r.project), plain(p));
+  const r = M.load(s); assert.equal(r.source, 'saved'); assert.deepEqual(plain(r.project), mig(p));
   LIB.save(s, proj('Other'), null); LIB.setCur(s, 'nothing');
-  const r2 = M.load(s); assert.equal(r2.source, 'saved'); assert.deepEqual(plain(r2.project), plain(p)); assert.equal(s.getItem(M.KEYS.current), M.exportJSON(p));
+  const r2 = M.load(s); assert.equal(r2.source, 'saved'); assert.deepEqual(plain(r2.project), mig(p)); assert.equal(s.getItem(M.KEYS.current), M.exportJSON(p));
   assert.equal(M.save(s, p), true);
 });
 
