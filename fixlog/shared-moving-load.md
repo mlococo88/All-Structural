@@ -388,7 +388,7 @@ results unchanged).
 ### Other copies
 - None.
 
-## 2026-11-27 — PR: claude/sb-ss-statics (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SSIL) — simple spans: influence lines by statics (opt-in m.ilStatics), envelopes reused for another stiffness (opt.reuse)   [§4: results move ≤ 7.5e-9 relative]
+## 2026-11-27 — PR: claude/sb-ss-statics (PR #1741: https://github.com/mlococo88/All-Structural/pull/1741) (SSIL) — simple spans: influence lines by statics (opt-in m.ilStatics), envelopes reused for another stiffness (opt.reuse)   [§4: results move ≤ 7.5e-9 relative]
 - **Request (engineer, 2026-11-26, "Yes, build it for review"; §4, not merged without the engineer's approval).**
 - **Where:** `analyze(m, opt)`, anchor `// SSIL (2026-11-26, opt-in m.ilStatics with m.simple;` (influence lines) and `// SSIL: opt.reuse,` (after `const res=effs.map(…)`); `sweep()` (`cfgs.push(cfg);if(RU)return;`), `refineAt()` (`if(RU)return;`), the Std. lane block (`if(m.stdLane&&!RU)`).
 - **Before (every model):** each influence ordinate by the stiffness solve: a unit load at node j (`b[fmap[2*j]] = -1`, `luSolve`), the effect from its element's end forces (`-k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2)` for M, `k*(12*d[2*e]+6*l*d[2*e+1]-12*d[2*e+2]+6*l*d[2*e+3])` for V, `ΣK·d` for R; the hinged element at an interior support of simple spans released).
