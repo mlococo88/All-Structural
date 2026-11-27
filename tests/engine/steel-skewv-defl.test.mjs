@@ -39,8 +39,10 @@ test('N3 default: no setting and "Whole length" give the values of before (pinne
   const i30 = at(R, 30), i60 = at(R, 60);
   assert.equal(R.df.spans[0].gV, 1.01588582027155); assert.equal(R.df.spans[0].fatV, 0.6824265412398829);
   [0, i30, i60].forEach(i => { assert.equal(R.ll.gVR[i], 1.01588582027155); assert.equal(R.fat.gVR[i], 0.6824265412398829); });
-  near(R.ll.VRpos[0], 128.72492408473096, 1e-12, 'V at the support'); near(R.ll.VRpos[i30], 87.33773569514163, 1e-12, 'V at L/4'); near(R.ll.VRpos[i60], 50.82679943643287, 1e-12, 'V at L/2');
-  near(R.fat.VRpos[i30] - R.fat.VRneg[i30], 40.913745897091026, 1e-12, 'fatigue range at L/4');
+  // SSIL (2026-11-27): the simple-span influence lines by statics; the stiffness-solve values pinned before (≤ 1.6e-9 relative apart):
+  //   V at the support 128.72492408473096, at L/4 87.33773569514163, at L/2 50.82679943643287; fatigue range at L/4 40.913745897091026
+  near(R.ll.VRpos[0], 128.72492405824866, 1e-12, 'V at the support'); near(R.ll.VRpos[i30], 87.3377357403857, 1e-12, 'V at L/4'); near(R.ll.VRpos[i60], 50.82679935982619, 1e-12, 'V at L/2');
+  near(R.fat.VRpos[i30] - R.fat.VRneg[i30], 40.91374590246844, 1e-12, 'fatigue range at L/4');
   const mod = AN.moduleOf(P, 0); assert.ok(!mod.R.regions[0].steps.some(s => /rVx/.test(s.id)), 'no taper step at the default');
 });
 
@@ -59,8 +61,9 @@ test('N3 tapered: r_V(x) = 1 + (r_V − 1)(1 − x/(L/2)); support, quarter poin
   near(R.ll.gVR[i60], g0, 1e-14, 'mid-span: 1.0'); near(R.ll.gVR[i90], R.ll.gVR[i30], 1e-14, 'symmetric');
   R.x.forEach((x, i) => { const t = Math.min(x, 120 - x) / 60, e = g0 * (1 + (c - 1) * (1 - t)); near(R.ll.gVR[i], e, 1e-13, `g_V(x) at ${x}`); near(R.fat.gVR[i], D.fatV / c * (1 + (c - 1) * (1 - t)), 1e-13, `g_fat,V(x) at ${x}`);
     near(R.ll.VRpos[i], R.ll.gVR[i] * R.ll.perLane.VRmax[i], 1e-14, 'V = g_V(x) V_HL93'); assert.ok(R.ll.VRpos[i] <= R0.ll.VRpos[i] + 1e-12, 'never above the whole-length value'); });
-  near(R.ll.VRpos[i30], 83.12972340536, 1e-12, 'V_LL+IM at L/4, tapered (before 87.338)');
-  near(R.fat.VRpos[i30] - R.fat.VRneg[i30], 38.942484057227006, 1e-12, 'fatigue shear range at L/4, tapered (before 40.914)');
+  // SSIL (2026-11-27): statics influence lines; pinned before by the stiffness solve: 83.12972340536 and 38.942484057227006
+  near(R.ll.VRpos[i30], 83.12972344842416, 1e-12, 'V_LL+IM at L/4, tapered (before 87.338)');
+  near(R.fat.VRpos[i30] - R.fat.VRneg[i30], 38.94248406234533, 1e-12, 'fatigue shear range at L/4, tapered (before 40.914)');
   assert.equal(js(R.llR.map(r => [r.gV, r.max, r.min])), js(R0.llR.map(r => [r.gV, r.max, r.min])), 'reactions: the support value');
   assert.equal(js([R.ll.Mpos, R.ll.Mneg, R.fat.Mpos, R.lld.map(q => q.d), R.camber.total]), js([R0.ll.Mpos, R0.ll.Mneg, R0.fat.Mpos, R0.lld.map(q => q.d), R0.camber.total]), 'moments, deflection, camber unchanged');
   // the worked steps: the loads module's r_V(x) and the analysis' factor at the station

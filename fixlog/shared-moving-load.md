@@ -387,3 +387,20 @@ results unchanged).
 - **Consumers (CLAUDE.md §3; every tool that loads shared/moving-load.js):** Moving Load Generator (`tests/smoke/phone-layout.mjs --tool mlg`, `decimal-entry.mjs --tool mlg`, `project-library.mjs --tool mlg`: pass) and apps/steel-bridge (engine suite). No display change.
 ### Other copies
 - None.
+
+## 2026-11-27 — PR: claude/sb-ss-statics (PR #1741: https://github.com/mlococo88/All-Structural/pull/1741) (SSIL) — simple spans: influence lines by statics (opt-in m.ilStatics), envelopes reused for another stiffness (opt.reuse)   [§4: results move ≤ 7.5e-9 relative]
+- **Request (engineer, 2026-11-26, "Yes, build it for review"; §4, not merged without the engineer's approval).**
+- **Where:** `analyze(m, opt)`, anchor `// SSIL (2026-11-26, opt-in m.ilStatics with m.simple;` (influence lines) and `// SSIL: opt.reuse,` (after `const res=effs.map(…)`); `sweep()` (`cfgs.push(cfg);if(RU)return;`), `refineAt()` (`if(RU)return;`), the Std. lane block (`if(m.stdLane&&!RU)`).
+- **Before (every model):** each influence ordinate by the stiffness solve: a unit load at node j (`b[fmap[2*j]] = -1`, `luSolve`), the effect from its element's end forces (`-k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2)` for M, `k*(12*d[2*e]+6*l*d[2*e+1]-12*d[2*e+2]+6*l*d[2*e+3])` for V, `ΣK·d` for R; the hinged element at an interior support of simple spans released).
+- **After (only `m.simple && m.ilStatics`; every other model as before, bit for bit):** load 1 at node j in span k, a = x[support k], b = x[support k+1], L = b − a:
+  - R at a: (b − x_j)/L; R at b: (x_j − a)/L (an interior support: the sum of the two spans' parts); a load on a support: 1 there, 0 elsewhere;
+  - M at section x_s in span k: (b − x_s)(x_j − a)/L for x_j ≤ x_s, (x_s − a)(b − x_j)/L for x_j ≥ x_s; a section on a support: 0;
+  - V in element e of span k: −(x_j − a)/L for j ≤ e, (b − x_j)/L for j > e (the unit jump at the cut added in `ends` and the sweep, as before);
+  - a load in another span: 0.
+  `opt.reuse` (a result of the same model except `m.segs[].I`, so the same mesh, both with statics lines): its envelopes (`res`) are copied and the vehicle sweep, its refinement and the Std. lane case are skipped (they depend on the lines, the mesh and the loads only); the stiffness, LU factors (deflection) and everything else are the model's own.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.4 (acceptable methods of structural analysis: classical statics of a determinate simple span); loads unchanged, Arts. 3.6.1.2 (design truck, tandem, lane), 3.6.1.3 (application), 3.6.2.1 (IM).
+- **Check case (hand):** simple span L = 120 ft, HL-93 per lane: M at x = 60 ft: ordinates ξ/2 (ξ ≤ 60): truck 32 kip at 60 ft (30.0), 32 kip at 74 ft (23.0), 8 kip at 46 ft (23.0): 32(30) + 32(23) + 8(23) = 1,880 k-ft × 1.33 = 2,500.4; lane 0.64 × 120²/8 = 1,152 → 3,652.4 k-ft. Before 3,652.3999986625, after 3,652.4000000000. V at x = 0⁺: 32(1.000) + 32(106/120) + 8(92/120) = 32 + 28.2667 + 6.1333 = 66.400 × 1.33 = 88.312; lane 0.64 × 120/2 = 38.4 → 126.712 kip. Before 126.7119999331, after 126.7120000000.
+- **How verified:** see the steel-bridge SSIL entry (hash list and per-quantity differences); `node tests/engine/run.mjs simple-span` (2 new tests: the statics lines equal the stiffness lines to 1e-8 on 1 and 3 simple spans, this hand check to 1e-12, the flag ignored on continuous spans; opt.reuse gives a fresh run's envelopes, bit for bit, for another stiffness, and is not taken for other spans, without the flag or on continuous spans); `node tests/engine/run.mjs moving-load` (the 35 recorded parity cases: no case sets the flag, identical).
+- **Consumers (CLAUDE.md §3):** Moving Load Generator does not set `m.ilStatics`: its results are unchanged (its simple spans keep the stiffness-solve lines); apps/steel-bridge sets it (steel-bridge SSIL).
+### Other copies
+- None.

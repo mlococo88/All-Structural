@@ -127,7 +127,24 @@ function analyze(m,opt){
 
   // Influence lines: unit downward load at every node
   const IL=effs.map(()=>new Float64Array(nn)), d=new Float64Array(nd), b=new Float64Array(nf);
-  for(let j=0;j<nn;j++){
+  // SSIL (2026-11-26, opt-in m.ilStatics with m.simple; Steel Bridge Design sets it): simple spans are statically determinate, so the
+  // influence ordinates are worked by statics (they do not depend on EI) in place of the stiffness solve, which gives the same lines to
+  // within its round-off (about 1e-9 relative). Load P = 1 at node j, x_j in span k (a = x[support k], b = x[support k+1], L = b − a):
+  //   reaction at a: (b − x_j)/L, at b: (x_j − a)/L (an interior support: the sum of its two spans' parts); a load on a support: 1 there;
+  //   M at a section x_s of span k: (b − x_s)(x_j − a)/L for x_j ≤ x_s, (x_s − a)(b − x_j)/L for x_j ≥ x_s; 0 at the supports;
+  //   V in element e (x_e … x_e+1) of span k: −(x_j − a)/L for j ≤ e, (b − x_j)/L for j > e (the unit jump at the cut added below, as before).
+  //   A load in another span: 0.
+  const ilSt=!!(m.simple&&m.ilStatics);
+  if(ilSt){const xa=supNodes.map(i=>x[i]),spOfN=j=>{for(let k=0;k<ns;k++)if(j>supNodes[k]&&j<supNodes[k+1])return k;return -1;};
+    for(let j=0;j<nn;j++){const sq=supNodes.indexOf(j);
+      if(sq>=0){effs.forEach((ef,ei)=>{if(ef.t==='R'&&ef.q===sq)IL[ei][j]=1;});continue;}
+      const k=spOfN(j); if(k<0)continue; const a=xa[k],bb=xa[k+1],L=bb-a,xj=x[j];
+      effs.forEach((ef,ei)=>{let v=0;
+        if(ef.t==='M'){const i=ef.node;if(i>supNodes[k]&&i<supNodes[k+1]){const xs=x[i];v=xj<=xs?(bb-xs)*(xj-a)/L:(xs-a)*(bb-xj)/L;}}
+        else if(ef.t==='V'){const e=ef.el;if(e>=supNodes[k]&&e<supNodes[k+1])v=j<=e?-(xj-a)/L:(bb-xj)/L;}
+        else{if(ef.q===k)v=(bb-xj)/L;else if(ef.q===k+1)v=(xj-a)/L;}
+        IL[ei][j]=v;});}}
+  for(let j=0;j<nn&&!ilSt;j++){
     const sq=supNodes.indexOf(j);
     if(sq>=0){effs.forEach((ef,ei)=>{if(ef.t==='R'&&ef.q===sq)IL[ei][j]=1;});continue;}
     b.fill(0); b[fmap[2*j]]=-1;
@@ -195,6 +212,11 @@ function analyze(m,opt){
     PED.Ap[ei]=D.lp;PED.An[ei]=D.ln;PED.max[ei]=PED.w*D.lp*PED.df;PED.min[ei]=PED.w*D.ln*PED.df;PED.g[ei]=[gp,gn];
     pedMax[ei]=gp>0?PED.max[ei]/gp:0;pedMin[ei]=gn>0?PED.min[ei]/gn:0;});
   const res=effs.map(()=>({max:0,maxG:null,min:0,minG:null}));
+  // SSIL: opt.reuse, an earlier result of the same model but for the stiffness (m.segs[].I; the same segment lengths, so the same mesh),
+  // with statics influence lines on simple spans: its envelopes are the same numbers, so they are taken and the vehicle sweep is not run again.
+  const sameBut=(p,q)=>{const k=o=>JSON.stringify({...o,segs:(o.segs||[]).map(s=>({...s,I:null}))},(kk,v)=>typeof v==='number'&&(!isFinite(v)||Object.is(v,-0))?'#'+(Object.is(v,-0)?'-0':String(v)):v);return k(p)===k(q);};
+  const RU=ilSt&&opt.reuse&&opt.reuse.m&&opt.reuse.m.simple&&opt.reuse.m.ilStatics&&opt.reuse.res&&opt.reuse.res.length===effs.length&&sameBut(opt.reuse.m,m)?opt.reuse:null;
+  if(RU)RU.res.forEach((r,i)=>{const g=q=>q?{...q,pos:[...q.pos]}:q;res[i]={max:r.max,maxG:g(r.maxG),min:r.min,minG:g(r.minG)};});
 
   // Axle standing exactly at a shear cut (the unit jump in the V influence line): the envelope is the limit of the
   // axle approaching from either side, so count it with the left-side ordinate or the right-side ordinate, whichever
@@ -208,7 +230,7 @@ function analyze(m,opt){
     let k=x[lo]<=xp?lo:lo-1;if(lo+1<nn&&x[lo+1]<=xp)k=lo+1;
     let n0=k+1,n1=k;for(let c=k;c>=0&&!(Math.abs(xp-x[c])>1e-6);c--)n0=c;for(let c=k+1;c<nn&&!(Math.abs(xp-x[c])>1e-6);c++)n1=c;
     N0[a]=n0;N1[a]=n1;};
-  const cfgs=[];function sweep(cfg){cfgs.push(cfg);
+  const cfgs=[];function sweep(cfg){cfgs.push(cfg);if(RU)return;
     const nA=cfg.offs.length, Lv=cfg.offs[nA-1], tr=cfg.trail, ext=Lv+(tr?tr.gap:0)+m.step;
     const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA),XP=new Float64Array(nA),N0=new Int32Array(nA),N1=new Int32Array(nA);
     const act=[]; effs.forEach((ef,ei)=>{const s=cfg.sel(ef);if(s[0]||s[1])act.push([ei,s[0],s[1],imArr[ei],ef.t==='V'?ef.el:-1,ef.cutL,imMinArr[ei]]);});
@@ -280,6 +302,7 @@ function analyze(m,opt){
   // Warnings
   // ── Refinement: spacing/headway at 0.5 ft, then each governing position at 0.1 ft ──
   function refineAt(cfg,p,dir,list){   // function declaration (hoisted): also used by sweep() for the shear-jump positions
+    if(RU)return;   // SSIL: the envelopes taken from opt.reuse
     const nA=cfg.offs.length,Lv=cfg.offs[nA-1],tr=cfg.trail,J=[],T=[],Pa=[],pos=[],N0=[],N1=[];
     for(let a=0;a<nA;a++){const xp=p-dir*cfg.offs[a];if(xp<-1e-9||xp>Lt+1e-9)continue;
       let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=xp)lo=md;else hi=md;}
@@ -325,7 +348,7 @@ function analyze(m,opt){
 
   // ── AASHTO Std. Spec. lane loading, separate case enveloped with the truck (17th Ed. 3.7.1.1, Fig. 3.7.6B, 3.11.3; impact 3.8.1) ──
   // max = I+(w*positive IL area + P*max ordinate); min = I-(w*negative IL area + P*min ordinate [+ P*min ordinate in one other span, negative moment, 2+ spans])
-  if(m.stdLane){const SL=m.stdLane;
+  if(m.stdLane&&!RU){const SL=m.stdLane;
     effs.forEach((ef,ei)=>{
       const P1=ef.t==='M'?SL.PM:SL.PV, D=DER[ei], spMin=m.spans.map(()=>[0,0]);
       let hi=0,xh=0,lo=0,xl=0,kl=-1,k=0;
