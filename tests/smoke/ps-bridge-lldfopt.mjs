@@ -19,6 +19,8 @@ let n = 0; const ok = m => { n++; console.log('  ok  ', m); };
 const { b, p, errs } = await openPage(FILE, { vw: 1400, vh: 1000 });
 const otab = t => p.evaluate(t => document.querySelector(`#tabBar [data-otab="${t}"]`).click(), t);
 const itab = t => p.evaluate(t => document.querySelector(`#inTabs [data-itab="${t}"]`).click(), t);
+// SET (2026-11-26): the two selects moved to the Settings window (Live-load distribution); its copy edits the same input (a real change event)
+const setLo = async (k, v) => { await p.click('#psGear'); await p.click('[data-pssg="lldf"]'); await p.selectOption(`#psSet [data-lo="${k}"]`, v); await p.waitForTimeout(300); await p.click('#psSetSave'); };
 const until = async (f, ms, w) => { const t0 = Date.now(); for (;;) { if (await f()) return; if (Date.now() - t0 > ms) throw new Error('timeout: ' + w); await new Promise(r => setTimeout(r, 200)); } };
 const shot = async (sel, name) => { if (!SHOT) return; const el = await p.$(sel); if (el) await el.screenshot({ path: path.join(SHOT, name) }); };
 const stored = () => p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')));
@@ -37,7 +39,7 @@ try {
   assert.equal((await stored()).xs.lldf, undefined); const r0 = await calc(); assert.equal(r0.lldf, null); assert.equal(r0.pos, 'interior'); near(r0.dfv, 0.95711, 1e-5, 'DF_V before');
   ok(`Cross-section tab: "Live-load distribution options", both off (the Steel Bridge app's labels); nothing stored; G2 DF_V ${r0.dfv.toFixed(4)}`);
   // 2. the shear skew correction on the exterior girders only
-  await p.selectOption('[data-lo="skewV"]', 'ext'); await p.waitForTimeout(500);
+  await setLo('skewV', 'ext'); await p.waitForTimeout(500);
   assert.deepEqual((await stored()).xs.lldf, { skewV: 'ext', extMin: false });
   const r1 = await calc(); near(r1.dfv, 0.88388, 1e-5, 'DF_V with the option'); assert.equal(r1.dfm, r0.dfm); assert.deepEqual(r1.lldf, { skewV: 'ext' });
   await itab('xsec'); await p.waitForSelector('#lldfOptNote'); assert.match(await p.evaluate(() => document.querySelector('#lldfOptNote').textContent), /On now: Shear skew correction: Exterior girders only/);
@@ -47,8 +49,8 @@ try {
   assert.equal(l1.cv, '1.0000'); assert.match(l1.step, /Exterior girders only/); assert.match(l1.step, /0\.9571/); assert.match(l1.dfv, /0\.8839/);
   ok(`"Exterior girders only": saved (xs.lldf.skewV 'ext'); interior G2 DF_V ${r0.dfv.toFixed(4)} → ${r1.dfv.toFixed(4)}, V_LL ${r0.VLL.toFixed(2)} → ${r1.VLL.toFixed(2)} kip; row and step ld.lo.cV on the Loads & LLDF tab`);
   // 3. exterior not less than interior, the exterior girder shown
-  await itab('xsec'); await p.waitForSelector('[data-lo="extMin"]'); await p.selectOption('[data-lo="skewV"]', 'all'); await p.waitForTimeout(300);
-  await itab('xsec'); await p.waitForSelector('[data-lo="extMin"]'); await p.selectOption('[data-lo="extMin"]', 'true'); await p.waitForTimeout(400);
+  await itab('xsec'); await p.waitForSelector('[data-lo="extMin"]', { state: 'attached' }); await setLo('skewV', 'all');
+  await itab('xsec'); await p.waitForSelector('[data-lo="extMin"]', { state: 'attached' }); await setLo('extMin', 'true'); await p.waitForTimeout(400);
   assert.deepEqual((await stored()).xs.lldf, { skewV: 'all', extMin: true });
   const e0 = await p.evaluate(() => { const P = PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project; P.design = { g: 1, s: 1 }; const Q = JSON.parse(JSON.stringify(P)); delete Q.xs.lldf;
     const i = PSBDesign.inputs(Q), R = PSBHoldDown.compute(JSON.parse(JSON.stringify(i))); localStorage.setItem('psb2.project.current', PSBModel.exportJSON(P)); return { dfm: R.dfm, dfv: R.dfv, VLL: R.VLL, fat: R.fat.dfFat }; });

@@ -155,9 +155,11 @@ const evCheck = async () => p.evaluate(() => {
     if (typeof v !== 'number' || el.textContent !== f(v, +el.dataset.d)) bad.push(`${el.dataset.ev}: ${el.textContent} vs ${v}`); });
   return { n: els.length, bad, svg: document.querySelectorAll('#out svg').length, katex: document.querySelectorAll('#out .katex').length };
 });
+// SET (2026-11-26): an input moved to the Settings window: set through its copy there (the same input), the window opened at it and saved
+const setSel = async (pth, v) => { await p.evaluate(q => window.PSBSettings.open(q), pth); await p.selectOption(`#psSet [data-path="${pth}"]`, v); await p.waitForTimeout(300); await p.click('#psSetSave'); };
 const DESIGNS = [['default', null], ['continuous, exterior G1 in span 2, restraint', async () => {
     await p.click('#inTabs [data-itab="layout"]'); await setList(p, '#i_spans\\.lengths', '100, 125, 100');
-    await p.selectOption('#i_spans\\.continuity', 'composite'); await p.selectOption('#i_base\\.cont\\.restraint', 'true');
+    await p.selectOption('#i_spans\\.continuity', 'composite'); await setSel('base.cont.restraint', 'true');
     // PR 3a-1: the new spans got copies of span 1's girder types (notice); the type and line are chosen above the output tabs
     while (await p.isVisible('#notices .nClose')) await p.click('#notices .nClose');
     await p.click('#tabBar [data-otab="sec"]'); await p.selectOption('#tyOutT', { label: 'Exterior S2 (span 2)' }); await p.selectOption('#tyOutL', '1'); }],
@@ -221,15 +223,19 @@ check(await p.evaluate(() => document.querySelector('#tabBar [data-otab="end"]')
 check(!!(await p.$('#sbDashCol [data-sdgrp="camb"] .sdVal')), 'camber chip');
 // PR 2d-3 (PS-10): the hold-down box (AASHTO, default on), the check on the End zone tab and in its chip; off removes it
 await p.click('#inTabs [data-itab="own"]');
-check(await p.isVisible('#i_base\\.opt\\.hdCheck') && (await p.inputValue('#i_base\\.opt\\.hdCheck')) === 'true' && (await p.inputValue('#i_base\\.opt\\.hdFrac')) === '0.75', 'PS-10 box on, 0.75');
+// SET (2026-11-26): the box and its limit moved to the Settings window (Owner and load modifiers): shown there, hidden on the tab
+await p.evaluate(() => window.PSBSettings.open('base.opt.hdCheck')); await p.waitForTimeout(300);
+check(await p.isVisible('#psSet [data-path="base.opt.hdCheck"]') && (await p.inputValue('#psSet [data-path="base.opt.hdCheck"]')) === 'true' && (await p.inputValue('#psSet [data-path="base.opt.hdFrac"]')) === '0.75'
+  && !(await p.isVisible('#i_base\\.opt\\.hdCheck')), 'PS-10 box on, 0.75');
+await p.click('#psSetSave');
 await p.click('#tabBar [data-otab="end"]'); await p.waitForTimeout(250);
 { const r = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
     return { has: !!(R.ps10 && !R.ps10.off), F: R.ps10 && R.ps10.Ftot, t: document.getElementById('out').textContent, step: !!document.getElementById('st-ez.hd.F'), ev: !!document.querySelector('#out [data-ev="ps10.Ftot"]') }; });
   check(r.has && r.step && r.ev && /PS-10/.test(r.t), 'PS-10 check worked on the End zone tab'); }
 await p.click('#sbDashCol [data-sdgrp="end"] .sdX'); check(/Hold-down force \(PS-10\)/.test(await p.textContent('#sbDashCol')), 'PS-10 in the End zone chip');
-await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\\.hdCheck', 'false'); await p.click('#tabBar [data-otab="end"]'); await p.waitForTimeout(250);
+await p.click('#inTabs [data-itab="own"]'); await setSel('base.opt.hdCheck', 'false'); await p.click('#tabBar [data-otab="end"]'); await p.waitForTimeout(250);
 check(/not checked for AASHTO/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev^="ps10."]')) && !/PS-10\)/.test(await p.textContent('#sbDashCol')) && JSON.parse((await lsSnap(p))['psb2.project.current']).base.opt.hdCheck === false, 'PS-10 box off: no check, saved');
-await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\\.hdCheck', 'true');
+await p.click('#inTabs [data-itab="own"]'); await setSel('base.opt.hdCheck', 'true');
 // PR 2e: the Report tab
 { await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
   const r = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P)), M = window.PSBReportUI.state.M;

@@ -321,14 +321,27 @@
   }
 
   /* ---------- the live-load runs: exact (memoized by input) or the screen's reference (one run per vehicle, any stiffness) ---------- */
-  function liveLoad(cache, approx) {
-    const ML0 = window.SharedMovingLoad, key = m => JSON.stringify(m);
+  /* ADSP (2026-11-26, speed only; every result unchanged, tests/engine hash proof in the PR): exact (X) holds the runs keyed by their whole
+     input: the moving-load runs, and staticAnalysis, camber and deflection (pure functions of their input; deflection by the run object it
+     is given). ctx.llx (jointRun) shares X between runs; the screen's reference ('ref|…', any stiffness) stays in the run's own cache. The
+     reference run is also kept under its exact key (and taken from it when that input already ran): the same input, the same result,
+     so the full check of the current design no longer repeats the moving-load run of the first screen. */
+  const exKey = v => JSON.stringify(v, (k, x) => typeof x === 'number' && (!isFinite(x) || Object.is(x, -0)) ? `#${Object.is(x, -0) ? '-0' : String(x)}` : x);   // NaN, ±Infinity and -0 kept apart
+  const deflMemo = new WeakMap();   // run object → Map(options key → deflection)
+  function liveLoad(cache, approx, X) {
+    const ML0 = window.SharedMovingLoad, key = m => JSON.stringify(m); X = X || cache;
+    const memo = (k, f) => { if (!X.has(k)) X.set(k, f()); return X.get(k); };
     return { ...ML0,
-      analyze: (m, o) => { const k = approx ? 'ref|' + m.short + '|' + JSON.stringify([m.spans, m.scanKeys.length]) : key(m); if (!cache.has(k)) cache.set(k, ML0.analyze(m, o)); return cache.get(k); },
-      deflection: (R, o) => { const k = 'defl|' + (approx ? 'ref' : '') + JSON.stringify(o); if (approx) { if (!cache.has(k)) cache.set(k, ML0.deflection(R, o)); return cache.get(k); } return ML0.deflection(R, o); } };
+      analyze: (m, o) => { if (approx) { const k = 'ref|' + m.short + '|' + JSON.stringify([m.spans, m.scanKeys.length]); if (!cache.has(k)) { const ek = key(m); if (!X.has(ek)) X.set(ek, ML0.analyze(m, o)); cache.set(k, X.get(ek)); } return cache.get(k); }
+        const k = key(m); if (!X.has(k)) X.set(k, ML0.analyze(m, o)); return X.get(k); },
+      deflection: (R, o) => { const k = 'defl|' + (approx ? 'ref' : '') + JSON.stringify(o); if (approx) { if (!cache.has(k)) cache.set(k, ML0.deflection(R, o)); return cache.get(k); }
+        if (!R || typeof R !== 'object') return ML0.deflection(R, o);
+        let D = deflMemo.get(R); if (!D) deflMemo.set(R, D = new Map()); const dk = exKey(o); if (!D.has(dk)) D.set(dk, ML0.deflection(R, o)); return D.get(dk); },
+      staticAnalysis: spec => memo('sa|' + exKey(spec), () => ML0.staticAnalysis(spec)),
+      camber: (st, o) => memo('cam|' + exKey([st, o]), () => ML0.camber(st, o)) };
   }
   function withLL(ctx, approx, fn) {
-    const ML0 = window.SharedMovingLoad; if (!ctx.ll) ctx.ll = new Map(); window.SharedMovingLoad = liveLoad(ctx.ll, approx);
+    const ML0 = window.SharedMovingLoad; if (!ctx.ll) ctx.ll = new Map(); window.SharedMovingLoad = liveLoad(ctx.ll, approx, ctx.llx);
     try { return fn(); } finally { window.SharedMovingLoad = ML0; }
   }
 
@@ -811,7 +824,7 @@
      note }. opt: { settings (overrides P.autodesign), maxIt, trimTries, fullChecks (false: screen only, for tests of the screen) } */
   function* run(P0, opt) {
     opt = opt || {}; const P = clone(P0); if (opt.settings) P.autodesign = { ...(P.autodesign || {}), ...opt.settings, limits: { ...((P.autodesign || {}).limits || {}), ...((opt.settings || {}).limits || {}) }, cost: { ...((P.autodesign || {}).cost || {}), ...((opt.settings || {}).cost || {}) } };
-    const S = settings(P), L0 = layoutOf(P), ctx = { L0, maxIt: opt.maxIt || 10, ll: new Map() }, key = objKey(S), out = [];
+    const S = settings(P), L0 = layoutOf(P), ctx = { L0, maxIt: opt.maxIt || 10, ll: new Map(), ...(opt.llx ? { llx: opt.llx } : {}) }, key = objKey(S), out = [];
     if (!L0.web.length) return { S, cands: [], rejected: [], screened: [], note: 'The project has no plate girder.' };
     yield { f: 0.01, msg: 'Live load on the current stiffness (the screen reference)…' };
     const E0 = evaluate(P, { level: 'screen', ctx });
@@ -873,7 +886,7 @@
         E = evaluate(Q, { level: 'full', ctx }); pr = proportions(o.L, Q, S);
         if (o.job && o.job.spl) { const sc = splCheck(P, S, o.L, Q); o = { ...o, splC: sc }; if (!sc.ok) E = { ...E, pass: false, fails: [...E.fails, ...sc.items.filter(q => !q.ok).map(q => ({ mod: 'splice placement', id: q.id, title: q.what, r: q.r, x: q.x }))] }; }
         if ((E.pass && pr.ok) || !E.fails.some(plateCk) || pol >= 2 || opt.polish === false) break;
-        const ctx2 = { L0: o.L, maxIt: 6, ll: new Map() }, it2 = design(P, S, { nb: o.L.nb, D: o.L.D, refine: true, minLines: o.L.minLines }, ctx2); let s2;
+        const ctx2 = { L0: o.L, maxIt: 6, ll: new Map(), llx: ctx.llx || ctx.ll }, it2 = design(P, S, { nb: o.L.nb, D: o.L.D, refine: true, minLines: o.L.minLines }, ctx2); let s2;
         while (!(s2 = it2.next()).done) yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: resizing with the live load on its own stiffness — ${s2.value.msg}` };
         if (!s2.value.pass) break;
         let r2 = s2.value; if (opt.trimTries !== 0) { const it3 = trim(P, S, r2, ctx2, 4); let s3; while (!(s3 = it3.next()).done) yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: ${s3.value.msg}` }; r2 = s3.value; }
@@ -1001,6 +1014,15 @@
      run, n its lines), G (girders[] with every type's best plates), Dc, D0 ([t] → pass-0 D), passes: [{ k, Dc, changed: [t] }], converged,
      note }. o.maxIt (default 4), o.runOpt (extra run() options, the engine tests), o.onPass(k, G, Dc) (after each pass; tests). Nothing of P is changed; applyJoint(P, J) writes J.G (the girders before kept for Undo). */
   const sameSegs = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  /* lruRuns(n) (ADSP): a Map-like store (has, get, set) for liveLoad's exact runs that keeps the n most recently used moving-load runs (keys
+     '{…}', the model's JSON); the small staticAnalysis / camber entries ('sa|', 'cam|') are kept */
+  function lruRuns(n) {
+    const M = new Map(), big = k => k.charAt(0) === '{'; let nb = 0;
+    return { has: k => M.has(k), get: k => { if (!M.has(k)) return undefined; const v = M.get(k); M.delete(k); M.set(k, v); return v; },
+      set(k, v) { if (M.has(k)) M.delete(k); else if (big(k)) nb++; M.set(k, v);
+        if (nb > n) for (const q of M.keys()) { if (big(q) && q !== k) { M.delete(q); nb--; break; } }
+        return this; } };
+  }
   function lockD(Q, Dc) {
     Q.girders.forEach(g => { if (!adF(g)) g.segments.forEach(z => { z.D = Dc; }); });
     const a = Q.autodesign = { ...(Q.autodesign || {}) }; a.vars = { ...(a.vars || {}), D: { mode: 'lock' } };
@@ -1011,10 +1033,12 @@
     o = o || {}; const T = P.girders.map((_, t) => t), maxIt = o.maxIt > 0 ? o.maxIt : 4, S0 = settings(P), inc = S0.lim.Dinc > 0 ? S0.lim.Dinc : 1;
     const Lmax = Math.max(...P.spans.lengths.map(Number)), Dhi = S0.lim.Dmax != null ? S0.lim.Dmax : Lmax * 12 / 18;
     let G = clone(P.girders); const passes = [], prog = (k, i, p) => onProgress && onProgress({ ...p, pass: k, f: ((k + (i + (p.f || 0)) / T.length) / (maxIt + 1)), msg: `${k ? `Pass ${k} (common D = ${r4(Dc)} in)` : 'Pass 0 (each type as set)'}, type ${P.girders[T[i]].label || P.girders[T[i]].id} (${i + 1} of ${T.length}): ${p.msg || ''}` });
-    let Dc = null, RT = null;
+    // ADSP (2026-11-26, speed only): the exact runs (keyed by their whole input) shared by every pass and the check of the #1s; at most the 16 most
+    // recently used moving-load runs kept (a run holds its stiffness matrix and influence lines; one evicted is worked again, the same result)
+    let Dc = null, RT = null; const LLX = lruRuns(16);
     const pass = async k => { const out = [], changed = []; for (let i = 0; i < T.length; i++) { const t = T[i];
         const Qt = typeProject({ ...P, girders: G }, t); if (k) lockD(Qt, Dc);
-        const R = await runChunked(clone(Qt), { ...typeOpt(P), ...(o.runOpt || {}) }, p => prog(k, i, p), stopped); if (!R) return null;   // o.runOpt: run() options (tests)
+        const R = await runChunked(clone(Qt), { ...typeOpt(P), ...(o.runOpt || {}), llx: LLX }, p => prog(k, i, p), stopped); if (!R) return null;   // o.runOpt: run() options (tests)
         out.push({ t, Q: Qt, R, n: Qt.girders.filter(g => !adF(g)).length }); const c = R.cands[0]; if (!c) { if (k) return { out, miss: t }; continue; }   // pass 0: a type with no candidate as set gives no D of its own
         const sg = segmentsOf(c.L); if (!sameSegs(sg, G[t].segments)) changed.push(t); G = G.map((g, q) => q === t ? { ...g, segments: sg } : g); }
       if (o.onPass) o.onPass(k, clone(G), Dc);   // tests: each pass's plates
@@ -1031,7 +1055,7 @@
       if (!r.changed.length) return { RT, G, Dc, D0, passes, converged: true, note: '' };
       // plates changed in this pass: every type's #1 checked again (full check, no sizing) with the other types' plates as they now are; all
       // pass: the set is consistent and the run ends (the remaining changes are the search's own refinements from a new starting point)
-      const bad = []; for (const t of T) { if (stopped && stopped()) return null; await new Promise(ok => setTimeout(ok, 0)); const E = evaluate(typeProject({ ...P, girders: G }, t), { level: 'full' }); if (!E.pass) bad.push(t); }
+      const bad = []; for (const t of T) { if (stopped && stopped()) return null; await new Promise(ok => setTimeout(ok, 0)); const E = evaluate(typeProject({ ...P, girders: G }, t), { level: 'full', ctx: { llx: LLX } }); if (!E.pass) bad.push(t); }
       passes[passes.length - 1].verified = !bad.length; passes[passes.length - 1].bad = bad;
       if (!bad.length) return { RT, G, Dc, D0, passes, converged: true, verified: true, note: '' };
     }

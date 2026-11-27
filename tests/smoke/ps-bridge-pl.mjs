@@ -30,7 +30,9 @@ try {
   assert.ok(await p.$('#plOff'), 'the "no pedestrian load" note'); assert.equal(await p.$('#plRow'), null);
   const before = await p.evaluate(() => { const P = PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, i = PSBDesign.inputs(P), R = PSBHoldDown.compute(JSON.parse(JSON.stringify(i))); const m = R.grid.reduce((a, r) => Math.abs(r.x - R.L / 2) < Math.abs(a.x - R.L / 2) ? r : a); return { pl: i.pl || null, Mll: m.Mll, Mu: R.MuMid, s3: m.s3Bot }; });
   assert.equal(before.pl, null);
-  await p.fill('[data-path="xs.dl.ped"]', '75'); await p.dispatchEvent('[data-path="xs.dl.ped"]', 'change'); await p.waitForTimeout(500);
+  // SET (2026-11-26): the pedestrian live load moved to the Settings window (Superimposed dead load); its copy edits the same input
+  await p.click('#psGear'); await p.click('[data-pssg="sdl"]'); const ped = '#psSet [data-path="xs.dl.ped"]';
+  await p.fill(ped, '75'); await p.dispatchEvent(ped, 'change'); await p.waitForTimeout(500); await p.click('#psSetSave');
   await itab('xsec'); await p.waitForSelector('#plOn');
   const c = await p.evaluate(() => ({ ped: JSON.parse(localStorage.getItem('psb2.project.current')).xs.dl.ped, note: document.querySelector('#plOn').textContent, row: [...document.querySelectorAll('#plRow td')].map(t => t.textContent) }));
   assert.equal(c.ped, 75); assert.match(c.note, /4\.50 ft walkable × 0\.075 ksf = 0\.3375 klf/); assert.deepEqual(c.row.slice(1), ['0.0675', '0.0675', '0.0675', '0.0675', '0.0675']);
