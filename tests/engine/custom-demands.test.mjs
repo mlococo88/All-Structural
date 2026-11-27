@@ -318,7 +318,7 @@ test('Rating: custom = the Flexure and Shear tabs\' entered tables (= this proje
     const A = W.SBDRatingUI.build({ P, g, src: 'analysis' }); assert.ok(!A.err, tag + ': ' + A.err);
     // the rating's own analysis payload (ui/rating.js fromAnalysis: one station per analysis station, the shears of the side with the larger
     // permanent shear, LL+IM of both sides) in both tables: the rating takes its shears so (its V_n at the Shear tab's layout)
-    const rp = W.SBDRatingUI.fromAnalysis(P, g).pl, Pc = J(P); setRows(Pc, 'flex', g, flexRows(rp)); setRows(Pc, 'shear', g, shearRows(rp));
+    const rp = A.plRt || W.SBDRatingUI.fromAnalysis(P, g).pl, Pc = J(P); setRows(Pc, 'flex', g, flexRows(rp)); setRows(Pc, 'shear', g, shearRows(rp));
     const F = W.SBDRatingUI.build({ P: Pc, g, src: 'custom' }); assert.ok(!F.err, tag + ': ' + F.err); assert.match(F.what, /^Demands: entered \(Custom\)/);
     assert.equal(F.rows.length, A.rows.length); let n = 0, maxd = 0;
     F.rows.forEach((q, i) => { const e = A.rows[i]; assert.equal(q.name, e.name); ['inv', 'opr'].forEach(k => { if (isFinite(e[k])) { maxd = Math.max(maxd, close(q[k], e[k], `${tag} ${q.name} ${k}`)); n++; } else assert.ok(Object.is(q[k], e[k])); }); });
