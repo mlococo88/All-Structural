@@ -787,7 +787,7 @@
     const dfNote = DF ? note(`Note (informational, not in the verdict): ${DF.flagged ? 'below optional AASHTO depth guidance' : 'meets the optional AASHTO depth guidance'} (Art. 2.5.2.6.3, Table 2.5.2.6.3-1; optional criteria, e.g. clearance-limited structures may be shallower) [[dg.${DF.comp ? 'O' : 'I'}]].`) : null;
     const dfSub = DF ? sub('depth', 'Span-to-depth guidance (informational; Art. 2.5.2.6.3, optional criteria)', [note(DF.text.replace(/≤/g, '$\\le$').replace(/ > /g, ' $>$ ')),
       note('Optional criteria: they apply where the owner invokes span-to-depth controls (2.5.2.6.3); a structure may be shallower, e.g. where clearance limits the depth. Shown for information: not a check, not counted in any ratio, status or verdict.'), steps('', DF.steps)]) : null;
-    return { title: 'Summary of governing ratios', subs: [sub('gov', `${gLn(B)}: governing demand / capacity of each check group`, [
+    return { title: 'Summary of governing ratios', subs: [{ key: 'sum.gov', ...sub('gov', `${gLn(B)}: governing demand / capacity of each check group`, [ 
       apNote,
       note(`Each ratio links to the step that works it. Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Demands: ${B.src === 'file' ? `the hand-off file ${B.plName || ''} for flexure, shear, fatigue, constructibility and rating; this project for the rest` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)}; this project's analysis for the rest` : "this project's analysis"}. ${ED}.`),
       top ? note(`Largest ratio: ${f(top.r, 3)} (${top.mod}, ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.`) : null,
@@ -796,7 +796,35 @@
       tbl(['Module', 'Check', 'Location', 'Ratio / RF', 'Status'], rows, { wide: true }),
       ...X.warn.map(w => note(w, true)),
       dfNote,
-      errs.length ? note('Not in this report: ' + errs.map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]}: ${v}`).join('; '), true) : null]), apSub, dfSub].filter(Boolean) };
+      errs.length ? note('Not in this report: ' + errs.map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]}: ${v}`).join('; '), true) : null]) }, linesSub(B, X), apSub, dfSub].filter(Boolean) };
+  }
+  /* linesSub(B, X) (SBGL, 2026-11-25, engineer's request; display only; the Prestressed Bridge app's RG table): the report works the girder
+     type on its governing line (X.lines from ui/report.js: the line with the highest controlling demand / capacity ratio of the type's
+     checks, report/summary.js govLine); one row per line of the type, the worked line first: each Summary column's governing ratio (or RF)
+     and status (report/summary.js cells(): the Summary tab's values), the governing check, the line's status, a link to the worked line's
+     table (§ of the Summary's first table) and a flag where a line's status, governing check or a column's status differs from the worked
+     line. Null without X.lines (the report of before: "Work the line chosen above the tab (report of before)", one line, a file) or with one line. */
+  function linesSub(B, X) {
+    const Ls = X.lines, SM = window.SBDSummary; if (!Ls || !SM || !Ls.list || Ls.list.length < 2) return null;
+    const P = B.P, COLS = (SM.cols ? SM.cols(P) : SM.COLS).filter(c => c.id !== 'rtVeh' || SM.vehOn(P)), lbl = c => (SM.label ? SM.label(c, P).head : c.head), stT = { pass: 'PASS', fail: 'FAIL', review: 'REVIEW', na: 'n/a', notrun: 'not run' };
+    const nf = r => (isFinite(r) ? f(r, 3) : r === Infinity ? '∞' : 'NaN'), w = Ls.list.find(q => q.j === Ls.j), ord = [w, ...Ls.list.filter(q => q !== w)].filter(Boolean);
+    const stat = q => { const C = Object.values((q.sum || {}).cells || {}); return C.some(x => x.st === 'fail') ? 'FAIL' : C.some(x => x.st === 'review') ? 'REVIEW' : 'PASS'; };
+    const govC = q => { const C = (q.sum || {}).cells || {}; let b = null; COLS.filter(c => !c.rf).forEach(c => { const x = C[c.id]; if (!x || x.st === 'na' || x.st === 'notrun' || x.r == null) return; const v = isFinite(x.r) ? x.r : Infinity; if (!b || v > b.v) b = { c, x, v }; }); return b; };
+    const flagged = [];
+    const rows = ord.map(q => { const me = q === w, C = (q.sum || {}).cells || {}, W = (w && w.sum && w.sum.cells) || {}, g = govC(q), gw = w ? govC(w) : null;
+      if (!q.sum) return { cells: [`G${q.j + 1}`, ...COLS.map(() => '—'), '—', { t: 'not computed', cls: 'ng' }, { t: 'see the worked line', key: 'sum.gov' }, '—'], cls: 'gov' };
+      const diff = me ? [] : [].concat(stat(q) !== stat(w) ? [`status ${stat(q)}, G${Ls.j + 1} ${stat(w)}`] : [], g && gw && g.c.id !== gw.c.id ? [`governing check ${lbl(g.c)}, G${Ls.j + 1} ${lbl(gw.c)}`] : [],
+        COLS.filter(c => (C[c.id] || {}).st !== (W[c.id] || {}).st).map(c => `${lbl(c)} ${stT[(C[c.id] || {}).st] || '—'} (G${Ls.j + 1} ${stT[(W[c.id] || {}).st] || '—'})`));
+      if (diff.length) flagged.push(`G${q.j + 1}: ${diff.join('; ')}`);
+      const cell = c => { const x = C[c.id]; if (!x || x.st === 'na' || x.st === 'notrun') return { t: x ? stT[x.st] : '—', cls: 'na' };
+        return c.rf ? { t: `RF ${isFinite(x.rf) ? f(x.rf, 2) : '—'} ${stT[x.st] || ''}`, n: true, cls: x.st === 'fail' ? 'ng' : x.st === 'review' ? 'hi' : 'ok' } : { t: `${nf(x.r)} ${stT[x.st] || ''}`, n: true, cls: x.st === 'fail' ? 'ng' : x.st === 'review' ? 'hi' : rc(x.r) }; };
+      return { cells: [`G${q.j + 1}${me ? ' (worked)' : ''}`, ...COLS.map(cell), g ? `${lbl(g.c)}: ${tt(g.x.check || '')}` : '—', { t: stat(q), cls: stat(q) === 'FAIL' ? 'ng' : stat(q) === 'REVIEW' ? 'hi' : 'ok' },
+        { t: me ? 'worked in full in this report' : `not worked in full; worked line G${Ls.j + 1}`, key: 'sum.gov' },
+        me ? (Ls.auto ? 'the governing line of the type' : 'the line worked') : diff.length ? { t: `differs from G${Ls.j + 1}: ${diff.join('; ')}`, cls: 'hi' } : `as G${Ls.j + 1}: the same statuses and governing check`], cls: me ? '' : diff.length ? 'gov' : '' }; });
+    return { key: 'sum.ln', ...sub('ln', `Lines of ${gName(B.girder)}: the governing line worked in full, the other lines`, [
+      note(`This report works ${gName(B.girder)} in full on line G${Ls.j + 1}, ${Ls.auto ? 'its governing line: the line with the highest controlling demand / capacity ratio of the type\'s checks (the largest ratio of the Summary columns; on a tie the next largest decides, then the first line; rating factors are not ratios and are left out)' : 'its design line (the governing line could not be found)'}. Each line is computed in full with this project's analysis (its own dead loads and distribution factors); the ${ord.length - 1} other line${ord.length > 2 ? 's are' : ' is'} summarised here with the Summary tab's values: each column's governing ratio (or RF) and status, the governing check and the line's status. Their worked steps are on the output tabs with that line chosen (the [[tab:sum|Summary tab]] lists every line); with "Work the line chosen above the tab (report of before)" ticked on the Report tab, the report works the line chosen above the tab, as before.`),
+      tbl(['Line', ...COLS.map(c => (SM.label ? SM.label(c, P).short : c.short) || lbl(c)), 'Governing check', 'Status', 'Worked', 'Compared with the worked line'], rows, { wide: true, caption: 'Each line of the girder type: the governing ratio (or RF) and status of each Summary column, the governing check, the line\'s status' }),
+      flagged.length ? note(`Lines that differ from the worked line (check their values in the table; their worked steps are on the output tabs with that line chosen): ${flagged.join('. ')}.`, true) : note('Every other line has the statuses and the governing check of the worked line.')]) };
   }
 
 
@@ -824,6 +852,7 @@
     const top = rows.filter(q => q.rf == null).reduce((a, q) => (!a || grv(q.r) > grv(a.r) ? q : a), null), low = rows.filter(q => q.rf != null && isFinite(q.rf)).reduce((a, q) => (!a || q.rf < a.rf ? q : a), null);
     const items = [{ type: 'figure', plain: true, svg: banner(verdict, `${G}: ${nFail} FAIL, ${nRev} REVIEW / warning, ${rows.length - nFail - nRev + (AP && AP.level === 'fail' ? 1 : 0)} OK of ${rows.length} check groups${AP && AP.level === 'fail' ? ' + analysis applicability FAIL' : ''}`), caption: 'Verdict of this girder: FAIL where any check group exceeds 1.0 (or a rating factor is below 1.0) or the line-girder analysis is not applicable (SA4 FAIL); PASS WITH NOTES where a check has a warning, a ratio is not a number (REVIEW) or an item below is flagged; else PASS.' },
       top ? note(`Governing D/C: ${f(top.r, 3)} (${top.cat}; ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.${low ? ` Lowest rating factor: ${f(low.rf, 2)} (${low.check}, ${low.loc})${low.key ? ` [[${low.key}]]` : ''}.` : ''}`) : null,
+      X.lines && X.lines.list && X.lines.list.length > 1 ? note(`${gName(B.girder)} is on ${X.lines.list.length} lines; this report works line G${X.lines.j + 1} in full, ${X.lines.auto ? 'its governing line (the highest controlling demand / capacity ratio of its checks)' : 'its design line'}${sumOn ? '; every line of the type: see [[sum.ln]]' : ''}.`) : null,   // SBGL
       AP && AP.level === 'fail' ? note(`Line-girder analysis not applicable (SA4 FAIL): ${AP.items.filter(q => q.level === 'fail').map(q => `${q.title}, ${q.val}`).join('; ')}: refined analysis required${sumOn ? ' [[ap.th]]' : ''}.`, true) : null,
       tbl(['Limit state / check group', 'Governing check', 'Girder', 'Location', 'D/C or RF', 'Status'], rows.map(q => ({ cells: [q.cat, q.check, G, q.loc, q.rf != null ? { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, key: q.key } : R3(q.r, q.key), st(q)], cls: st(q) === 'FAIL' ? 'gov' : '' })), { wide: true, caption: 'Every check group the app computes for this girder (each value links to the step that works it); the per-group detail is in the Summary section and the module sections' }),
       out.length ? tbl(['Not included in the verdict', 'Status', 'Value', 'Work'], out.map(q => [q[0], q[1], q[2], q[3] ? { t: '', key: q[3] } : ''])) : note('Not included in the verdict: none.'),
@@ -1018,7 +1047,7 @@
   const NEED = { loads: 'loads', an: 'an', defl: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', wd: 'wd', dk: 'dk', rt: 'rating' };
   function model(B, opt) {
     opt = opt || {};
-    const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [], on, anch: new Set(), made: new Set() };   // made: SBRF-7, the sections written so far (a link only into one of them)   // on, anch: BOM2 (2026-11-23), the bill of materials links only into the subsections written in this report (BOM_ANCH)
+    const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [], on, anch: new Set(), made: new Set(), lines: opt.lines || null };   // lines: SBGL (2026-11-25), the type's lines (ui/report.js)   // made: SBRF-7, the sections written so far (a link only into one of them)   // on, anch: BOM2 (2026-11-23), the bill of materials links only into the subsections written in this report (BOM_ANCH)
     const P = B.P, p = P.project || {}, secs = [], built = [], dropped = [];
     const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, defl: B.src === 'file' ? null : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, wd: B.wd, dk: B.dk, rt: B.rating };
     (B.dkOn ? SECTIONS_DK : SECTIONS).forEach(([k, label]) => {
@@ -1069,7 +1098,7 @@
         : it.type === 'kv' ? { ...it, rows: it.rows.map(r => (r[2] && !have.has(r[2]) ? [r[0], r[1], null] : r)) } : it); }); } });   // exec and basis (PR3)
     const girder = B.girder;
     numberFigs(secs);   // RPX: Figure n.m
-    return { refs: refsOf(secs, P), title: 'Steel Bridge Design', subtitle: `Calculation report: ${gLn(B)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
+    return { refs: refsOf(secs, P), title: 'Steel Bridge Design', subtitle: `Calculation report: ${gLn(B)}${X.lines && X.lines.auto && X.lines.list.length > 1 ? ' (governing line)' : ''}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
       head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\n${gLn(B)}`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
       sections: secs, gov: X.gov };

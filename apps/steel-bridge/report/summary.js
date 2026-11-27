@@ -216,5 +216,19 @@
     J.forEach(q => { Object.entries(q.G.err || {}).forEach(([k, v]) => { if (!out.err[k]) out.err[k] = v; }); });
     return out;
   }
-  window.SBDSummary = { units, merge, weight, MODS, COLS, ALL, cols, vehOn, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel, deckOf, DECK_COL, DECK_G };
+  /* govLine(byLine) (SBGL, 2026-11-25, engineer's request; display only): the governing line of a girder type from the Summary cells of each
+     of its lines (byLine: [{ j, cells }], merge()'s byLine or one entry per line): the line with the highest controlling ratio (the largest
+     demand / capacity of the type's checks, the D/C columns; a ratio not a number counts as the largest, as in merge(); the rating factor
+     columns are not ratios and are left out); on a tie the next largest ratio of each line decides, and so on; a full tie: the first line.
+     null while a line has a check not run yet (the governing line is not known) or with no line. Returns { j, r, col, ratios }. */
+  function govLine(byLine) {
+    const L = (byLine || []).filter(q => q && q.cells); if (!L.length) return null;
+    if (L.some(q => Object.values(q.cells).some(x => x && x.st === 'notrun'))) return null;
+    const rs = L.map(q => { const v = COLS.filter(c => !c.rf).map(c => { const x = q.cells[c.id]; return x && x.st !== 'na' && x.r != null ? { r: gr(x.r), c } : null; }).filter(Boolean).sort((a, b) => b.r - a.r);
+      return { j: q.j, v }; });
+    const cmp = (a, b) => { for (let i = 0; i < Math.max(a.v.length, b.v.length); i++) { const x = a.v[i] ? a.v[i].r : -Infinity, y = b.v[i] ? b.v[i].r : -Infinity; if (x !== y) return y - x > 0 ? 1 : -1; } return a.j - b.j; };
+    const best = rs.slice().sort(cmp)[0];
+    return { j: best.j, r: best.v.length ? best.v[0].r : NaN, col: best.v.length ? best.v[0].c.id : null, ratios: rs.map(q => ({ j: q.j, r: q.v.length ? q.v[0].r : NaN })) };
+  }
+  window.SBDSummary = { govLine, units, merge, weight, MODS, COLS, ALL, cols, vehOn, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel, deckOf, DECK_COL, DECK_G };
 })();

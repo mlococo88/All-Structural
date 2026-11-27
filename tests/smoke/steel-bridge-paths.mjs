@@ -42,6 +42,7 @@ try {
   // Report (selected girder): the Welds section
   await p.click('#tabBar [data-otab="rpt"]');
   if (await p.$('#rp_scope')) await p.selectOption('#rp_scope', 'girder');
+  if (await p.$('#rp_full')) await p.check('#rp_full');   // SBGL (2026-11-26): the report of the line on the tabs (the governing-line report runs each line of the type; tests/smoke/steel-bridge-report-governing.mjs)
   await p.click('#rp_build');
   await p.waitForSelector('.rp-doc .rp-h1', { timeout: 180000 });
   const rp = await p.evaluate(() => ({ secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent.trim()), kErr: document.querySelectorAll('.rp-doc .katex-error').length, text: document.querySelector('.rp-doc').innerText }));
