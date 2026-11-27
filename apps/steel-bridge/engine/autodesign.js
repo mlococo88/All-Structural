@@ -331,9 +331,16 @@
   function liveLoad(cache, approx, X) {
     const ML0 = window.SharedMovingLoad, key = m => JSON.stringify(m); X = X || cache;
     const memo = (k, f) => { if (!X.has(k)) X.set(k, f()); return X.get(k); };
+    /* SSIL (2026-11-26): a simple-span model with statics influence lines (m.ilStatics) gives the same envelopes for any stiffness on the same
+       spans and mesh (segment lengths): the first such run is kept under the model without the I's ('ss|…') and handed to the next as
+       opt.reuse (shared/moving-load.js analyze), which then skips the vehicle sweep; its stiffness (deflection) is still its own */
+    const ssKey = m => 'ss|' + exKey({ ...m, segs: (m.segs || []).map(q => ({ ...q, I: null })) });
+    const exact = (m, o) => { const k = key(m); if (X.has(k)) return X.get(k);
+      let R; if (m.simple && m.ilStatics) { const sk = ssKey(m), R0 = X.get(sk); R = ML0.analyze(m, R0 ? { ...(o || {}), reuse: R0 } : o); if (!R0) X.set(sk, R); } else R = ML0.analyze(m, o);
+      X.set(k, R); return R; };
     return { ...ML0,
-      analyze: (m, o) => { if (approx) { const k = 'ref|' + m.short + '|' + JSON.stringify([m.spans, m.scanKeys.length]); if (!cache.has(k)) { const ek = key(m); if (!X.has(ek)) X.set(ek, ML0.analyze(m, o)); cache.set(k, X.get(ek)); } return cache.get(k); }
-        const k = key(m); if (!X.has(k)) X.set(k, ML0.analyze(m, o)); return X.get(k); },
+      analyze: (m, o) => { if (approx) { const k = 'ref|' + m.short + '|' + JSON.stringify([m.spans, m.scanKeys.length]); if (!cache.has(k)) cache.set(k, exact(m, o)); return cache.get(k); }
+        return exact(m, o); },
       deflection: (R, o) => { const k = 'defl|' + (approx ? 'ref' : '') + JSON.stringify(o); if (approx) { if (!cache.has(k)) cache.set(k, ML0.deflection(R, o)); return cache.get(k); }
         if (!R || typeof R !== 'object') return ML0.deflection(R, o);
         let D = deflMemo.get(R); if (!D) deflMemo.set(R, D = new Map()); const dk = exKey(o); if (!D.has(dk)) D.set(dk, ML0.deflection(R, o)); return D.get(dk); },
@@ -1017,7 +1024,7 @@
   /* lruRuns(n) (ADSP): a Map-like store (has, get, set) for liveLoad's exact runs that keeps the n most recently used moving-load runs (keys
      '{…}', the model's JSON); the small staticAnalysis / camber entries ('sa|', 'cam|') are kept */
   function lruRuns(n) {
-    const M = new Map(), big = k => k.charAt(0) === '{'; let nb = 0;
+    const M = new Map(), big = k => k.charAt(0) === '{' || k.startsWith('ss|'); let nb = 0;
     return { has: k => M.has(k), get: k => { if (!M.has(k)) return undefined; const v = M.get(k); M.delete(k); M.set(k, v); return v; },
       set(k, v) { if (M.has(k)) M.delete(k); else if (big(k)) nb++; M.set(k, v);
         if (nb > n) for (const q of M.keys()) { if (big(q) && q !== k) { M.delete(q); nb--; break; } }

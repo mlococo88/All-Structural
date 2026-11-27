@@ -421,7 +421,7 @@
     let fm = null;
     if (FM && isNum(FM.Pj) && Math.abs(FM.Pj) > 1e-12) {
       const preSup = []; for (let i = 0; i < N - 1; i++) if (supIdx.includes(i + 1)) preSup.push((xs[i] + xs[i + 1]) / 2);
-      const mFM = { spans, E, segs: segsOf(sbS), stdLane: null, dirs: [1, -1], llf: 1, dfM: spans.map(() => 1), dfV: spans.map(() => 1), dfNeg: 0, step: 1, hStep: 2, simple: !cont,
+      const mFM = { spans, E, segs: segsOf(sbS), stdLane: null, dirs: [1, -1], llf: 1, dfM: spans.map(() => 1), dfV: spans.map(() => 1), dfNeg: 0, step: 1, hStep: 2, simple: !cont, ilStatics: !cont,
         scanKeys: [...xs, ...preSup], scanM: [...xs], scanV: true, negX: [], axles: [[1, 0]], short: 'Finishing machine', udl: { mode: 'none', w: 0 }, vK: 0, vMin: 0, vMax: 0, neglect: false,
         secondary: '', multi: false, mScale: 1, mHmin: 50, mFixed: 0, imp: { method: 'const', val: 1, S: 6.5, bal: false, onUdl: false } };
       const u = pick(ML().analyze(mFM, { vehicles: VEH().build().presets })), Pj = FM.Pj;
@@ -441,7 +441,7 @@
       const preSup = []; for (let i = 0; i < N - 1; i++) if (supIdx.includes(i + 1)) preSup.push((xs[i] + xs[i + 1]) / 2);
       const negX = []; for (let k = 1; k < ns && cont; k++) { const idx = []; region.forEach((r, i) => { if (r === k) idx.push(i); }); if (idx.length) negX.push([xs[idx[0]], xs[idx[idx.length - 1]]]); }
       const segsN = segsOf(sbN), Vt = VEH().build(), pre = Vt.presets, H = pre['HL93-Truck'], F = Vt.fatigue;
-      const base = { spans, E, segs: segsN, stdLane: null, dirs: [1, -1], llf: 1, dfM: spans.map(() => 1), dfV: spans.map(() => 1), dfNeg: 0, step: 1, hStep: 2, simple: !cont,
+      const base = { spans, E, segs: segsN, stdLane: null, dirs: [1, -1], llf: 1, dfM: spans.map(() => 1), dfV: spans.map(() => 1), dfNeg: 0, step: 1, hStep: 2, simple: !cont, ilStatics: !cont,
         scanKeys: [...xs, ...preSup], scanM: [...xs], scanV: true, negX };
       const mH = { ...base, axles: H.axles.map(a => [...a]), short: 'HL93-Truck', udl: { ...H.udl }, vK: H.vary.k, vMin: H.vary.min, vMax: H.vary.max, neglect: H.neglect,
         secondary: H.secondary, multi: H.multi.on, mScale: H.multi.scale, mHmin: H.multi.hmin, mFixed: H.multi.fixed, imp: { method: 'const', val: 1 + S.im / 100, S: 6.5, bal: false, onUdl: false } };

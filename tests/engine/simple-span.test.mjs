@@ -135,3 +135,38 @@ test('default unchanged: simple absent / false / true on one span give the same 
   assert.equal(a, b);
   assert.equal(j(run(model('HL93-Truck', [90]))), j(run(model('HL93-Truck', [90], { simple: true }))));
 });
+
+// SSIL (2026-11-26, opt-in m.ilStatics with m.simple): influence lines of simple spans by statics in place of the stiffness solve.
+//   They equal the stiffness lines to that solve's round-off (about 1e-9 relative); a continuous model ignores the flag.
+//   Hand check, one simple span L = 120 ft, HL-93 per lane (IM 1.33 on the truck), DF 1:
+//     M at 60 ft: ordinates x/2 (x <= 60): 32(30.0) + 32(23.0) + 8(23.0) = 1,880 x 1.33 = 2,500.4; lane 0.64(120)^2/8 = 1,152 -> 3,652.4 kip-ft
+//     V at 0+:    32(1.000) + 32(106/120) + 8(92/120) = 66.400 x 1.33 = 88.312; lane 0.64(120)/2 = 38.4 -> 126.712 kips
+//   opt.reuse (a result of the same model but for m.segs[].I, both with statics lines): the same envelopes as a fresh run.
+test('SSIL: ilStatics: statics influence lines = stiffness lines (1e-8); hand check L = 120 ft; continuous models ignore the flag', () => {
+  const j = R => JSON.stringify([R.res, R.IL.map(a => [...a]), R.warn, R.check]);
+  for (const spans of [[120], [60, 110, 75]]) {
+    const A = run(model('HL93-Truck', spans, { simple: true })), B = run(model('HL93-Truck', spans, { simple: true, ilStatics: true }));
+    assert.equal(A.effs.length, B.effs.length);
+    let n = 0; A.IL.forEach((a, i) => a.forEach((v, k) => { close(B.IL[i][k], v, 1e-8, `IL ${A.effs[i].t}@${A.effs[i].x} node ${k}`); n++; }));
+    assert.ok(n > 1000);
+    A.res.forEach((r, i) => { close(B.res[i].max, r.max, 1e-8, `max ${i}`); close(B.res[i].min, r.min, 1e-8, `min ${i}`); });
+  }
+  const R = run(model('HL93-Truck', [120], { simple: true, ilStatics: true }));
+  close(eff(R, 'M', 60).max, 3652.4, 1e-12, 'M at 60 ft'); close(eff(R, 'V', 0).max, 126.712, 1e-12, 'V at 0+');
+  close(midM(120), 3652.4, 1e-12, 'midM 120'); close(endV(120), 126.712, 1e-12, 'endV 120');
+  assert.equal(j(run(model('HL93-Truck', [100, 120], { ilStatics: true }))), j(run(model('HL93-Truck', [100, 120]))));
+});
+
+test('SSIL: opt.reuse gives the envelopes of a fresh run for another stiffness; not taken for other spans, without the flag or continuous', () => {
+  const seg = I => [{ len: 50, I, bad: false }, { len: 0, I: I * 1.6, bad: false }];
+  const mA = model('HL93-Truck', [60, 110], { simple: true, ilStatics: true, segs: seg(10000) });
+  const mB = model('HL93-Truck', [60, 110], { simple: true, ilStatics: true, segs: seg(23000) });
+  const A = run(mA), fresh = run(mB), B = S.analyze(mB, { vehicles: P, reuse: A });
+  assert.equal(JSON.stringify(B.res), JSON.stringify(fresh.res));
+  assert.equal(JSON.stringify(B.IL.map(a => [...a])), JSON.stringify(fresh.IL.map(a => [...a])));
+  const dB = S.deflection(B, { mode: 'lrfd', DF: 1, useIM: true }), dF = S.deflection(fresh, { mode: 'lrfd', DF: 1, useIM: true });
+  assert.equal(JSON.stringify(dB.res), JSON.stringify(dF.res));
+  const other = [model('HL93-Truck', [60, 100], { simple: true, ilStatics: true, segs: seg(23000) }),
+    model('HL93-Truck', [60, 110], { simple: true, segs: seg(23000) }), model('HL93-Truck', [60, 110], { ilStatics: true, segs: seg(23000) })];
+  other.forEach((m, i) => assert.equal(JSON.stringify(S.analyze(m, { vehicles: P, reuse: A }).res), JSON.stringify(run(m).res), `case ${i}`));
+});
