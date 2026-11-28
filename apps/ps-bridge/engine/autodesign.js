@@ -612,9 +612,9 @@
           if (!relOK(rT)) continue;   // even the longest debonding leaves a release check failing: more debonded strands
           let a = 0, c = l1, rc = rT; while (c - a > 1) { const m = (a + c) >> 1, r = yield* at(m); if (ctx.stopped) break outer; if (relOK(r)) { c = m; rc = r; } else a = m; }
           if (rc.pass) { pat = { rows: withDeb(rw, nd, c, dc.dStep), N: Ns + nTop, D, lv }; break outer; }
-          // the shortest lengths pass the release checks but another check fails: longer lengths up to l1 (one pass each way, the 1 ft grid)
-          let found = null; for (let l0 = c + 1; l0 <= l1 && !found; l0++) { const r = yield* at(l0); if (ctx.stopped) break outer; if (r.pass) found = l0; }
-          if (found) { pat = { rows: withDeb(rw, nd, found, dc.dStep), N: Ns + nTop, D, lv }; break outer; }
+          // the shortest lengths pass the release checks but another check fails: longer debonding does not help it (it takes prestress
+          // off the end); a check more strands improve: the next N; else more debonded strands
+          if (rc.fails.every(n => GROW.includes(n))) break;
         }
         if (!r0.fails.some(n => GROW.includes(n)) && !r0.fails.some(n => RELEASE.includes(n))) break;
       }
