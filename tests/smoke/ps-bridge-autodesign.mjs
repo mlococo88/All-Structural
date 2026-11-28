@@ -129,6 +129,11 @@ try {
   await p.selectOption('#ad_pattern', 'draped'); await p.waitForTimeout(150);
   assert.equal(JSON.parse(await proj()).autodesign.pattern, undefined, 'draped = absent (the default)');
   ok('strand pattern: Both saved in P.autodesign, the debonding limits listed; Draped = the default (absent)');
+  // 4e. PSAD-D (2026-11-28): the uniformity option (saved; None = absent)
+  await p.selectOption('#ad_uniform', 'types'); await p.waitForTimeout(150);
+  assert.equal(JSON.parse(await proj()).autodesign.uniform, 'types'); assert.ok(await p.evaluate(() => /Uniformity/.test(document.getElementById('inPanes').innerText)));
+  await p.selectOption('#ad_uniform', 'none'); await p.waitForTimeout(150); assert.equal(JSON.parse(await proj()).autodesign.uniform, undefined);
+  ok('uniformity: One design for the types of a span saved in P.autodesign; None = the default (absent)');
 
   // 5. phone width, keys, errors
   await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(400);
