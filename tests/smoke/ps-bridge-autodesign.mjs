@@ -101,7 +101,7 @@ try {
   await p.fill('#ad_maxRatio', '0.95'); await p.dispatchEvent('#ad_maxRatio', 'change'); await p.waitForTimeout(150);
   r = await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')).autodesign); assert.equal(r.mode, 'refine'); assert.equal(r.maxRatio, 0.95);
   await itab('ad'); await p.click('#ad_run'); await until(() => p.evaluate(() => !!document.querySelector('#ad-span-1') && !PSBAutoDesignUI.state().running), 180000, 'the Refine results');
-  r = await p.evaluate(() => ({ txt: document.getElementById('adHost').innerText, head: document.querySelector('#ad-span-1 thead').innerText, rows: [...document.querySelectorAll('#ad-span-1 tbody tr')].map(t => t.innerText.replace(/\s+/g, ' ')) }));
+  r = await p.evaluate(() => ({ txt: document.getElementById('adHost').innerText, head: document.querySelector('#ad-span-1 thead').innerText, rows: [...document.querySelector('#ad-span-1 table').querySelectorAll('tbody tr')].map(t => t.innerText.replace(/\s+/g, ' ')) }));   // the candidates table only (not the detail's checks)
   assert.ok(/Mode: Refine/.test(r.txt) && /target ratio 0\.95/.test(r.txt), 'the mode and the target named');
   assert.ok(/target 0\.95/.test(r.head) && /change from the entered design/.test(r.head), r.head);
   assert.ok(r.rows.length && r.rows.every(t => /PCI BT-72/.test(t)), 'Refine keeps the section: ' + r.rows.join(' / '));
