@@ -711,6 +711,8 @@ A small IIFE, `window.BridgeXfer`, providing:
 
 The reference copy is below. Paste it **verbatim** inside a plain `<script>` tag in each tool, before the tool's own hand-off code. If it ever changes, update this file and every copy in the same PR.
 
+`index.html`, `lldf.html` and `apps/ps-bridge/` no longer carry a pasted copy (BSB, 2026-11-28): they load `shared/bridge-suite-boot.js` and call `SharedBridgeBoot.xfer()` (the same text, byte for byte; tested against this reference in `tests/engine/psbridge-handoffs.test.mjs`). The other tools keep their pasted copies; a change to this helper updates this file, `shared/bridge-suite-boot.js` and every pasted copy in the same PR.
+
 ```js
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
