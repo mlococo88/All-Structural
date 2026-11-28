@@ -101,7 +101,7 @@ try {
   await p.fill('#ad_maxRatio', '0.95'); await p.dispatchEvent('#ad_maxRatio', 'change'); await p.waitForTimeout(150);
   r = await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')).autodesign); assert.equal(r.mode, 'refine'); assert.equal(r.maxRatio, 0.95);
   await itab('ad'); await p.click('#ad_run'); await until(() => p.evaluate(() => !!document.querySelector('#ad-span-1') && !PSBAutoDesignUI.state().running), 180000, 'the Refine results');
-  r = await p.evaluate(() => ({ txt: document.getElementById('adHost').innerText, head: document.querySelector('#ad-span-1 thead').innerText, rows: [...document.querySelectorAll('#ad-span-1 tbody tr')].map(t => t.innerText.replace(/\s+/g, ' ')) }));
+  r = await p.evaluate(() => ({ txt: document.getElementById('adHost').innerText, head: document.querySelector('#ad-span-1 thead').innerText, rows: [...document.querySelector('#ad-span-1 table').querySelectorAll('tbody tr')].map(t => t.innerText.replace(/\s+/g, ' ')) }));   // the candidates table only (not the detail's checks)
   assert.ok(/Mode: Refine/.test(r.txt) && /target ratio 0\.95/.test(r.txt), 'the mode and the target named');
   assert.ok(/target 0\.95/.test(r.head) && /change from the entered design/.test(r.head), r.head);
   assert.ok(r.rows.length && r.rows.every(t => /PCI BT-72/.test(t)), 'Refine keeps the section: ' + r.rows.join(' / '));
@@ -116,7 +116,7 @@ try {
   r = await p.evaluate(() => ({ a: JSON.parse(localStorage.getItem('psb2.project.current')).autodesign, sLo: !!document.getElementById('ad_sLo') }));
   assert.equal(r.a.vars.nb, 'auto'); assert.equal(r.a.mode, undefined); assert.equal(r.a.maxRatio, undefined); assert.ok(r.sLo, 'the spacing limits shown');
   await itab('ad'); await p.click('#ad_run'); await until(() => p.evaluate(() => !!document.querySelector('#ad-span-1') && !PSBAutoDesignUI.state().running), 240000, 'the N_b results');
-  r = await p.evaluate(() => ({ txt: document.getElementById('adHost').innerText, head: document.querySelector('#ad-span-1 thead').innerText, rows: [...document.querySelectorAll('#ad-span-1 tbody tr')].map(t => t.innerText.replace(/\s+/g, ' ')) }));
+  r = await p.evaluate(() => ({ txt: document.getElementById('adHost').innerText, head: document.querySelector('#ad-span-1 thead').innerText, rows: [...document.querySelector('#ad-span-1 table').querySelectorAll('tbody tr')].map(t => t.innerText.replace(/\s+/g, ' ')) }));
   assert.ok(/Girder counts searched: the current count ± 1/.test(r.txt), 'the counts named'); assert.ok(/Nb \(S, ft\)|N\s*b \(S, ft\)/.test(r.head), r.head);
   assert.ok(r.rows.some(t => / 4 \(12\.00\)/.test(t)) && r.rows.some(t => / 6 \(7\.20\)/.test(t)), 'the counts 4 and 6 tried: ' + r.rows.join(' / '));
   ok(`girder count Auto: ${r.rows.length} (count, section) rows, the counts 4, 5, 6 with S = 12.00, 9.00, 7.20 ft`);
