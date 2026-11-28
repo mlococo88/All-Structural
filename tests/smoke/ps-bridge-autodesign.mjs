@@ -33,12 +33,12 @@ try {
   await itab('ad');
   let r = await p.evaluate(() => ({ vars: [...document.querySelectorAll('[data-ad^="vars."]')].map(s => s.dataset.ad + '=' + s.value), obj: document.getElementById('ad_objective').value,
     ph: document.getElementById('ad_fcHi').placeholder, run: !!document.getElementById('ad_run') }));
-  assert.deepEqual(r.vars, ['vars.section=auto', 'vars.strands=auto', 'vars.drape=auto', 'vars.conc=auto']); assert.equal(r.obj, 'weight'); assert.equal(r.ph, '10.0'); assert.ok(r.run);
+  assert.deepEqual(r.vars, ['vars.section=auto', 'vars.strands=auto', 'vars.drape=auto', 'vars.conc=auto', 'vars.nb=lock']);   // PSAD-B: the girder count, Lock by default assert.equal(r.obj, 'weight'); assert.equal(r.ph, '10.0'); assert.ok(r.run);
   await p.selectOption('#ad_objective', 'depth'); await p.waitForTimeout(150);
   assert.equal(JSON.parse(await proj()).autodesign.objective, 'depth');
   assert.equal(await p.$eval('#bUndo', e => e.disabled), false); await p.click('#bUndo'); await p.waitForTimeout(200);
   assert.equal((JSON.parse(await proj()).autodesign || {}).objective, undefined, 'Undo of the setting');
-  ok('input tab: objective, the four variables (Auto), the owner f′c limit 10.0 grey, Run; a setting is saved in P.autodesign and is an undo step');
+  ok('input tab: objective, the four variables (Auto) and the girder count (Lock), the owner f′c limit 10.0 grey, Run; a setting is saved in P.autodesign and is an undo step');
   await shot('auto-input');
 
   // 2. Run
