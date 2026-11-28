@@ -98,7 +98,8 @@
     { k: 'base.handling.aHaul', l: 'Haul support (bunk) from the end', w: HAND, b: 'Changes with the girder length.' },
     { k: 'base.handling.ei', l: 'Initial sweep e<sub>i</sub>', w: HAND }, { k: 'base.handling.hr', l: 'Roll centre height (haul)', w: HAND }, { k: 'base.handling.theta_i', l: 'Road cross slope θ<sub>i</sub>', w: HAND }]);
   const ad = (k, l, x) => Object.assign({ k: 'autodesign.' + k, s: `[data-ad="${k}"]`, l }, x || {});
-  add('ad', 'Search', 'ad', [ad('topN', 'Sections to list per span')]);
+  add('ad', 'Search', 'ad', [ad('mode', 'Mode (New design / Refine the entered design)', { b: 'Usually New design, but a run that only adjusts the entered design uses Refine.' }), ad('topN', 'Sections to list per span'),
+    ad('maxRatio', 'Target ratio (every check ≤)', { b: 'An office margin, but one bridge can ask for a different one.' })]);
   add('ad', 'Concrete strength range', 'ad', [ad('fcLo', 'f′<sub>c</sub>, lowest'), ad('fcHi', 'f′<sub>c</sub>, highest'), ad('fciLo', 'f′<sub>ci</sub>, lowest'), ad('fciHi', 'f′<sub>ci</sub>, highest (plant)')]);
   const OWNER = { k: 'base.owner', s: dp('base.owner'), t: 'own', b: 'The office’s usual owner, but a bridge for another DOT needs a different one, so each bridge keeps its own.' };
   const SCOPED = ['gird', 'mat', 'loads'];   // ui/types.js SCOPED: values per girder type

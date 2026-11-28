@@ -44,9 +44,20 @@
    Assumed (Decisions pending engineer review, fixlog/ps-bridge.md AD-D*): a higher f′c / f′ci is not worse for any check, more draped
    relief at the end is found by a higher y_end, and the checks in GROW are those more strands improve.
 
+   Added 2026-11-28 (PSAD-A, engineer's choice of 2026-11-28, items 4 and 7; fixlog/ps-bridge.md PSAD-A):
+     settings.mode      'new' (the search above; the default) or 'refine' (refine() below: the current section of each span kept, the design
+                        nearest the entered one that passes, ranked by distance(): |ΔN|, |Δn_h|, the drape change, |Δf′c|, |Δf′ci|; the
+                        entered design first when it passes; the list also holds the passing design with the fewest strands, so an
+                        over-designed pattern is reduced)
+     settings.maxRatio  the target ratio (default 1.00: the engine's pass, results unchanged): a candidate passes only when every check has
+                        r ≤ maxRatio (+ the engine's 1e-4 tolerance), except the RULE checks (the confinement detailing, the LLDF range of
+                        applicability, the hold-down force limit, the owners' f′c / f′ci / age / debonded-share rules), which must pass
+                        (their own pass, as before); evalCand's govT is the governing check the target applies to.
+
    API
-     DEF, FRACS, GROW, settings(P), family(name), sections(P, s, o), owners(P, k), conc(P, k, o)
-     evalCand(P, k, eff, ctx, full)  -> { pass, fails: [names], gov: { n, r, g, loc }, lines: [{ g, R }] | null, err }
+     DEF, FRACS, GROW, RULE, settings(P), family(name), sections(P, s, o), owners(P, k), conc(P, k, o)
+     evalCand(P, k, eff, ctx, full)  -> { pass, fails: [names], gov: { n, r, g, loc }, govT (target < 1), lines: [{ g, R }] | null, err }
+     refine(P, k, girder, o, ctx, log) generator -> as search(), with list (the designs listed, nearest first; each with dist, entered, fewest)
      run(P, o) generator (yields { i, n, msg } progress; returns the result), runSync(P, o)
      apply(P, Res, choice) -> { note } (writes the chosen candidates into the girder types' overrides; the page records it as one step)
    Nothing here is stored but by apply(); the result lives in the page's memory. */
@@ -59,14 +70,21 @@
   /* checks that more strands improve (step 2: N grows only while a trial failed on these alone) */
   const GROW = ['Flexure', 'Srv III tens', 'Min reinf', 'Shear', 'Long. reinf (5.7.3.5)', 'Fatigue I (strand)'];
   const HD = /^Hold-down force/;
-  const DEF = { objective: 'weight', topN: 3, vars: { section: 'auto', strands: 'auto', drape: 'auto', conc: 'auto' },
+  const DEF = { mode: 'new', objective: 'weight', topN: 3, maxRatio: 1.00, vars: { section: 'auto', strands: 'auto', drape: 'auto', conc: 'auto' },
     fcLo: '', fcHi: '', fciLo: 4.0, fciHi: '', maxRuns: 20000 };
+  /* PSAD-A (2026-11-28, items 4 and 7): mode 'new' (the search above, the default) or 'refine' (refine(): the current section kept, the
+     smallest change from the entered design); maxRatio (the target ratio, default 1.00 = the engine's own pass): a candidate passes only if
+     the ratio of every check is at most maxRatio, except the RULE checks (rules of fact, not demand / capacity ratios), which must pass. */
+  const RULE = /^(Confinement steel|LLDF range of applicability|Hold-down force|Girder f′c|Release strength f′ci|Girder age at continuity|Debonded strands)/;
+  const TOL = 1e-4;   // the engine's own pass tolerance (r ≤ 1.0001), applied to the target the same way
   const num = (v, d) => (v === '' || v == null || !isFinite(+v)) ? d : +v;
   /* settings(P): the run's settings (P.autodesign, optional; absent = DEF) */
   function settings(P) {
     const a = (P && P.autodesign) || {}, v = Object.assign({}, DEF.vars, a.vars || {});
     Object.keys(v).forEach(k => { if (v[k] !== 'lock') v[k] = 'auto'; });
-    return { objective: a.objective === 'depth' ? 'depth' : 'weight', topN: Math.max(1, Math.min(10, Math.round(num(a.topN, DEF.topN)))), vars: v,
+    const mr = num(a.maxRatio, DEF.maxRatio);
+    return { mode: a.mode === 'refine' ? 'refine' : 'new', maxRatio: mr > 0 && mr < 1 ? R2(mr) : 1,
+      objective: a.objective === 'depth' ? 'depth' : 'weight', topN: Math.max(1, Math.min(10, Math.round(num(a.topN, DEF.topN)))), vars: v,
       fcLo: num(a.fcLo, NaN), fcHi: num(a.fcHi, NaN), fciLo: num(a.fciLo, DEF.fciLo), fciHi: num(a.fciHi, NaN), maxRuns: Math.max(100, num(a.maxRuns, DEF.maxRuns)),
       fracs: FRACS.slice() };   // fracs: the hold-down positions searched (the tests' exhaustive case passes a shorter list; not a page setting)
   }
@@ -134,19 +152,23 @@
     ctx.runs++; ctx.cache.set(key, R); if (ctx.cache.size > 400) ctx.cache.delete(ctx.cache.keys().next().value);
     return R;
   }
+  /* over(c, t): check c is above the target ratio t (t < 1 only; a RULE check is held to its own pass alone) */
+  const over = (c, t) => t < 1 && !RULE.test(c.n) && !(c.r <= t + TOL);
   /* evalCand(P, k, eff, ctx, full): eff on every line of type k. Not full: stops at the first failing line (that line is tried first next
      time). Returns { pass, fails, gov, lines, err, fit }. */
   function evalCand(P, k, eff, ctx, full) {
     const fit = fitErrors(P, k, eff, ctx);
     if (fit.length) return { pass: false, fails: ['strand fit (input check)'], fit, gov: null, lines: null, err: '' };
-    const BR = window.PSBBridge; let L = BR.typeLines(P, k).slice();
+    const BR = window.PSBBridge, tgt = ctx && ctx.o ? ctx.o.maxRatio : 1; let L = BR.typeLines(P, k).slice();
     const first = ctx.first && ctx.first[k]; if (first && L.includes(first)) L = [first, ...L.filter(g => g !== first)];
     const out = { pass: true, fails: [], gov: null, lines: [], err: '' };
     for (const g of L) {
       const R = engineRun(lineInputs(P, k, g, eff), ctx);
       if (!R || R.error) { out.pass = false; out.err = (R && R.error) || 'no result'; out.fails.push('engine error'); if (ctx.first) ctx.first[k] = g; if (!full) return out; continue; }
       out.lines.push({ g, R });
-      R.checks.forEach(c => { if (!out.gov || !(c.r <= out.gov.r)) out.gov = { n: c.n, r: c.r, g, loc: c.loc }; if (!c.pass) { out.pass = false; if (!out.fails.includes(c.n)) out.fails.push(c.n); } });
+      R.checks.forEach(c => { if (!out.gov || !(c.r <= out.gov.r)) out.gov = { n: c.n, r: c.r, g, loc: c.loc };
+        if (tgt < 1 && !RULE.test(c.n) && (!out.govT || !(c.r <= out.govT.r))) out.govT = { n: c.n, r: c.r, g, loc: c.loc };   // the governing check the target applies to
+        if (!c.pass || over(c, tgt)) { out.pass = false; if (!out.fails.includes(c.n)) out.fails.push(c.n); } });
       if (!out.pass) { if (ctx.first) ctx.first[k] = g; if (!full) return out; }
     }
     return out;
@@ -319,6 +341,158 @@
     res.best = { k, girder, N: lockS ? pat.N : pat.N + nTop, nh: pat.nh, nTop: lockS ? 0 : nTop, rows: e.rows, harp: e.harp, fc, fci, eff: e, ev: r, W, hd: hdOf(r) };
     return res;
   }
+  /* ---------- Refine (PSAD-A, item 4): the smallest change from the entered design ---------- */
+  /* distance(d0, b): the distance of design b from the entered design d0, compared lexicographically (cmpDist): |ΔN|, |Δn_h|, the drape
+     change, |Δf′c|, |Δf′ci|. The drape change: with entered draped strands (n_h0 > 0) and draped strands in b, (|Δy_end|, |Δfrac|); with
+     none entered, (the slope (y_end − y_mid)/frac, |frac − 0.40|), the order of the new-design search (the flatter first); no draped strand
+     in b: (0, 0). Decision PSAD-D1 (pending engineer review). */
+  function distance(d0, b) {
+    const dr = !b.nh ? [0, 0] : d0.nh > 0 ? [Math.abs(+b.harp.yEnd - d0.yEnd), Math.abs(+b.harp.frac - d0.frac)] : [(+b.harp.yEnd - +b.harp.yMid) / +b.harp.frac, Math.abs(+b.harp.frac - 0.4)];
+    return [Math.abs(b.N - d0.N), Math.abs(b.nh - d0.nh), R2(dr[0]), R2(dr[1]), R2(Math.abs(b.fc - d0.fc)), R2(Math.abs(b.fci - d0.fci))];
+  }
+  const cmpDist = (a, c) => { for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - c[i]) > 1e-9) return a[i] - c[i]; return 0; };
+  /* modRows(P, k, base, ent, Ns, ctx): the entered straight rows (lower half, bottom-up) changed by pairs to Ns strands: fewer: pairs off
+     the highest row first (a row left with none is dropped); more: pairs onto the lowest row they fit on (the input check's strand fit),
+     then a new row on the section's row grid above the top row (rowsOf). Entered debonding kept (at most the row's count). null: no fit. */
+  function modRows(P, k, base, ent, Ns, ctx) {
+    let rows = ent.map(r => ({ n: +r.n || 0, y: +r.y, dbnd: +r.dbnd || 0, nd: +r.nd || 0 })).filter(r => r.n > 0 && isNum(r.y)).sort((a, c) => a.y - c.y);
+    let tot = rows.reduce((a, r) => a + r.n, 0); if (Ns < 2) return null;
+    const noH = Object.assign({}, base.harp, { n: 0 }), fits = (n, y) => !fitErrors(P, k, Object.assign({}, base, { rows: [{ n, y, dbnd: 0, nd: 0 }], harp: noH }), ctx).length;
+    while (tot > Ns) { const r = rows[rows.length - 1], d = Math.min(r.n, tot - Ns >= 2 ? 2 : tot - Ns); r.n -= d; tot -= d; if (r.nd > r.n) r.nd = r.n; if (r.n <= 0) rows.pop(); if (!rows.length) return null; }
+    const grid = rowsOf(P, k, base, ctx);
+    while (tot < Ns) { const add = Math.min(2, Ns - tot); let r = rows.find(q => fits(q.n + add, q.y));
+      if (!r) { const top = rows.length ? rows[rows.length - 1].y : -Infinity, gq = grid.find(q => q.y > top + 1e-9 && q.cap >= add); if (!gq) return null; r = { n: 0, y: gq.y, dbnd: 0, nd: 0 }; rows.push(r); }
+      r.n += add; tot += add; }
+    return rows;
+  }
+  /* refine(P, k, girder, o, ctx, log): Refine mode for type k on its current section: { best, list (the passing designs, nearest first),
+     trials, closest, why, level }. Steps:
+       1. the entered design itself (strands, drape, f′c, f′ci);
+       2. N = N0, then N0 − 2, N0 − 4, … (down, to reduce an over-designed pattern: stops at the first N with no passing design once one
+          passed, or when every trial at N failed only on checks that more strands improve (GROW)), and, only when nothing passes at N0,
+          N0 + 2, N0 + 4, … up to the first that passes (or no trial fails on GROW alone, or every row is full);
+       3. at each N: n_h in the order of |Δn_h| (then the fewer); the entered rows changed by pairs (modRows); at each n_h the drape nearest
+          the entered one (per frac: the passing y_end range by bisection, as the new-design search, then the y_end in it nearest the
+          entered y_end), judged at the highest f′c / f′ci; the first n_h with a passing drape is the pattern for that N;
+       4. at that pattern the f′c nearest the entered one that passes (with its highest f′ci), then the f′ci nearest the entered one
+          (bisection; a higher strength is assumed not worse, AD-D8).
+     The list: the passing designs ranked by distance(); listed: the first topN − 1 and the one with the fewest strands (so an over-designed
+     pattern always shows its reduction), Decision PSAD-D2 (pending engineer review). */
+  function* refine(P, k, girder, o, ctx, log) {
+    const lockS = o.vars.strands === 'lock', lockD = o.vars.drape === 'lock';
+    const b0 = window.PSBBridge.effBase(P, k), base = Object.assign(J(b0), { girder }), C = conc(P, k, o);
+    const res = { girder, best: null, list: [], trials: 0, closest: null, why: '', level: 'the entered design (Refine)' };
+    const h = window.PSBInputCheck.depthOf(base), h0 = h;
+    const upper = r => isNum(+r.y) && +r.y > h0 / 2, ent = (Array.isArray(b0.rows) ? b0.rows : []).filter(r => r && typeof r === 'object');
+    const tops = ent.filter(upper), low = ent.filter(r => !upper(r)), nTop = tops.reduce((a, r) => a + (+r.n || 0), 0);
+    const hp0 = b0.harp || {}, d0 = { N: countOf(b0), nh: +hp0.n || 0, yEnd: +hp0.yEnd, frac: +hp0.frac, fc: +b0.mat.fc, fci: +b0.mat.fci };
+    /* mk: the candidate's inputs; rows null = the entered rows exactly (the entered design, in its own row order) */
+    const mk = (rows, harp, fc, fci) => { const e = J(base); e.rows = rows === null ? J(b0.rows) : J(rows).concat(lockS ? [] : J(tops)); e.harp = Object.assign({}, b0.harp, harp); e.mat = Object.assign({}, e.mat, { fc, fci }); return e; };
+    const note = (what, r) => { res.trials++;
+      if (r.gov && (!res.closest || r.fails.length < res.closest.fails.length || (r.fails.length === res.closest.fails.length && r.gov.r < res.closest.gov.r))) res.closest = { what, fails: r.fails.slice(), gov: r.gov };
+      if (log.length < 3000) log.push({ k, girder, what, pass: r.pass, fails: r.fails.slice(0, 4), gov: r.gov ? { n: r.gov.n, r: r.gov.r, g: r.gov.g } : null });
+      if (ctx.runs >= o.maxRuns) ctx.stopped = true; };
+    const trial = function* (rows, harp, fc, fci, what) { const r = evalCand(P, k, mk(rows, harp, fc, fci), ctx, false); note(what, r); yield { i: ctx.runs, msg: `${girder}: ${what}` }; return r; };
+    const dTxt = hp => hp.n ? `, y_end ${hp.yEnd} in, y_mid ${hp.yMid} in, frac ${(+hp.frac).toFixed(2)}` : '';
+    const noHD = r => r.lines && !r.err && r.fails.every(n => HD.test(n));
+    const hiFci = f => { const q = C.fciOf(f); return q.length ? q[q.length - 1] : null; };
+    const fcTop = C.lock ? d0.fc : C.fc.length ? C.fc[C.fc.length - 1] : null, fciTop = C.lock ? d0.fci : fcTop != null ? hiFci(fcTop) : null;
+    if (fcTop == null || fciTop == null) { res.why = 'no f′c / f′ci in the ranges searched'; return res; }
+    const LT = `f′c ${fcTop} / f′ci ${fciTop} ksi${C.lock ? ' (locked)' : ', the highest'}`;
+    /* concAt(rows, harp): the f′c / f′ci nearest the entered values that pass with this pattern (it passes at the highest); null if none */
+    const concAt = function* (rows, harp, tag) {
+      if (C.lock) { const r = yield* trial(rows, harp, d0.fc, d0.fci, `${tag}, f′c / f′ci locked`); return r.pass ? { fc: d0.fc, fci: d0.fci } : null; }
+      const F = C.fc.filter(f => hiFci(f) != null), ok = function* (f, fi) { return (yield* trial(rows, harp, f, fi, `${tag}, f′c ${f} ksi, f′ci ${fi} ksi`)).pass; };
+      if (!F.length) return null;
+      /* near(L, x0, pass): in the ascending grid L, whose last value passes and where the passing values are those from some index T on
+         (the monotone assumption, AD-D8), the passing value nearest x0: x0 itself when it is on the grid and passes, else T by bisection
+         (from x0's index when it is on the grid), then the value of L[T..] nearest x0 */
+      const near = function* (L, x0, pass) {
+        const last = L.length - 1, j0 = L.findIndex(f => Math.abs(f - x0) < 1e-9);
+        if (x0 >= L[last] - 1e-9) return L[last];
+        if (j0 >= 0 && (yield* pass(L[j0]))) return L[j0];
+        let a = j0, c = last; while (c - a > 1) { const m = (a + c) >> 1; if (yield* pass(L[m])) c = m; else a = m; if (ctx.stopped) return null; }
+        return L.slice(c).reduce((b, f) => Math.abs(f - x0) < Math.abs(b - x0) - 1e-9 ? f : b, L[c]);
+      };
+      const fc = yield* near(F, d0.fc, f => ok(f, hiFci(f))); if (fc == null) return null;
+      const fci = yield* near(C.fciOf(fc), d0.fci, fi => ok(fc, fi)); if (fci == null) return null;
+      return { fc, fci };
+    };
+    const found = [];   // { N, nh, rows, harp, fc, fci }
+    const finish = function* (pat) { const cc = yield* concAt(pat.rows, pat.harp, `N ${pat.N} (${pat.N - pat.nh - (lockS ? 0 : nTop)} straight, ${pat.nh} draped${dTxt(pat.harp)})`); if (cc) found.push(Object.assign({}, pat, cc)); return !!cc; };
+    // 1. the entered design itself
+    { const r = yield* trial(null, b0.harp, d0.fc, d0.fci, 'the entered design');
+      if (r.pass) found.push({ N: d0.N, nh: d0.nh, rows: null, harp: J(b0.harp), fc: d0.fc, fci: d0.fci }); }
+    if (lockS) { if (!found.length && !ctx.stopped) { const r = yield* trial(null, b0.harp, fcTop, fciTop, `the entered strands, ${LT}`); if (r.pass) yield* finish({ N: d0.N, nh: d0.nh, rows: null, harp: J(b0.harp) }); } }
+    else {
+      /* patternAt(N): the nearest passing (n_h, drape) at N, judged at the highest strengths: { pat } | { grow } (every trial failed on GROW
+         checks alone, or on none that a pattern changes) */
+      const patternAt = function* (N) {
+        const Nl = N - nTop; let grow = true, anyT = false, stiff = false, nhFitMax = Infinity;
+        const nhs = lockD ? [d0.nh] : Array.from({ length: Math.max(0, Math.floor((Nl - 2) / 2) + 1) }, (_, i) => 2 * i).sort((a, c) => Math.abs(a - d0.nh) - Math.abs(c - d0.nh) || a - c);
+        for (const nh of nhs) {
+          if (stiff) return { stiff };
+          if (nh > nhFitMax || Nl - nh < 2) continue;
+          const rw = modRows(P, k, base, low, Nl - nh, ctx); if (!rw) continue;
+          const at = function* (hp) { const r = yield* trial(rw, hp, fcTop, fciTop, `N ${N} (${Nl - nh} straight, ${nh} draped${dTxt(hp)}), ${LT}`);
+            if (!(r.fit && r.fit.length)) { anyT = true; if (!(r.fails.length && r.fails.every(n => GROW.includes(n))) && !r.pass) grow = false; if (r.fails.includes('LL deflection')) stiff = true; } return r; };
+          if (nh === 0 || lockD) { const hp = nh === 0 ? { n: 0 } : J(b0.harp), r = yield* at(hp); if (ctx.stopped) return {}; if (r.pass) return { pat: { N, nh, rows: rw, harp: hp } }; continue; }
+          // the entered drape first (same n_h, the entered y_end / y_mid / frac)
+          if (nh === d0.nh && N === d0.N && isNum(+hp0.yEnd) && isNum(+hp0.yMid)) { const r = yield* at(J(hp0)); if (ctx.stopped) return {}; if (r.pass) return { pat: { N, nh, rows: rw, harp: Object.assign(J(hp0), { n: nh }) } }; }
+          const D = drapes(rw, nh, h, o.fracs); if (!D.list.length) { nhFitMax = nh - 2; continue; }
+          const ys = [...new Set(D.list.map(q => q.yEnd))].sort((a, c) => a - c).filter(y => { for (let z = D.yMid; z <= y + 1e-9; z = R2(z + 1)) if (!bundleFits(P, k, base, nh, z, ctx)) return false; return true; });
+          if (!ys.length) { if (!bundleFits(P, k, base, nh, D.yMid, ctx)) nhFitMax = nh - 2; continue; }
+          const yT = d0.nh > 0 && nh > 0 ? d0.yEnd : -Infinity, fT = d0.nh > 0 && isNum(d0.frac) ? d0.frac : 0.4;
+          let best = null; const key = (y, f) => d0.nh > 0 ? [Math.abs(y - yT), Math.abs(f - fT)] : [(y - D.yMid) / f, Math.abs(f - 0.4)];
+          for (const frac of (o.fracs || FRACS).slice().sort((a, c) => Math.abs(a - fT) - Math.abs(c - fT) || c - a)) {
+            if (stiff) return { stiff };
+            const hpOf = y => ({ n: nh, yEnd: y, yMid: D.yMid, frac });
+            const rTop = yield* at(hpOf(ys[ys.length - 1])); if (ctx.stopped) return {};
+            if (!noHD(rTop)) continue;
+            let a = -1, c = ys.length - 1;   // the lowest y_end at which every check but the hold-down force passes
+            while (c - a > 1) { const m = (a + c) >> 1, r = yield* at(hpOf(ys[m])); if (ctx.stopped) return {}; if (noHD(r)) c = m; else a = m; }
+            // the passing y_end: from ys[c] up to the highest at which the hold-down force passes; the one nearest y_T
+            let i = c; if (isFinite(yT)) { i = ys.findIndex((y, j) => j >= c && y >= yT - 1e-9); if (i < 0) i = ys.length - 1; if (i > c && Math.abs(ys[i - 1] - yT) <= Math.abs(ys[i] - yT)) i--; }
+            if (best && cmpDist(key(ys[i], frac), key(best.y, best.frac)) >= 0 && cmpDist(key(ys[c], frac), key(best.y, best.frac)) >= 0) continue;
+            let r = yield* at(hpOf(ys[i])); if (ctx.stopped) return {};
+            if (!r.pass && i > c) { let lo = c, hi = i; const rc = yield* at(hpOf(ys[c])); if (ctx.stopped) return {}; if (!rc.pass) continue;
+              while (hi - lo > 1) { const m = (lo + hi) >> 1, q = yield* at(hpOf(ys[m])); if (ctx.stopped) return {}; if (q.pass) lo = m; else hi = m; }
+              i = lo; r = { pass: true }; }
+            if (r.pass && (!best || cmpDist(key(ys[i], frac), key(best.y, best.frac)) < 0)) best = { y: ys[i], frac };
+          }
+          if (best) return { pat: { N, nh, rows: rw, harp: { n: nh, yEnd: best.y, yMid: D.yMid, frac: best.frac } } };
+        }
+        return { grow: anyT && grow, none: !anyT, stiff };
+      };
+      const capS = rowsOf(P, k, base, ctx).reduce((a, q) => a + q.cap, 0) + low.reduce((a, r) => a + (+r.n || 0), 0);
+      let passN0 = found.length > 0;
+      if (!passN0) { const q = yield* patternAt(d0.N); if (q.pat) passN0 = yield* finish(q.pat); }
+      // down: fewer strands
+      for (let N = d0.N - 2; N - nTop >= 2 && !ctx.stopped; N -= 2) { const q = yield* patternAt(N);
+        if (q.pat) { if (!(yield* finish(q.pat))) break; continue; }
+        if (found.length || q.grow || q.none || q.stiff) break; }
+      // up: more strands, only when nothing passes at N0
+      if (!passN0 && !ctx.stopped) for (let N = d0.N + 2; N - nTop <= capS && !ctx.stopped; N += 2) { const q = yield* patternAt(N);
+        if (q.pat) { if (yield* finish(q.pat)) break; continue; }
+        if (q.stiff) { res.why = 'the live-load deflection fails at the highest f′c (the section\'s stiffness: no strand pattern changes it)'; break; }
+        if (!q.grow && !q.none) { res.why = `no strand pattern passes at N = ${N}: the checks that fail are not improved by more strands`; break; } }
+    }
+    if (!found.length) { if (!res.why) res.why = ctx.stopped ? 'stopped' : 'no design near the entered one passes'; return res; }
+    const list = [];
+    for (const f of found) { const e = mk(f.rows, f.harp, f.fc, f.fci), r = evalCand(P, k, e, ctx, true); if (!r.pass) continue;
+      const W = r.lines.reduce((a, q) => a + q.R.g.wsw * (q.R.L + 2 * (+e.opt.endOh || 0) / 12), 0);
+      const b = { k, girder, N: f.N, nh: f.nh, nTop: lockS ? 0 : nTop, rows: e.rows, harp: e.harp, fc: f.fc, fci: f.fci, eff: e, ev: r, W, hd: hdOf(r) };
+      b.dist = distance(d0, b);
+      b.delta = { N: b.N - d0.N, nh: b.nh - d0.nh, yEnd: b.nh && d0.nh ? R2(+b.harp.yEnd - d0.yEnd) : null, frac: b.nh && d0.nh ? R2(+b.harp.frac - d0.frac) : null, fc: R2(b.fc - d0.fc), fci: R2(b.fci - d0.fci) };
+      if (!list.some(q => cmpDist(q.dist, b.dist) === 0 && q.N === b.N)) list.push(b); }
+    if (!list.length) { res.why = 'the final design does not pass (unexpected)'; return res; }
+    list.sort((a, c) => cmpDist(a.dist, c.dist));
+    const fewest = list.reduce((a, q) => q.N < a.N ? q : a, list[0]);
+    res.list = list.slice(0, Math.max(1, o.topN - 1)); if (o.topN > 1) { if (!res.list.includes(fewest)) res.list.push(fewest); else if (list.length > res.list.length) res.list.push(list[res.list.length]); }
+    res.list.forEach(q => { q.fewest = q === fewest; q.entered = q.dist.every(x => x === 0); });
+    res.best = res.list[0];
+    return res;
+  }
   /* hdOf(ev): the hold-down check of the worst line (F_hd / limit), or null */
   const hdOf = ev => { let q = null; (ev.lines || []).forEach(l => l.R.checks.forEach(c => { if (HD.test(c.n) && (!q || c.r > q.r)) q = { n: c.n, r: c.r, g: l.g }; })); return q; };
 
@@ -330,13 +504,24 @@
        cur: { k: evalCurrent }, log, runs, ms, stopped } */
   function* run(P, o) {
     o = o || settings(P); const BR = window.PSBBridge, t0 = Date.now();
-    const ctx = { cache: new Map(), fit: new Map(), rows: new Map(), runs: 0, first: {}, stopped: false }, log = [];
+    const ctx = { cache: new Map(), fit: new Map(), rows: new Map(), runs: 0, first: {}, stopped: false, o }, log = [];
     const out = { spans: [], cur: {}, log, runs: 0, ms: 0, stopped: false, o };
     for (let s = 1; s <= P.spans.lengths.length; s++) {
       const ks = BR.spanTypes(P, s).filter(k => BR.typeLines(P, k).length); if (!ks.length) continue;
       ks.forEach(k => { out.cur[k] = evalCurrent(P, k, ctx); });
-      const S = sections(P, s, o), sp = { s, why: S.why, types: ks, sections: [], cands: [] };
+      const ref = o.mode === 'refine', S = sections(P, s, ref ? Object.assign({}, o, { vars: Object.assign({}, o.vars, { section: 'lock' }) }) : o), sp = { s, why: ref ? S.why.replace(/\(locked\)/, '(Refine keeps the section)') : S.why, types: ks, sections: [], cands: [] };
       out.spans.push(sp);
+      if (ref) {   // Refine: the current section; span candidate i = each type's design i of its list (its last when shorter)
+        const sec = S.list[0], R = {};
+        for (const k of ks) { R[k] = yield* refine(P, k, sec ? sec.name : BR.effBase(P, k).girder, o, ctx, log); if (!R[k].best || ctx.stopped) break; }
+        const ok = ks.every(k => R[k] && R[k].best), n = ok ? Math.max(...ks.map(k => R[k].list.length)) : 1;
+        for (let i = 0; i < n; i++) { const ent = { name: sec ? sec.name : '', A: sec ? sec.A : NaN, h: sec ? sec.h : NaN, pass: ok, ri: i, types: ks.filter(k => R[k]).map(k => ({ k, res: ok ? Object.assign({}, R[k], { best: R[k].list[Math.min(i, R[k].list.length - 1)] }) : R[k] })) };
+          sp.sections.push(ent); if (ok) { ent.W = ent.types.reduce((a, q) => a + q.res.best.W, 0); sp.cands.push(ent); } }
+        if (!sp.cands.length) { let bl = null; const and = f => { bl = bl ? bl.filter(n => f.includes(n)) : f.slice(); };
+          ks.forEach(k => and(out.cur[k].ev.fails)); ks.forEach(k => { if (R[k] && !R[k].best) and(R[k].closest ? R[k].closest.fails : []); }); sp.blocked = bl || []; }
+        if (ctx.stopped) break;
+        continue;
+      }
       for (const sec of S.list) {
         const ent = { name: sec.name, A: sec.A, h: sec.h, pass: true, types: [] };
         sp.sections.push(ent);
@@ -376,5 +561,5 @@
   }
   const countOf = b => (Array.isArray(b.rows) ? b.rows : []).reduce((a, q) => a + (+q.n || 0), 0) + (+(b.harp || {}).n || 0);
 
-  window.PSBAutoDesign = { DEF, FRACS, GROW, settings, family, sections, conc, rowsOf, fill, drapes, lineInputs, fitErrors, evalCand, search, run, runSync, apply, countOf, hdOf };
+  window.PSBAutoDesign = { DEF, FRACS, GROW, RULE, settings, refine, distance, cmpDist, modRows, over, family, sections, conc, rowsOf, fill, drapes, lineInputs, fitErrors, evalCand, search, run, runSync, apply, countOf, hdOf };
 })();
