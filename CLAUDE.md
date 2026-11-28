@@ -44,16 +44,21 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
 - Moving existing duplicated code into `shared/` is planned work (see the
   rebuild plan), not a drive-by change. Until a snippet is moved, keep its
   copies in step and list in the PR which tools contain it.
-- Known duplicated snippets not yet moved: the `bridgeSuite.v1.*` bootstrap/handoff code at the
-  top of `index.html`, `lldf.html` and `Prestressed Bridge Design.html`
-  (`psbeam.html` until 2026-10-22). (The ACI rebar development-length app
+- Known duplicated snippets not yet moved: none of the `bridgeSuite.v1.*`
+  bootstrap/handoff code: since 2026-11-28 it is one file,
+  `shared/bridge-suite-boot.js` (the BridgeXfer helper is still pasted in
+  the other tools, HANDOFF.md §5). (The ACI rebar development-length app
   now exists only as the Development & Splice tab of
   `Concrete Beam Capacity.html`: its standalone file was retired 2026-11-05.)
   The old single-file `Steel Bridge Design.html` was archived 2026-11-19 (see
   below); copies taken from it (e.g. the SBD-SHARED line-girder block in
-  `Prestressed Bridge Design.html` and `apps/ps-bridge/engine/pbd-model.js`)
+  `apps/ps-bridge/engine/pbd-model.js`)
   are not kept in step with the archived copy, which is not maintained.
   See `AUDIT.md`.
+- Prestressed Bridge Design is the folder app `apps/ps-bridge/` (2026-11-28).
+  `Prestressed Bridge Design.html` (the old single-file app until 2026-11-28)
+  and `psbeam.html` are redirect pages to it; the old app's last text is in
+  the git history (pinned in `tests/engine/psbridge-source.mjs`).
 - Steel Bridge Design is the folder app `apps/steel-bridge/` (2026-11-19). The
   old single-file app (GirderDetail; `Steel Bridge Design.html` until
   2026-11-19, `Steel Bridge Beam Modules.html` until 2026-10-22) is archived,
@@ -123,8 +128,8 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
   `elastomeric_design_module.html`, `Steel Bridge Design.html`, which since
   2026-11-19 is a redirect page to `apps/steel-bridge/index.html`;
   `Steel Bridge Beam Modules.html` is kept as a redirect page to the same;
-  `Prestressed Bridge Design.html`, with `psbeam.html` kept as a redirect page
-  to it).
+  `Prestressed Bridge Design.html`, which since 2026-11-28 is a redirect page
+  to `apps/ps-bridge/index.html`, as is `psbeam.html`).
 
 ## 8. Fix log
 

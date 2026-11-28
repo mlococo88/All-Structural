@@ -1,2 +1,4 @@
 # Local symlinks created by test runs (a symlink outside the repo breaks the GitHub Pages build)
 tests/libs/libs
+# the old Prestressed Bridge Design page written from its pinned text by tests/psbridge-compare.mjs (switch-over, 2026-11-28)
+.psbd-old-*.html

@@ -283,7 +283,7 @@ var st=document.createElement('style'); st.textContent=css;
    ========================================================================== */
 (function(){
   var KEY='bridgeSuite.v1.appPaths';
-  var DEF={mct:'index.html', psbeam:'Prestressed Bridge Design.html', lldf:'lldf.html'};
+  var DEF={mct:'index.html', psbeam:'apps/ps-bridge/index.html', lldf:'lldf.html'};   // PS switch-over (2026-11-28): psbeam was 'Prestressed Bridge Design.html' (now a redirect page to it)
   var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', lldf:'LL & DL Distribution'};
   var ME='';                                   // which app this file is, set by boot()
   var MAXDIRS=24;                              // folders remembered per app

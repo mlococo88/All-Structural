@@ -64,11 +64,15 @@ import path from 'path';
 import { openPage, REPO } from './lib.mjs';
 import { TAB_CASES } from './engine/psbridge-tab-cases.mjs';
 import { MIDAS_CASES, midasFixtures } from './engine/psbridge-midas-cases.mjs';   // batch D1
+import { pinText, PIN } from './engine/psbridge-source.mjs';   // switch-over (2026-11-28)
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
 const NEW = path.resolve(args.new || path.join(REPO, 'apps/ps-bridge/index.html'));
-const OLD = path.resolve(args.old || path.join(REPO, 'Prestressed Bridge Design.html'));
+// switch-over (2026-11-28): "Prestressed Bridge Design.html" is a redirect page; the old app is its text at the pin (checked against the pinned
+// blob), written next to it in the repository folder (it loads shared/*.js by relative path) under a name git ignores (.gitignore)
+const oldFile = () => { const f = path.join(REPO, `.psbd-old-${PIN.slice(0, 7)}.html`); if (!fs.existsSync(f) || fs.readFileSync(f, 'utf8') !== pinText()) fs.writeFileSync(f, pinText()); return f; };
+const OLD = path.resolve(args.old || oldFile());
 /* the tabs compared and the worked steps each shows (RC.W key of the page) */
 const TABS = { loss: 'losses', str: 'stresses', flex: 'flexure', shear: 'shear', end: 'endzone', camb: 'camber', hand: 'handling', deck: 'deck', rt: 'rating' };
 const tabs = (args.tabs ? String(args.tabs).split(',') : Object.keys(TABS)).filter(t => TABS[t]);

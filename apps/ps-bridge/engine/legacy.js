@@ -199,7 +199,7 @@
     } else add('note', 'One girder design (no old bridge model with it).');
     const ie = window.PSBInputCheck ? window.PSBInputCheck.collect(P).errors : [];
     if (ie.length) add('err', `${ie.length} input error${ie.length > 1 ? 's' : ''} in this app (results are not shown until fixed): ${ie.slice(0, 6).map(e => e.msg).join(' ')}${ie.length > 6 ? ' …' : ''}`);
-    add('not', 'Not imported: the old app\'s screen preferences (tabs, folds, chart choices), its Undo / Redo history, and its hand-off links (locks, adopted hand-offs): this app sends and receives no hand-offs before the switch-over (PS-14 c).');
+    add('not', 'Not imported: the old app\'s screen preferences (tabs, folds, chart choices), its Undo / Redo history, and its hand-off links (locks, adopted hand-offs): this app keeps its own record of what it sent and loaded (Project tab, Hand-offs card).');   // switch-over (2026-11-28): was "this app sends and receives no hand-offs before the switch-over (PS-14 c)."
     const legacy = { from: FROM, source: { kind: src.kind || '', label: src.label || '', key: src.key || '', fileName: src.fileName || '', savedAt: src.savedAt || '' }, importedAt: when,
       inputs: clone(isObj(src.inputs) ? src.inputs : raw), bridge: br ? clone(br) : null, external: ext, summary: { items, results: null } };
     P.legacy = legacy;

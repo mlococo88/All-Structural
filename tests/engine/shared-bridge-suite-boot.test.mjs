@@ -19,7 +19,15 @@ import { test, ROOT } from './harness.mjs';
 
 const PIN = '656cbaca';   // origin/main before the move (the blocks inline)
 const show = f => execFileSync('git', ['show', `${PIN}:${f}`], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 });
-const SHARED = fs.readFileSync(path.join(ROOT, 'shared/bridge-suite-boot.js'), 'utf8');
+// The changes made to the shared file since the move, each a documented, intended change (fixlog/shared-bridge-suite-boot.md): [now, before].
+// The refactor proofs below run on the file with these put back; the last test checks each change on its own.
+const SINCE = [
+  // PS switch-over (2026-11-28): BridgeApps' default file of the app id psbeam is the new app (the old file is a redirect page to it)
+  ["  var DEF={mct:'index.html', psbeam:'apps/ps-bridge/index.html', lldf:'lldf.html'};   // PS switch-over (2026-11-28): psbeam was 'Prestressed Bridge Design.html' (now a redirect page to it)",
+   "  var DEF={mct:'index.html', psbeam:'Prestressed Bridge Design.html', lldf:'lldf.html'};"],
+];
+const NOW = fs.readFileSync(path.join(ROOT, 'shared/bridge-suite-boot.js'), 'utf8');
+const SHARED = SINCE.reduce((s, [a, b]) => { assert.equal(s.split(a).length, 2, a); return s.replace(a, b); }, NOW);
 const BOOTLINE = "try{ window.BridgeApps.boot(app); }catch(e){}";
 
 // each part's body as it is written in the shared file: from "function name(...) {\n" to the "\n  }\n\n" before the next part's
@@ -213,4 +221,16 @@ test('behaviour: the old inline blocks and the shared file + calls give the same
   const ns = c => NAMES.filter(n => c[n]);
   assert.deepEqual(ns(a.ctx), ['BridgeXfer']); assert.deepEqual(ns(b.ctx), ['BridgeXfer']);
   const sa = session(a), sb = session(b); assert.deepEqual(sb, sa); assert.deepEqual(b.log, a.log); assert.deepEqual([...b.store], [...a.store]);
+});
+
+test('the changes since the move (SINCE): each one present once, and only those', () => {
+  const E = env('lldf.html'); vm.runInContext(NOW, E.ctx); vm.runInContext("SharedBridgeBoot.registry('lldf')", E.ctx);
+  assert.equal(E.ctx.BridgeApps.DEFAULTS.psbeam, 'apps/ps-bridge/index.html');
+  assert.equal(E.ctx.BridgeApps.path('psbeam'), 'apps/ps-bridge/index.html');   // nothing recorded: the new app
+  // a folder where the old app recorded its file keeps that record (the old file is a redirect page to the new app)
+  const F = env('lldf.html'); F.store.set('bridgeSuite.v1.appPaths', JSON.stringify({ psbeam: { file: 'Prestressed Bridge Design.html', dir: 'file:///repo/', at: { 'file:///repo/': { file: 'Prestressed Bridge Design.html' } } } }));
+  vm.runInContext(NOW, F.ctx); vm.runInContext("SharedBridgeBoot.registry('lldf')", F.ctx);
+  assert.equal(F.ctx.BridgeApps.path('psbeam'), 'Prestressed Bridge Design.html');
+  const lines = s => s.split('\n'); const a = lines(NOW), b = lines(SHARED);
+  assert.equal(a.length, b.length); assert.equal(a.filter((x, i) => x !== b[i]).length, SINCE.length);
 });

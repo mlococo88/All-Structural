@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- CBUST: ask browsers to revalidate this page (best effort; as apps/steel-bridge/index.html). The ?v= stamp below makes the scripts follow it. -->
 <meta http-equiv="Cache-Control" content="no-cache">
-<title>Prestressed Bridge Design (new, in development)</title>
+<title>Prestressed Bridge Design</title>
 <!-- PS Bridge, the Prestressed Bridge Design rebuild (docs/ps-bridge-plan.md; engineer decisions PS-1 to PS-14, 2026-11-12). Built like the
      Steel Bridge app (apps/steel-bridge/): plain HTML/JS/CSS, classic scripts, opens from file://, relative paths only.
      Engine: engine/*.js (no DOM). Report: report/*.js. UI: ui/*.js. Saved data: localStorage keys psb2.* only (engine/model.js).
@@ -393,7 +393,7 @@
   <header id="hdr">
     <div class="titleRow">
       <div>
-        <h1>Prestressed Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>
+        <h1>Prestressed Bridge Design</h1>
         <div class="byline">AASHTO LRFD 10th Ed. (2024) <span id="saveState" aria-live="polite"></span></div>
         <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
       </div>
@@ -419,7 +419,7 @@
       <div id="out"></div>
     </main>
   </div>
-  <footer id="appFoot"><span>Prestressed Bridge Design v3.0-dev (new, in development) · AASHTO LRFD 10th Ed. (2024) · units: kip, in, ksi</span><span>Design aid — independent verification by a licensed engineer required</span></footer>
+  <footer id="appFoot"><span>Prestressed Bridge Design v3.0 · AASHTO LRFD 10th Ed. (2024) · units: kip, in, ksi</span><span>Design aid — independent verification by a licensed engineer required</span></footer>
 </div>
 <script>
 (function () {
@@ -787,10 +787,11 @@
     let h = '';
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
     h += secNotice();   // PS-31: the old box / voided slab section corrected (or removed)
+    h += LGUI.offerBar(LS);   // switch-over (2026-11-28): the old app's saved designs offered once (read only; ui/legacy.js)
     h += HOUI.staleBar(hoCtx);   // HO-D2 (2026-11-21): the hand-offs out of date since this project sent / loaded them (click only)
     h += HOUI.beamChip(P);    // batch F3: the old app's Design beam chip (LL & DL's design beam; read only, Show G<i> by click)
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
-    h += `<div class="alert">In development: Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them; the Summary, the check summary column and the Report cover every girder type on every line. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+    h += `<p class="note">Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them; the Summary, the check summary column and the Report cover every girder type on every line.</p>`;   // switch-over (2026-11-28): the "In development … use the old app" note removed
     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
     let rc = null; ctxOut = null;
     if (!errs.length) { rc = result(); if (rc.R.error) h += `<div class="alert err" role="alert"><b>The engine could not compute this design:</b> ${esc(rc.R.error)}. Results not shown.</div>`; }
@@ -843,6 +844,7 @@
   const gotoStep = (t, id) => { gotoOut(t); if (id) { const el = window.SharedSteps.reveal($('out'), id); if (el) el.scrollIntoView({ block: 'center' }); } };
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (b) gotoOut(b.dataset.otab); });
   $('out').addEventListener('click', e => {
+    if (LGUI.onOffer(e, LS, () => { goIn('proj'); const c = $('lgCard'); if (c) c.scrollIntoView({ block: 'start' }); })) { drawOut(); return; }   // switch-over (2026-11-28): the old app's designs offered
     if (HOUI.onBar(e, hoCtx)) return;   // the stale banner and the design beam chip above the output tabs (NOMCT: the MCT banners removed)
     if (e.target.closest('[data-secdismiss]')) { P.notices = Object.assign({}, P.notices, { sec: window.PSBSections.sig(P) }); changed(); return; }   // PS-31: closed for this project (shown again if another section is corrected)
     if (e.target.closest('[data-dedismiss]')) { const D = window.PSBDesign.deDiff(P); P.notices = Object.assign({}, P.notices, { de: D.sig }); changed(); return; }   // PS-23: dismissed for this project

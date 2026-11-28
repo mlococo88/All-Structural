@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Prestressed Bridge Design (moved)</title>
-<!-- Redirect page (PBD-1, 2026-10-22). PS-Beam / PS-Girder ("psbeam.html") is now "Prestressed Bridge Design.html" in the same folder.
+<!-- Redirect page (PBD-1, 2026-10-22). PS-Beam / PS-Girder ("psbeam.html") became "Prestressed Bridge Design.html" in the same folder, and
+     at the PS Bridge switch-over (2026-11-28) the folder app apps/ps-bridge/index.html: this page forwards straight there (one hop).
      This page forwards there, keeping the address's #hash and ?query (the MCT Generator's frame and every link to psbeam.html land in it).
      Saved data: Chrome and Edge keep one browser storage for every file opened from one computer, so the PS-Beam designs open in
      Prestressed Bridge Design as before (same keys). Firefox and Safari keep the storage of each file apart: the design saved by the old
@@ -25,17 +26,17 @@
 <body>
 <main>
   <h1 style="font-size:20px;margin:0 0 8px">PS-Beam is now Prestressed Bridge Design</h1>
-  <p>This tool was renamed. Its file is now <b>Prestressed Bridge Design.html</b>, in the same folder.</p>
+  <p>This tool was renamed and rebuilt. It is now <b>apps/ps-bridge/index.html</b> in this repository folder.</p>
   <div id="offer" hidden>
-    <p>This browser keeps a PS-Beam design saved by the old file<span id="pname"></span>. In Firefox and Safari each file has its own storage, so Prestressed Bridge Design cannot see it. Download it here, then open Prestressed Bridge Design and use <b>Import</b>.</p>
+    <p>This browser keeps a PS-Beam design saved by the old file<span id="pname"></span>. In Firefox and Safari each file has its own storage, so Prestressed Bridge Design cannot see it. Download it here, then open Prestressed Bridge Design and use <b>Project tab → From the old app → Import an old-app JSON file…</b>.</p>
     <p><button type="button" id="dl">Download my PS-Beam data (JSON)</button></p>
     <p class="note">In Chrome or Edge the design is already there; you do not need the file. This page shows this offer once.</p>
   </div>
-  <p><a id="go" href="Prestressed%20Bridge%20Design.html">Open Prestressed Bridge Design</a></p>
+  <p><a id="go" href="apps/ps-bridge/index.html">Open Prestressed Bridge Design</a></p>
 </main>
 <script>
 (function () {
-  var to = 'Prestressed%20Bridge%20Design.html' + (location.search || '') + (location.hash || '');
+  var to = 'apps/ps-bridge/index.html' + (location.search || '') + (location.hash || '');   // switch-over (2026-11-28): was 'Prestressed%20Bridge%20Design.html'
   var KEY = 'psbeam.inputs.v1', SEEN = 'psbeam.redirect.offered.v1';
   var go = document.getElementById('go'); go.setAttribute('href', to);
   function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -51,6 +52,8 @@
     var e = (JSON.parse(get('bridgeSuite.v1.appPaths') || '{}') || {}).psbeam, f = e && e.at && e.at[dir] ? e.at[dir].file : (e && !e.dir ? e.file : '');
     shared = !!f && String(f).toLowerCase() !== 'psbeam.html';
   } catch (e) { }
+  // switch-over (2026-11-28): or the new app (apps/ps-bridge) opened in this same storage (its keys are psb2.*)
+  try { for (var i = 0; !shared && i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('psb2.') === 0) shared = true; } } catch (e) { }
   var framed = false; try { framed = window.self !== window.top; } catch (e) { framed = true; }
   if (!data || typeof data !== 'object' || shared || framed || get(SEEN)) { forward(); return; }
   var name = data.proj && data.proj.name ? String(data.proj.name) : '';

@@ -58,7 +58,7 @@ async function run(root, A) {
   await s.b.close(); return R;
 }
 let failed = 0;
-for (const key of arg('app', 'lldf,psb').split(',')) {
+for (const key of arg('app', 'lldf').split(',')) {   // switch-over (2026-11-28): psb (the old Prestressed Bridge Design.html) is a redirect page now; --app psb only with --a / B trees that still hold it
   const A = APPS[key]; const a = await run(AROOT, A), b = await run(REPO, A);
   console.log(`== ${key}`);
   for (const ph of ['load', 'edit', 'reload']) for (const part of Object.keys(a[ph])) {
