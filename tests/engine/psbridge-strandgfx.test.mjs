@@ -109,7 +109,13 @@ for (const [girder, S] of SHAPES) {
       for (const [view, cg] of [['end', cgE], ['mid', cgM]]) {
         const o = oldXY(R, view), n = SG.xy(R, cg);
         assert.deepEqual(bag(n), bag(o), `${tag}: positions = old app (${view})`);
-        assert.deepEqual(bag(n.filter(q => q.db)), bag(o.filter(q => q.db)), `${tag}: debonded strands = old app (${view})`);
+        // PSDB (2026-11-28): the debonded strands are no longer the old app's (its outermost first): inside the outermost, symmetric pairs
+        ss.rows.forEach((r, ri) => { const all = n.filter(q => !q.h && q.ri === ri), d = all.filter(q => q.db), nd = r.dbnd > 0 ? Math.min(r.nd || 0, r.n) : 0;
+          assert.equal(d.length, nd, `${tag}: row ${ri + 1} debonded count (${view})`); if (G.isNext || !nd) return;
+          const far = Math.max(...all.map(q => Math.abs(q.x)));
+          if (nd <= r.n - 2) assert.ok(d.every(q => Math.abs(q.x) < far - 1e-9), `${tag}: row ${ri + 1}: the outermost strands bonded (${view})`);
+          if (nd % 2 === 0) assert.deepEqual(bag(d.map(q => ({ x: -q.x, y: q.y, h: q.h, db: true }))), bag(d.map(q => ({ x: q.x, y: q.y, h: q.h, db: true }))), `${tag}: row ${ri + 1}: symmetric (${view})`);
+          const inner = all.filter(q => Math.abs(q.x) < far - 1e-9).map(q => Math.abs(q.x)).sort((a, c) => c - a); if (nd <= inner.length) assert.ok(d.every(q => Math.abs(q.x) >= inner[nd - 1] - 1e-9), `${tag}: row ${ri + 1}: furthest from the ℄ first (${view})`); });
       }
       // (3) inside the concrete with the cover (the patterns that fit); never between the NEXT stems
       Object.entries(g).forEach(([k, pts]) => pts.forEach(q => {
@@ -130,7 +136,7 @@ test('PS-27: NEXT 36F, the engineer\'s case: 10 + 10 + 6 straight (2 of the top 
   assert.deepEqual(xs(2), [-34, -32, -30, -28, -26, 26, 28, 30, 32, 34]);
   assert.deepEqual(xs(6), [-32, -30, -28, 28, 30, 32]);
   assert.deepEqual(xs(10), [-31, -29, 29, 31], 'draped: 2 in each stem at y_mid');
-  assert.deepEqual(J(W.PSBStrandGfx.xy(R, 24).filter(q => q.db).map(q => q.x).sort((a, b) => a - b)), [-32, 28], 'debonded: an outermost column of each stem (the first of the two, as the old app)');
+  assert.deepEqual(J(W.PSBStrandGfx.xy(R, 24).filter(q => q.db).map(q => q.x).sort((a, b) => a - b)), [-30, 30], 'debonded (PSDB): inside each stem\'s outermost columns, mirrored (before: −32 and 28, the old app\'s outermost first)');
   // the stems' faces: 30 ± 6.5 in; the outermost strand 34 in: 2.5 in from the outer face
   assert.ok(W.PSBStrandGfx.xy(R, 10).every(q => Math.abs(q.x) >= 23.5 + 2 && Math.abs(q.x) <= 36.5 - 2));
 });

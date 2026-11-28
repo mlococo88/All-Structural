@@ -18,13 +18,24 @@
      PS-27 (engineer report 2026-11-13: "make sure the strands are actually within the beam webs; this was correct in the psgirder app"):
      a port of the old app's strandXY ("Prestressed Bridge Design.html" @ 8fe8650, :4877-4914), the reference for the drawn positions:
        NEXT (two stems at stemCC c/c, width B): each row's strands split between the two stems, on a 2 in grid about each stem's ℄
-         (at most floor((B - 4) / 2) + 1 columns a stem, 2 in edge cover; more wrap onto the same columns, as the old app), the outermost
-         columns of each stem debonded first; the draped strands in one row in each stem about its ℄ at y = cg;
-       every other shape: each row centred on the girder ℄ on a 2 in grid, the outermost strands debonded first; the draped strands two
+         (at most floor((B - 4) / 2) + 1 columns a stem, 2 in edge cover; more wrap onto the same columns, as the old app), debonded
+         strands inside the stem's outermost ones, mirrored between the stems (PSDB, debOrder); the draped strands in one row in each stem about its ℄ at y = cg;
+       every other shape: each row centred on the girder ℄ on a 2 in grid, the debonded strands inside the outermost ones, in symmetric pairs (PSDB, debOrder); the draped strands two
          a row (x = ∓1 in), the rows 2 in apart about cg.
      One change from the old code (PS27-D1, pending engineer review): an odd count in a NEXT row (straight, debonded or draped) is drawn as
      ⌈n/2⌉ in the left stem and ⌊n/2⌋ in the right, each stem centred on its own count; the old app drew round(n/2) in each stem (one
      strand more than entered). Even counts: the old app's positions exactly. Display only: the engine uses only each row's y and count. */
+  /* debOrder(pts, c, sgn) (PSDB, 2026-11-28, engineer's answer of 2026-11-28 (b): "inner strands are debonded first, symmetric about the
+     centreline, and the outermost stay bonded", AASHTO LRFD 10th Ed. Art. 5.9.4.3.3 (D), (I)–(K)): the order in which a row's strands (or a
+     NEXT stem's) are drawn debonded: the strands inside the outermost one each side first, furthest from the centre c first (5.9.4.3.3(I):
+     the debonded strands away from the centreline), in mirrored pairs; the outermost pair last (only when more strands are debonded than
+     the row has inner strands). sgn: which side of a pair comes first (the right stem of a NEXT beam mirrors the left). Display only: the
+     engine uses only each row's count, debonded count and length. Before (the old app's strandXY): the outermost strands first. */
+  function debOrder(pts, c, sgn) {
+    const o = pts.slice().sort((a, b) => Math.abs(b.x - c) - Math.abs(a.x - c) || sgn * (a.x - b.x));
+    const far = o.length ? Math.abs(o[0].x - c) : 0, outer = o.filter(q => Math.abs(Math.abs(q.x - c) - far) < 1e-9 && o.length > 2);
+    return o.filter(q => !outer.includes(q)).concat(outer);
+  }
   function xy(R, cg) {
     const pts = [], g = R.g, ss = R.ss;
     if (g.isNext && g.next) {
@@ -34,8 +45,7 @@
         const nd = r.dbnd > 0 ? Math.min(r.nd || 0, r.n) : 0, hs = split(r.n), ds = split(nd);
         [-sCL, sCL].forEach((stemX, k) => {
           const half = hs[k], w = (Math.min(half, perStemCols) - 1) / 2;
-          const order = [...Array(half).keys()].map(i => ({ i, x: stemX + (i % perStemCols - w) * 2 })).sort((a, b) => Math.abs(b.x - stemX) - Math.abs(a.x - stemX));   // outermost columns debonded first
-          const dbSet = new Set(order.slice(0, ds[k]).map(o => o.i));
+          const dbSet = new Set(debOrder([...Array(half).keys()].map(i => ({ i, x: stemX + (i % perStemCols - w) * 2 })), stemX, stemX < 0 ? 1 : -1).slice(0, ds[k]).map(o => o.i));   // PSDB: the stem's outermost bonded, mirrored stems
           for (let i = 0; i < half; i++) pts.push({ x: stemX + (i % perStemCols - w) * 2, y: r.y, h: false, ri, db: dbSet.has(i), slot: k * half + i });
         });
       });
@@ -45,8 +55,7 @@
     }
     ss.rows.forEach((r, ri) => {
       const n = r.n, xs = [...Array(n)].map((_, i) => (i - (n - 1) / 2) * 2), nd = r.dbnd > 0 ? Math.min(r.nd || 0, r.n) : 0;
-      const order = xs.map((x, i) => ({ x, i })).sort((a, b) => Math.abs(b.x) - Math.abs(a.x));   // outermost strands debonded first
-      const dbSet = new Set(order.slice(0, nd).map(o => o.i));
+      const dbSet = new Set(debOrder(xs.map((x, i) => ({ x, i })), 0, 1).slice(0, nd).map(o => o.i));   // PSDB: the outermost bonded, symmetric pairs
       xs.forEach((x, i) => pts.push({ x, y: r.y, h: false, ri, db: dbSet.has(i), slot: i }));
     });
     if (ss.nh > 0) { const n = ss.nh, rows = Math.ceil(n / 2);
