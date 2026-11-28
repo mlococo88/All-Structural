@@ -43,7 +43,8 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
     const busy = S.running;
     return `<p class="note"><a href="#" data-adout="1">Results: Auto design output tab</a> (the candidates of each span, the governing check of each, Apply).</p>
       <section class="sec"><div class="secHead">Auto design: settings</div><div class="secBody">
-      <div class="ad-grid">${sel('objective', 'Objective', o.objective, [['weight', 'Lightest section'], ['depth', 'Shallowest section']])}${numF('topN', 'Sections to list per span', v('topN', ''), '', String(AD().DEF.topN))}</div>
+      <div class="ad-grid">${sel('mode', 'Mode', o.mode, [['new', 'New design (search the sections)'], ['refine', 'Refine the entered design']])}${sel('objective', 'Objective', o.objective, [['weight', 'Lightest section'], ['depth', 'Shallowest section']])}${numF('topN', o.mode === 'refine' ? 'Designs to list per span' : 'Sections to list per span', v('topN', ''), '', String(AD().DEF.topN))}${numF('maxRatio', 'Target ratio (every check ≤)', v('maxRatio', ''), '', AD().DEF.maxRatio.toFixed(2))}</div>
+      <p class="note">${o.mode === 'refine' ? '<b>Refine</b>: the current section of each span is kept; the design nearest the entered one that passes is proposed: the entered design itself when it passes, then the fewest changes, ranked by the change in the strand count N, then in the draped strands n<sub>h</sub>, then in the drape (y<sub>end</sub>, hold-down point), then in f′c, then in f′ci. The list also shows the passing design with the fewest strands (an over-designed pattern is reduced).' : '<b>New design</b>: the sections of the family are searched, lightest (or shallowest) first, as below.'} <b>Target ratio</b>: a candidate passes only when every check's ratio is at most the target (blank: 1.00, the checks' own pass). The rules of fact (confinement detailing, the LLDF range of applicability, the hold-down force limit, the owners' f′c, f′ci, age and debonded-share rules) are not ratios of demand to capacity: they must pass, and the target does not apply to them.</p>
       <table class="ad-vars"><thead><tr><th class="lft">Variable</th><th>Auto / Lock</th><th class="lft">Searched (Auto)</th></tr></thead><tbody>
       ${VARS.map(([id, lab, nt]) => `<tr><td class="lft">${lab}</td><td><select data-ad="vars.${id}" aria-label="${esc(lab)}: Auto or Lock">${opt(o.vars[id], [['auto', 'Auto'], ['lock', 'Lock (as entered)']])}</select></td><td class="lft nt">${esc(nt)}</td></tr>`).join('')}
       </tbody></table>
@@ -65,6 +66,7 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
     const a = P.autodesign = Object.assign({}, P.autodesign || {}), path = id.split('.');
     if (path[0] === 'vars') { a.vars = Object.assign({}, a.vars || {}); a.vars[path[1]] = el.value === 'lock' ? 'lock' : 'auto'; }
     else if (id === 'objective') a.objective = el.value === 'depth' ? 'depth' : 'weight';
+    else if (id === 'mode') { if (el.value === 'refine') a.mode = 'refine'; else delete a.mode; }   // PSAD-A: absent = 'new' (the default)
     else { const t = String(el.value).trim(); if (t === '') delete a[id]; else a[id] = isFinite(+t) ? +t : t; }
     return true;
   }
@@ -102,7 +104,13 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
   const link = (n, txt) => { const w = where(n); if (!w) return esc(txt || n);
     return w.gp.input ? `<a href="#" data-goin="${w.gp.tab}">${esc(txt || n)}</a>` : `<a href="#st-${esc(w.st)}" data-gotab="${w.gp.tab}">${esc(txt || n)}</a>`; };
   const tabName = n => { const w = where(n); return w ? w.gp.name : ''; };
-  const govTxt = g => g ? `${link(g.n)} ${fx(g.r, 3)} (G${g.g})` : '—';
+  const govTxt = (g, ev, o) => !g ? '—' : `${link(g.n)} ${fx(g.r, 3)} (G${g.g})${o && o.maxRatio < 1 && ev && ev.govT ? `; target ${fx(o.maxRatio, 2)}: ${link(ev.govT.n)} ${fx(ev.govT.r, 3)} (G${ev.govT.g})` : ''}`;
+  /* distTxt(b): a Refine design's change from the entered design (PSAD-A) */
+  const sg = (v, d) => `${v > 0 ? '+' : '−'}${fx(Math.abs(v), d)}`;
+  const distTxt = b => { if (!b || !b.delta) return ''; if (b.entered) return 'the entered design'; const d = b.delta, q = [];
+    if (d.N) q.push(`N ${sg(d.N, 0)}`); if (d.nh) q.push(`n_h ${sg(d.nh, 0)}`); if (d.yEnd) q.push(`y_end ${sg(d.yEnd, 2)} in`); if (d.frac) q.push(`hold-down ${sg(d.frac, 2)} L`);
+    if (d.fc) q.push(`f′c ${sg(d.fc, 1)} ksi`); if (d.fci) q.push(`f′ci ${sg(d.fci, 1)} ksi`);
+    return (q.length ? q.join(', ') : 'the entered strands, rows changed') + (b.fewest ? ' (the fewest strands)' : ''); };
   const rowsTxt = rows => rows.map(r => `${r.n} at ${fx(+r.y, 2)}${+r.nd > 0 ? ` (${r.nd} debonded ${fx(+r.dbnd, 1)} ft)` : ''}`).join(', ');
   const drapeTxt = b => b.nh ? `${b.nh} draped: y<sub>end</sub> ${fx(+b.harp.yEnd, 2)} in, y<sub>mid</sub> ${fx(+b.harp.yMid, 2)} in, hold-down at ${fx(+b.harp.frac, 2)} L${b.hd ? `, F<sub>hd</sub> / limit ${fx(b.hd.r, 3)}` : ''}` : 'none';
   const curTxt = (P, k, R) => { const c = R.cur[k]; if (!c) return ''; const e = c.eff;
@@ -116,17 +124,17 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
     if (!R) { host.innerHTML = h; return; }
     const Q = S.Q, stale = S.key !== keyOf(P), T = BR().types(Q), lab = k => esc((T[k] || {}).label || `type ${k + 1}`);
     if (stale) h += '<div class="alert">The project changed since this run: run again before applying.</div>';
-    h += `<p class="note">${R.runs} engine runs in ${fx(R.ms / 1000, 1)} s${R.stopped ? ' (stopped at the run limit: the results are partial)' : ''}.</p>`;
+    h += `<p class="note">${R.runs} engine runs in ${fx(R.ms / 1000, 1)} s${R.stopped ? ' (stopped at the run limit: the results are partial)' : ''}. Mode: ${R.o.mode === 'refine' ? 'Refine the entered design (the current section kept; the nearest passing designs first)' : 'New design'}; target ratio ${fx(R.o.maxRatio, 2)}${R.o.maxRatio < 1 ? ' (every check that is a ratio of demand to capacity at most this; the rules of fact must pass)' : ' (the checks\' own pass)'}.</p>`;
     let anyC = false;
     R.spans.forEach(sp => {
       const ks = sp.types, sel = S.sel[sp.s] || 0; if (sp.cands.length) anyC = true;
       h += `<section class="sec" id="ad-span-${sp.s}"><div class="secHead">Span ${sp.s}: candidates (${esc(ks.map(lab).join(', '))})</div><div class="secBody">
         <p class="note">Sections searched: ${esc(sp.why)}, ${R.o.objective === 'depth' ? 'shallowest' : 'lightest'} first. Current design: ${ks.map(k => `${lab(k)}: ${curTxt(Q, k, R)}`).join('; ')}.</p>
-        <div class="tscroll"><table class="tbl ad-tbl"><thead><tr><th></th><th class="lft">Section</th><th>h (in)</th><th>A (in²)</th>${ks.map(k => `<th class="lft">${lab(k)}: strands, f′c / f′ci (ksi), governing check (ratio, line)</th>`).join('')}<th>Weight (kip, the span's lines)</th></tr></thead><tbody>
+        <div class="tscroll"><table class="tbl ad-tbl"><thead><tr><th></th><th class="lft">Section</th><th>h (in)</th><th>A (in²)</th>${ks.map(k => `<th class="lft">${lab(k)}: strands, f′c / f′ci (ksi), governing check (ratio, line${R.o.maxRatio < 1 ? `; target ${fx(R.o.maxRatio, 2)}` : ''})${R.o.mode === 'refine' ? ', change from the entered design' : ''}</th>`).join('')}<th>Weight (kip, the span's lines)</th></tr></thead><tbody>
         ${sp.sections.map(e => { const ci = sp.cands.indexOf(e), cls = ci >= 0 ? (ci === sel ? 'ad-sel' : 'ad-ok') : 'ad-ng';
           return `<tr class="${cls}"><td>${ci >= 0 ? `<input type="radio" name="adsel${sp.s}" data-adsel="${sp.s}|${ci}"${ci === sel ? ' checked' : ''} aria-label="candidate ${ci + 1} of span ${sp.s}">#${ci + 1}` : ''}</td><td class="lft">${esc(e.name)}</td><td>${fx(e.h, 2)}</td><td>${fx(e.A, 1)}</td>
             ${ks.map(k => { const q = e.types.find(z => z.k === k); if (!q) return '<td class="lft" title="another girder type of the span has no design on this section">not run</td>';
-              const b = q.res.best; return b ? `<td class="lft">${b.N} (${b.nh} draped), ${fx(b.fc, 1)} / ${fx(b.fci, 1)}, ${govTxt(b.ev.gov)}</td>` : `<td class="lft wrap">none: ${esc(q.res.why)}${q.res.closest ? `; closest trial: ${esc(q.res.closest.what)}, fails ${q.res.closest.fails.slice(0, 3).map(n => link(n)).join(', ')}${q.res.closest.fails.length > 3 ? ` and ${q.res.closest.fails.length - 3} more` : ''}` : ''}</td>`; }).join('')}
+              const b = q.res.best; return b ? `<td class="lft">${b.N} (${b.nh} draped), ${fx(b.fc, 1)} / ${fx(b.fci, 1)}, ${govTxt(b.ev.gov, b.ev, R.o)}${R.o.mode === 'refine' ? `; ${esc(distTxt(b))}` : ''}</td>` : `<td class="lft wrap">none: ${esc(q.res.why)}${q.res.closest ? `; closest trial: ${esc(q.res.closest.what)}, fails ${q.res.closest.fails.slice(0, 3).map(n => link(n)).join(', ')}${q.res.closest.fails.length > 3 ? ` and ${q.res.closest.fails.length - 3} more` : ''}` : ''}</td>`; }).join('')}
             <td>${ci >= 0 ? fx(e.W, 1) : '—'}</td></tr>`; }).join('')}
         </tbody></table></div>
         ${sp.cands.length ? detail(Q, sp, sp.cands[sel], lab) : `<div class="alert err">No section passes every check for every girder type of span ${sp.s}.${sp.blocked && sp.blocked.length ? ` Failing on the current design and on the closest trial of every section: ${sp.blocked.map(n => link(n)).join(', ')} (not changed by the variables searched: check those inputs).` : ''}</div>`}
@@ -138,7 +146,9 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
       <li>The choice, in order: the lighter section (gross area A; or the shallower, depth h), then fewer strands, then fewer draped strands, then the lower hold-down force (the flatter drape), then the hold-down point nearest 0.40 L, then the lower f′c, then the lower f′ci.</li>
       <li>Per girder type and section: (1) the fewest straight strands that pass Strength I flexure and Service III tension with no draped strand (a lower bound); (2) from there, in pairs, n<sub>h</sub> = 0, 2, … draped strands with the flattest drape that passes every check; (3) the lowest f′c and f′ci that pass with that pattern. The strand search is run at the entered f′c / f′ci first, then at the entered f′c with the highest f′ci it allows, then at the highest f′c and f′ci.</li>
       <li>Assumption (<a href="#rp:rs.adb" data-gotab="rpt">Report, §2, Auto design basis</a>): a higher f′c or f′ci is not worse for any check; a higher y<sub>end</sub> relieves the end; the checks more strands improve are ${esc(AD().GROW.join(', '))}.</li>
-      <li>Debonding is never added (PS-12): entered debonding is kept row by row; top strands (rows in the upper half) are kept as entered.</li></ul></div></section>`;
+      <li>Debonding is never added (PS-12): entered debonding is kept row by row; top strands (rows in the upper half) are kept as entered.</li>
+      <li>Refine (the Mode setting): the current section of each span is kept; the entered design is tried first; then the strand count from the entered N, fewer first (down to the fewest that passes) and, only when nothing passes at N, more; at each N the draped strands nearest the entered n<sub>h</sub>, the drape nearest the entered one and the f′c / f′ci nearest the entered values; the entered rows are changed by pairs (off the highest row, onto the lowest row they fit, then a new row on the grid). Ranked by |ΔN|, then |Δn<sub>h</sub>|, then the drape change (|Δy<sub>end</sub>|, then |Δ hold-down point|; with no draped strands entered: the flatter drape first), then |Δf′c|, then |Δf′ci|; the passing design with the fewest strands is always listed.</li>
+      <li>Target ratio (${fx(R.o.maxRatio, 2)}): ${R.o.maxRatio < 1 ? 'a candidate passes only when every check that is a ratio of demand to capacity is at most the target; the rules of fact (confinement detailing, the LLDF range of applicability, the hold-down force limit, the owners\' f′c, f′ci, age and debonded-share rules) must pass.' : 'the checks\' own pass (1.00).'}</li></ul></div></section>`;
     if (R.log.length) h += `<details class="ad-log"><summary>Trial log (${R.log.length}${R.log.length >= 3000 ? ', the first 3000' : ''})</summary><div class="tscroll"><table class="tbl ad-tbl"><thead><tr><th class="lft">Type</th><th class="lft">Section</th><th class="lft">Trial</th><th>Result</th><th class="lft">Governing (ratio, line)</th></tr></thead><tbody>
       ${R.log.slice(0, 3000).map(q => `<tr><td class="lft">${lab(q.k)}</td><td class="lft">${esc(q.girder)}</td><td class="lft">${esc(q.what)}</td><td>${q.pass ? '<span class="ad-pass">PASS</span>' : `<span class="ad-fail">FAIL</span> ${esc(q.fails.join(', '))}`}</td><td class="lft">${q.gov ? `${esc(q.gov.n)} ${fx(q.gov.r, 3)} (G${q.gov.g})` : '—'}</td></tr>`).join('')}</tbody></table></div></details>`;
     host.innerHTML = h;

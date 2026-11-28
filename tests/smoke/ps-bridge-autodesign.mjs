@@ -96,6 +96,19 @@ try {
   assert.ok(r.stale && r.dis);
   ok('a change after the run: "The project changed since this run", Apply disabled');
 
+  // 4b. PSAD-A (2026-11-28): Refine and the target ratio on the input tab, saved in P.autodesign; the output names the mode and the target
+  await itab('ad'); await p.selectOption('#ad_mode', 'refine'); await p.waitForTimeout(150);
+  await p.fill('#ad_maxRatio', '0.95'); await p.dispatchEvent('#ad_maxRatio', 'change'); await p.waitForTimeout(150);
+  r = await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')).autodesign); assert.equal(r.mode, 'refine'); assert.equal(r.maxRatio, 0.95);
+  await itab('ad'); await p.click('#ad_run'); await until(() => p.evaluate(() => !!document.querySelector('#ad-span-1') && !PSBAutoDesignUI.state().running), 180000, 'the Refine results');
+  r = await p.evaluate(() => ({ txt: document.getElementById('adHost').innerText, head: document.querySelector('#ad-span-1 thead').innerText, rows: [...document.querySelectorAll('#ad-span-1 tbody tr')].map(t => t.innerText.replace(/\s+/g, ' ')) }));
+  assert.ok(/Mode: Refine/.test(r.txt) && /target ratio 0\.95/.test(r.txt), 'the mode and the target named');
+  assert.ok(/target 0\.95/.test(r.head) && /change from the entered design/.test(r.head), r.head);
+  assert.ok(r.rows.length && r.rows.every(t => /PCI BT-72/.test(t)), 'Refine keeps the section: ' + r.rows.join(' / '));
+  assert.ok(r.rows.some(t => /target 0\.95: /.test(t)), 'the governing check against the target in the column');
+  ok(`Refine and target 0.95 set on the input tab (saved in P.autodesign); ${r.rows.length} designs on the current section, the target in the governing column`);
+  await shot('auto-refine');
+
   // 5. phone width, keys, errors
   await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(400);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no sideways scroll');
