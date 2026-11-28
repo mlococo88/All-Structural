@@ -33,7 +33,8 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
   const VARS = [['section', 'Girder section', 'the library sections of the owner and of the shape\'s family (adjacent members: of the same width), lightest (or shallowest) first; the same section for every girder type of a span (PS-8)'],
     ['strands', 'Strand count and rows', 'the straight rows bottom-up on the row grid (PS-41 for MassDOT sections), each row filled to the most strands that fit, in symmetric pairs (PS-12); top strands and entered debonding kept'],
     ['drape', 'Draped strands', 'n_h = 0, 2, 4, …; y_mid directly above the top straight row, y_end on the 2 in grid; hold-down points at 0.33 L to 0.45 L from ℄ bearing (PS-5)'],
-    ['conc', 'f′c and f′ci', '0.5 ksi steps through the entered values (PS-11), within the limits below']];
+    ['conc', 'f′c and f′ci', '0.5 ksi steps through the entered values (PS-11), within the limits below'],
+    ['nb', 'Girder count N<sub>b</sub>', 'Auto: the current count ± 1 with the spacing S = W_cc / (N_b − 1) within 3.5 to 16 ft (the LLDF range of applicability) and the limits below; Range: every count from min to max; Lock (the default): the current count. Each count: equal spacing over the present exterior girder spacing W_cc, the overhangs kept, the girder types re-assigned as on a count change (the outer lines keep the exterior types), an entered b_eff back to the calculated width; not for adjacent members or NEXT beams, entered distribution factors or live load, or a demand table']];
   function inputs(P) {
     css(); const o = AD().settings(P), a = P.autodesign || {}, v = (k, d) => a[k] !== undefined && a[k] !== '' ? a[k] : d;
     const k0 = (BR().cells(P)[0] || {}).k, C = k0 != null ? AD().conc(P, k0, Object.assign({}, o, { vars: Object.assign({}, o.vars, { conc: 'auto' }), fcLo: NaN, fcHi: NaN })) : null;
@@ -46,8 +47,9 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
       <div class="ad-grid">${sel('mode', 'Mode', o.mode, [['new', 'New design (search the sections)'], ['refine', 'Refine the entered design']])}${sel('objective', 'Objective', o.objective, [['weight', 'Lightest section'], ['depth', 'Shallowest section']])}${numF('topN', o.mode === 'refine' ? 'Designs to list per span' : 'Sections to list per span', v('topN', ''), '', String(AD().DEF.topN))}${numF('maxRatio', 'Target ratio (every check ≤)', v('maxRatio', ''), '', AD().DEF.maxRatio.toFixed(2))}</div>
       <p class="note">${o.mode === 'refine' ? '<b>Refine</b>: the current section of each span is kept; the design nearest the entered one that passes is proposed: the entered design itself when it passes, then the fewest changes, ranked by the change in the strand count N, then in the draped strands n<sub>h</sub>, then in the drape (y<sub>end</sub>, hold-down point), then in f′c, then in f′ci. The list also shows the passing design with the fewest strands (an over-designed pattern is reduced).' : '<b>New design</b>: the sections of the family are searched, lightest (or shallowest) first, as below.'} <b>Target ratio</b>: a candidate passes only when every check's ratio is at most the target (blank: 1.00, the checks' own pass). The rules of fact (confinement detailing, the LLDF range of applicability, the hold-down force limit, the owners' f′c, f′ci, age and debonded-share rules) are not ratios of demand to capacity: they must pass, and the target does not apply to them.</p>
       <table class="ad-vars"><thead><tr><th class="lft">Variable</th><th>Auto / Lock</th><th class="lft">Searched (Auto)</th></tr></thead><tbody>
-      ${VARS.map(([id, lab, nt]) => `<tr><td class="lft">${lab}</td><td><select data-ad="vars.${id}" aria-label="${esc(lab)}: Auto or Lock">${opt(o.vars[id], [['auto', 'Auto'], ['lock', 'Lock (as entered)']])}</select></td><td class="lft nt">${esc(nt)}</td></tr>`).join('')}
+      ${VARS.map(([id, lab, nt]) => `<tr><td class="lft">${lab}</td><td><select data-ad="vars.${id}" aria-label="${esc(lab.replace(/<[^>]+>/g, ''))}: Auto or Lock">${opt(o.vars[id], id === 'nb' ? [['lock', 'Lock (the current count)'], ['auto', 'Auto'], ['range', 'Range']] : [['auto', 'Auto'], ['lock', 'Lock (as entered)']])}</select></td><td class="lft nt">${esc(nt)}</td></tr>`).join('')}
       </tbody></table>
+      ${o.vars.nb !== 'lock' ? `<div class="ad-grid">${o.vars.nb === 'range' ? numF('nbMin', 'N<sub>b</sub>, fewest', v('nbMin', ''), '', String(P.xs.nb)) + numF('nbMax', 'N<sub>b</sub>, most', v('nbMax', ''), '', String(P.xs.nb)) : ''}${numF('sLo', 'Girder spacing, least (Auto)', v('sLo', ''), 'ft', fx(AD().S_LO, 1))}${numF('sHi', 'Girder spacing, most (Auto)', v('sHi', ''), 'ft', fx(AD().S_HI, 1))}</div>${(() => { const lk = AD().nbLock(P); return lk ? `<p class="note">The girder count is not searched for this bridge: ${esc(lk)}.</p>` : ''; })()}` : ''}
       <p class="note"><b>Limits</b> (blank: the owner's value, shown grey${C ? `; owner ${esc(C.owner)}` : ''}):</p><div class="ad-grid">
       ${numF('fcLo', 'f′c, lowest', v('fcLo', ''), 'ksi', C ? fx(C.lo, 1) : '')}${numF('fcHi', 'f′c, highest', v('fcHi', ''), 'ksi', C ? fx(C.hi, 1) : '')}
       ${numF('fciLo', 'f′ci, lowest', v('fciLo', ''), 'ksi', fx(AD().DEF.fciLo, 1))}${numF('fciHi', 'f′ci, highest (plant)', v('fciHi', ''), 'ksi', 'f′c and the owner\'s limit')}</div>
@@ -64,7 +66,9 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
   function onChange(el, P) {
     const id = el.dataset.ad; if (!id) return false;
     const a = P.autodesign = Object.assign({}, P.autodesign || {}), path = id.split('.');
-    if (path[0] === 'vars') { a.vars = Object.assign({}, a.vars || {}); a.vars[path[1]] = el.value === 'lock' ? 'lock' : 'auto'; }
+    if (path[0] === 'vars') { a.vars = Object.assign({}, a.vars || {});
+      if (path[1] === 'nb') { if (el.value === 'auto' || el.value === 'range') a.vars.nb = el.value; else delete a.vars.nb; }   // PSAD-B: absent = Lock (the default)
+      else a.vars[path[1]] = el.value === 'lock' ? 'lock' : 'auto'; }
     else if (id === 'objective') a.objective = el.value === 'depth' ? 'depth' : 'weight';
     else if (id === 'mode') { if (el.value === 'refine') a.mode = 'refine'; else delete a.mode; }   // PSAD-A: absent = 'new' (the default)
     else { const t = String(el.value).trim(); if (t === '') delete a[id]; else a[id] = isFinite(+t) ? +t : t; }
@@ -91,7 +95,7 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
       const t1 = Date.now(); let r;
       try { do { r = it.next(); } while (!r.done && Date.now() - t1 < 40); }
       catch (e) { S.running = false; S.prog = null; S.err = 'Auto design failed: ' + (e && e.message); ctx.redraw(); return; }
-      if (r.done) { S.running = false; S.prog = null; S.R = r.value; S.rev++; ctx.redraw(); return; }
+      if (r.done) { S.running = false; S.prog = null; S.R = r.value; if (r.value.sel) S.sel = Object.assign({}, r.value.sel); S.rev++; ctx.redraw(); return; }   // PSAD-B: the default choice of a run over several girder counts
       const i = r.value.i || 0; S.prog = { f: Math.min(0.98, i / Math.max(400, i * 1.25)), msg: `${i} engine runs, ${((Date.now() - S.t0) / 1000).toFixed(0)} s: ${r.value.msg || ''}` }; put();
       setTimeout(tick, 0);
     };
@@ -122,17 +126,20 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
     if (S.err) h += `<div class="alert err" role="alert">${esc(S.err)}</div>`;
     if (!R && !S.running) { h += `<p class="note">No results yet: set the variables and Run on the <a href="#" data-goin="ad">Auto design input tab</a>. The results are kept for this page view.</p>`; host.innerHTML = h; return; }
     if (!R) { host.innerHTML = h; return; }
-    const Q = S.Q, stale = S.key !== keyOf(P), T = BR().types(Q), lab = k => esc((T[k] || {}).label || `type ${k + 1}`);
+    const Q = S.Q, stale = S.key !== keyOf(P), T = BR().types(Q), multi = !!(R.nb && R.nb.list.length > 1);
+    let labs = {}; const lab = k => esc((T[k] || {}).label || labs[k] || `type ${k + 1}`);
     if (stale) h += '<div class="alert">The project changed since this run: run again before applying.</div>';
     h += `<p class="note">${R.runs} engine runs in ${fx(R.ms / 1000, 1)} s${R.stopped ? ' (stopped at the run limit: the results are partial)' : ''}. Mode: ${R.o.mode === 'refine' ? 'Refine the entered design (the current section kept; the nearest passing designs first)' : 'New design'}; target ratio ${fx(R.o.maxRatio, 2)}${R.o.maxRatio < 1 ? ' (every check that is a ratio of demand to capacity at most this; the rules of fact must pass)' : ' (the checks\' own pass)'}.</p>`;
     let anyC = false;
+    if (R.nb) h += `<p class="note">Girder counts searched: ${esc(R.nb.why)}${multi && R.nb.pick != null ? `; the count with the least concrete in all spans: N<sub>b</sub> = ${R.nb.pick} (chosen by default)` : ''}.</p>`;
+    const selNb = [...new Set(R.spans.map(sp => sp.cands[S.sel[sp.s] || 0]).filter(Boolean).map(c => c.nb != null ? c.nb : Q.xs.nb))], nbBad = selNb.length > 1;
     R.spans.forEach(sp => {
-      const ks = sp.types, sel = S.sel[sp.s] || 0; if (sp.cands.length) anyC = true;
+      const ks = sp.types, sel = S.sel[sp.s] || 0; labs = sp.labels || {}; if (sp.cands.length) anyC = true;
       h += `<section class="sec" id="ad-span-${sp.s}"><div class="secHead">Span ${sp.s}: candidates (${esc(ks.map(lab).join(', '))})</div><div class="secBody">
         <p class="note">Sections searched: ${esc(sp.why)}, ${R.o.objective === 'depth' ? 'shallowest' : 'lightest'} first. Current design: ${ks.map(k => `${lab(k)}: ${curTxt(Q, k, R)}`).join('; ')}.</p>
-        <div class="tscroll"><table class="tbl ad-tbl"><thead><tr><th></th><th class="lft">Section</th><th>h (in)</th><th>A (in²)</th>${ks.map(k => `<th class="lft">${lab(k)}: strands, f′c / f′ci (ksi), governing check (ratio, line${R.o.maxRatio < 1 ? `; target ${fx(R.o.maxRatio, 2)}` : ''})${R.o.mode === 'refine' ? ', change from the entered design' : ''}</th>`).join('')}<th>Weight (kip, the span's lines)</th></tr></thead><tbody>
+        <div class="tscroll"><table class="tbl ad-tbl"><thead><tr><th></th><th class="lft">Section</th>${multi ? '<th>N<sub>b</sub> (S, ft)</th>' : ''}<th>h (in)</th><th>A (in²)</th>${ks.map(k => `<th class="lft">${lab(k)}: strands, f′c / f′ci (ksi), governing check (ratio, line${R.o.maxRatio < 1 ? `; target ${fx(R.o.maxRatio, 2)}` : ''})${R.o.mode === 'refine' ? ', change from the entered design' : ''}</th>`).join('')}<th>Weight (kip, the span's lines${multi ? ', every girder' : ''})</th></tr></thead><tbody>
         ${sp.sections.map(e => { const ci = sp.cands.indexOf(e), cls = ci >= 0 ? (ci === sel ? 'ad-sel' : 'ad-ok') : 'ad-ng';
-          return `<tr class="${cls}"><td>${ci >= 0 ? `<input type="radio" name="adsel${sp.s}" data-adsel="${sp.s}|${ci}"${ci === sel ? ' checked' : ''} aria-label="candidate ${ci + 1} of span ${sp.s}">#${ci + 1}` : ''}</td><td class="lft">${esc(e.name)}</td><td>${fx(e.h, 2)}</td><td>${fx(e.A, 1)}</td>
+          return `<tr class="${cls}"><td>${ci >= 0 ? `<input type="radio" name="adsel${sp.s}" data-adsel="${sp.s}|${ci}"${ci === sel ? ' checked' : ''} aria-label="candidate ${ci + 1} of span ${sp.s}">#${ci + 1}` : ''}</td><td class="lft">${esc(e.name)}</td>${multi ? `<td>${e.nb} (${fx(e.S, 2)})</td>` : ''}<td>${fx(e.h, 2)}</td><td>${fx(e.A, 1)}</td>
             ${ks.map(k => { const q = e.types.find(z => z.k === k); if (!q) return '<td class="lft" title="another girder type of the span has no design on this section">not run</td>';
               const b = q.res.best; return b ? `<td class="lft">${b.N} (${b.nh} draped), ${fx(b.fc, 1)} / ${fx(b.fci, 1)}, ${govTxt(b.ev.gov, b.ev, R.o)}${R.o.mode === 'refine' ? `; ${esc(distTxt(b))}` : ''}</td>` : `<td class="lft wrap">none: ${esc(q.res.why)}${q.res.closest ? `; closest trial: ${esc(q.res.closest.what)}, fails ${q.res.closest.fails.slice(0, 3).map(n => link(n)).join(', ')}${q.res.closest.fails.length > 3 ? ` and ${q.res.closest.fails.length - 3} more` : ''}` : ''}</td>`; }).join('')}
             <td>${ci >= 0 ? fx(e.W, 1) : '—'}</td></tr>`; }).join('')}
@@ -140,8 +147,10 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
         ${sp.cands.length ? detail(Q, sp, sp.cands[sel], lab) : `<div class="alert err">No section passes every check for every girder type of span ${sp.s}.${sp.blocked && sp.blocked.length ? ` Failing on the current design and on the closest trial of every section: ${sp.blocked.map(n => link(n)).join(', ')} (not changed by the variables searched: check those inputs).` : ''}</div>`}
         </div></section>`;
     });
-    if (anyC) h += `<section class="sec"><div class="secBody"><div class="fRow"><button type="button" class="primary" id="ad_apply"${stale ? ' disabled' : ''}>Apply the selected candidate of every span</button></div>
-      <p class="note">Apply writes, for every girder type of each span with a candidate, its section, straight rows, draped strands, f′c and f′ci as the type's own inputs (Girders &amp; strands and Materials tabs); nothing else is changed. It is one step of the header's Undo. The tabs then show and work every check of the applied design.</p></div></section>`;
+    if (anyC && nbBad) h += `<div class="alert err" role="alert">The candidates chosen have different girder counts (${selNb.join(', ')}): the girder count is one for the bridge; choose candidates of one count in every span to apply.</div>`;
+    if (anyC && multi && !nbBad && selNb[0] !== Q.xs.nb && R.nb.notes[selNb[0]]) h += `<p class="note">Apply also changes the layout: ${esc(R.nb.notes[selNb[0]].join('; '))}.</p>`;
+    if (anyC) h += `<section class="sec"><div class="secBody"><div class="fRow"><button type="button" class="primary" id="ad_apply"${stale || nbBad ? ' disabled' : ''}>Apply the selected candidate of every span</button></div>
+      <p class="note">Apply writes, for every girder type of each span with a candidate, its section, straight rows, draped strands, f′c and f′ci as the type's own inputs (Girders &amp; strands and Materials tabs); with a candidate at another girder count also the count, the bays and the girder types' lines (as a count change on the Cross-section tab) and an entered b<sub>eff</sub> back to the calculated width; nothing else is changed. It is one step of the header's Undo. The tabs then show and work every check of the applied design.</p></div></section>`;
     h += `<section class="sec"><div class="secHead">How the search works (assumptions)</div><div class="secBody"><ul class="note">
       <li>The choice, in order: the lighter section (gross area A; or the shallower, depth h), then fewer strands, then fewer draped strands, then the lower hold-down force (the flatter drape), then the hold-down point nearest 0.40 L, then the lower f′c, then the lower f′ci.</li>
       <li>Per girder type and section: (1) the fewest straight strands that pass Strength I flexure and Service III tension with no draped strand (a lower bound); (2) from there, in pairs, n<sub>h</sub> = 0, 2, … draped strands with the flattest drape that passes every check; (3) the lowest f′c and f′ci that pass with that pattern. The strand search is run at the entered f′c / f′ci first, then at the entered f′c with the highest f′ci it allows, then at the highest f′c and f′ci.</li>
@@ -156,7 +165,7 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
     on('#ad_stop2', 'click', () => { S.stop = true; });
     on('[data-adsel]', 'change', e => { const [s, i] = e.target.dataset.adsel.split('|').map(Number); S.sel[s] = i; render(host, ctx); });
     on('#ad_apply', 'click', () => { if (S.key !== keyOf(P)) return;
-      const A = AD().apply(P, R, S.sel); if (!A.changed.length) return;
+      const A = AD().apply(P, R, S.sel); if (A.err) { S.err = A.err; render(host, ctx); return; } if (!A.changed.length) return;
       S.ap = { R, Q: S.Q, sel: Object.assign({}, S.sel), key: keyOf(P) }; S.rev++;   // ADB: the applied run, kept in this page view for the Report's Auto design basis
       S.R = null; S.prog = null; ctx.changed(); ctx.toast(A.note, true); });   // one step of the header's Undo (the notice's Undo is that step)
   }

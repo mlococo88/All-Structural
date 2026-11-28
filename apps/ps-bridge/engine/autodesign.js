@@ -70,8 +70,15 @@
   /* checks that more strands improve (step 2: N grows only while a trial failed on these alone) */
   const GROW = ['Flexure', 'Srv III tens', 'Min reinf', 'Shear', 'Long. reinf (5.7.3.5)', 'Fatigue I (strand)'];
   const HD = /^Hold-down force/;
-  const DEF = { mode: 'new', objective: 'weight', topN: 3, maxRatio: 1.00, vars: { section: 'auto', strands: 'auto', drape: 'auto', conc: 'auto' },
-    fcLo: '', fcHi: '', fciLo: 4.0, fciHi: '', maxRuns: 20000 };
+  const DEF = { mode: 'new', objective: 'weight', topN: 3, maxRatio: 1.00, vars: { section: 'auto', strands: 'auto', drape: 'auto', conc: 'auto', nb: 'lock' },
+    fcLo: '', fcHi: '', fciLo: 4.0, fciHi: '', maxRuns: 20000, nbMin: '', nbMax: '', sLo: '', sHi: '' };
+  /* PSAD-B (2026-11-28, item 1): the girder count N_b (vars.nb: 'lock' the current count, the default; 'auto' the current count ± 1 with the
+     spacing within the limits; 'range' every count nbMin … nbMax). Each count is a full re-layout (layoutFor): equal spacing over the
+     current exterior girder spacing W_cc = Σ bays, the overhangs kept (the app's equal-spacing rule, EQSP); the girder types re-assigned
+     by PSBBridge.renumber; an entered b_eff back to the calculated width; the LLDF, DC2 / DW and every line value then follow from the
+     page's own engine inputs of that layout. Spacing limits (Auto): the LLDF range of applicability 3.5 ≤ S ≤ 16 ft (Table 4.6.2.2.2b-1,
+     engine/applicability.js), narrowed by sLo / sHi when entered. */
+  const S_LO = 3.5, S_HI = 16.0;
   /* PSAD-A (2026-11-28, items 4 and 7): mode 'new' (the search above, the default) or 'refine' (refine(): the current section kept, the
      smallest change from the entered design); maxRatio (the target ratio, default 1.00 = the engine's own pass): a candidate passes only if
      the ratio of every check is at most maxRatio, except the RULE checks (rules of fact, not demand / capacity ratios), which must pass. */
@@ -81,10 +88,11 @@
   /* settings(P): the run's settings (P.autodesign, optional; absent = DEF) */
   function settings(P) {
     const a = (P && P.autodesign) || {}, v = Object.assign({}, DEF.vars, a.vars || {});
-    Object.keys(v).forEach(k => { if (v[k] !== 'lock') v[k] = 'auto'; });
+    Object.keys(v).forEach(k => { if (k === 'nb') { if (v[k] !== 'auto' && v[k] !== 'range') v[k] = 'lock'; } else if (v[k] !== 'lock') v[k] = 'auto'; });
     const mr = num(a.maxRatio, DEF.maxRatio);
     return { mode: a.mode === 'refine' ? 'refine' : 'new', maxRatio: mr > 0 && mr < 1 ? R2(mr) : 1,
       objective: a.objective === 'depth' ? 'depth' : 'weight', topN: Math.max(1, Math.min(10, Math.round(num(a.topN, DEF.topN)))), vars: v,
+      nbMin: num(a.nbMin, NaN), nbMax: num(a.nbMax, NaN), sLo: num(a.sLo, NaN), sHi: num(a.sHi, NaN),
       fcLo: num(a.fcLo, NaN), fcHi: num(a.fcHi, NaN), fciLo: num(a.fciLo, DEF.fciLo), fciHi: num(a.fciHi, NaN), maxRuns: Math.max(100, num(a.maxRuns, DEF.maxRuns)),
       fracs: FRACS.slice() };   // fracs: the hold-down positions searched (the tests' exhaustive case passes a shorter list; not a page setting)
   }
@@ -499,6 +507,53 @@
   /* evalCurrent(P, k, ctx): the current design of type k (for the comparison row) */
   function evalCurrent(P, k, ctx) { const e = window.PSBBridge.effBase(P, k); return { eff: e, ev: evalCand(P, k, e, ctx, true) }; }
 
+  /* ---------- the girder count (PSAD-B, item 1) ---------- */
+  /* nbLock(P): why the girder count cannot be searched ('' when it can): adjacent members and NEXT beams (their width sets the lines),
+     entered distribution factors or live load, a demand table or imported demands (a count change would not change them), no
+     cross-section. Decision PSAD-D5 (pending engineer review). */
+  function nbLock(P) {
+    const BR = window.PSBBridge, xs = P.xs || {}, nb = xs.nb;
+    if (!(Number.isInteger(nb) && nb >= 2 && Array.isArray(xs.bays) && xs.bays.length === nb - 1)) return 'no cross-section of two girders or more';
+    const ks = BR.types(P).map((T, k) => k).filter(k => BR.typeLines(P, k).length);
+    for (const k of ks) { const b = BR.effBase(P, k), f = family(b.girder).fam;
+      if (f === 'adj' || f === 'slab' || f === 'next' || f === 'nextd') return 'adjacent members and NEXT beams: their width sets the girder lines';
+      if (b.loads && b.loads.dfAuto === false) return 'distribution factors entered (Loads tab)';
+      if (b.loads && b.loads.llAuto === false) return 'live-load moment and shear entered (Loads tab)'; }
+    const DM = window.PSBDemands; if (DM && DM.anyExt && DM.anyExt(P)) return 'a demand table or imported demands (Loads tab)';
+    return '';
+  }
+  /* counts(P, o): { list: [N_b … searched, the current first], why } */
+  function counts(P, o) {
+    const xs = P.xs || {}, nb0 = xs.nb, v = o.vars.nb;
+    if (v === 'lock') return { list: [nb0], why: 'locked (the current count)' };
+    const lk = nbLock(P); if (lk) return { list: [nb0], why: `the current count only (${lk})` };
+    const W = xs.bays.reduce((a, b) => a + +b, 0), lo = Math.max(S_LO, isNum(o.sLo) ? o.sLo : -Infinity), hi = Math.min(S_HI, isNum(o.sHi) ? o.sHi : Infinity);
+    let L;
+    if (v === 'range') { const a = Math.max(2, Math.round(isNum(o.nbMin) ? o.nbMin : nb0)), c = Math.round(isNum(o.nbMax) ? o.nbMax : nb0); L = []; for (let n = a; n <= c && n < 100; n++) L.push(n); if (!L.length) L = [nb0]; }
+    else L = [nb0 - 1, nb0, nb0 + 1].filter(n => n >= 3 && (n === nb0 || (W / (n - 1) >= lo - 1e-9 && W / (n - 1) <= hi + 1e-9)));
+    if (!L.includes(nb0) && v !== 'range') L.push(nb0);
+    L = [...new Set(L)].sort((a, c) => (a === nb0 ? -1 : c === nb0 ? 1 : a - c));
+    return { list: L, why: v === 'range' ? `the counts ${L.slice().sort((a, c) => a - c).join(', ')} (Range)` : `the current count ± 1 with the spacing S = W_cc / (N_b − 1) from ${fx2(lo)} to ${fx2(hi)} ft (W_cc = ${fx2(W)} ft)` };
+  }
+  const fx2 = v => (Math.round(v * 100) / 100).toFixed(2);
+  /* applyLayout(Q, n): Q (changed in place) with n girders: every bay S = W_cc / (n − 1), W_cc = Σ bays (equal spacing: xs.Wcc = W_cc), the
+     overhangs kept; the girder types re-assigned (PSBBridge.renumber, the page's rule on a count change); the design girder within N_b;
+     an entered b_eff (base or a type's override) back to the calculated width (the BEFF-3 rule of the Steel Bridge app). Returns the notes. */
+  function applyLayout(Q, n) {
+    const BR = window.PSBBridge, xs = Q.xs, nb0 = xs.nb, notes = []; if (n === nb0) return notes;
+    const W = xs.bays.reduce((a, b) => a + +b, 0), S = W / (n - 1), LT0 = BR.hasTypes(Q) ? BR.snapshot(Q) : null;
+    xs.nb = n; xs.bays = new Array(n - 1).fill(S); if (xs.spMode === 'equal') xs.Wcc = W;
+    notes.push(`Girder count ${nb0} → ${n}: every bay S = ${fx2(W)} / (${n} − 1) = ${fx2(S)} ft, the overhangs ${fx2(+xs.ohL)} / ${fx2(+xs.ohR)} ft kept`);
+    if (LT0) { const ch = BR.renumber(Q, nb0, LT0); if (ch.length) notes.push(`the girder types' lines re-assigned: ${ch.map(q => `S${q.s} G${q.g}: ${q.from || 'no type'} → ${q.to || 'removed'}`).join('; ')}`); }
+    if (Q.design && Number.isInteger(Q.design.g) && Q.design.g > n) Q.design.g = n;
+    const bo = []; if (Q.base && Q.base.beffAuto === false) { Q.base.beffAuto = true; bo.push('the base design'); }
+    (Array.isArray(Q.types) ? Q.types : []).forEach(T => { if (T.ovr && T.ovr.beffAuto === false) { delete T.ovr.beffAuto; if (Q.base.beffAuto === false) T.ovr.beffAuto = true; bo.push(T.label); } });
+    if (bo.length) notes.push(`the entered effective flange width of ${bo.join(', ')} set back to the calculated width (it was for the old spacing)`);
+    return notes;
+  }
+  /* layoutFor(P, n): a copy of P with n girders (applyLayout), or P itself for the current count */
+  function layoutFor(P, n) { if (n === P.xs.nb) return { Q: P, notes: [] }; const Q = J(P), notes = applyLayout(Q, n); return { Q, notes }; }
+
   /* run(P, o): every span of the project; o = settings(P) by default. Generator: yields progress, returns
      { spans: [{ s, why, sections: [{ name, A, h, pass, types: [{ k, res }] }], cands: [section entries that pass], types: [k] }],
        cur: { k: evalCurrent }, log, runs, ms, stopped } */
@@ -506,7 +561,13 @@
     o = o || settings(P); const BR = window.PSBBridge, t0 = Date.now();
     const ctx = { cache: new Map(), fit: new Map(), rows: new Map(), runs: 0, first: {}, stopped: false, o }, log = [];
     const out = { spans: [], cur: {}, log, runs: 0, ms: 0, stopped: false, o };
+    // PSAD-B: the girder counts searched (one: the code before, unchanged); each count's layout and its own fit / row / line-order caches
+    const NB = o.mode === 'refine' ? { list: [P.xs.nb], why: 'Refine keeps the layout (the current count)' } : counts(P, o), multi = NB.list.length > 1;
+    out.nb = { list: NB.list.slice(), why: NB.why, cur: P.xs.nb, notes: {} };
+    const lays = new Map(), ctxN = new Map(), useN = n => { const c = ctxN.get(n); ctx.fit = c.fit; ctx.rows = c.rows; ctx.first = c.first; };
+    if (multi) NB.list.forEach(n => { const L = layoutFor(P, n); lays.set(n, L); out.nb.notes[n] = L.notes; ctxN.set(n, n === P.xs.nb ? { fit: ctx.fit, rows: ctx.rows, first: ctx.first } : { fit: new Map(), rows: new Map(), first: {} }); });
     for (let s = 1; s <= P.spans.lengths.length; s++) {
+      if (multi) useN(P.xs.nb);
       const ks = BR.spanTypes(P, s).filter(k => BR.typeLines(P, k).length); if (!ks.length) continue;
       ks.forEach(k => { out.cur[k] = evalCurrent(P, k, ctx); });
       const ref = o.mode === 'refine', S = sections(P, s, ref ? Object.assign({}, o, { vars: Object.assign({}, o.vars, { section: 'lock' }) }) : o), sp = { s, why: ref ? S.why.replace(/\(locked\)/, '(Refine keeps the section)') : S.why, types: ks, sections: [], cands: [] };
@@ -519,6 +580,26 @@
           sp.sections.push(ent); if (ok) { ent.W = ent.types.reduce((a, q) => a + q.res.best.W, 0); sp.cands.push(ent); } }
         if (!sp.cands.length) { let bl = null; const and = f => { bl = bl ? bl.filter(n => f.includes(n)) : f.slice(); };
           ks.forEach(k => and(out.cur[k].ev.fails)); ks.forEach(k => { if (R[k] && !R[k].best) and(R[k].closest ? R[k].closest.fails : []); }); sp.blocked = bl || []; }
+        if (ctx.stopped) break;
+        continue;
+      }
+      if (multi) {   // PSAD-B: every (count, section) in the order of the objective; the first topN that pass every type of the span
+        const jobs = []; NB.list.forEach((n, ni) => S.list.forEach((sec, si) => jobs.push({ n, ni, sec, si, w: sec.A * n })));
+        jobs.sort((a, c) => o.objective === 'depth' ? (a.sec.h - c.sec.h || a.w - c.w || a.ni - c.ni || a.si - c.si) : (a.w - c.w || a.sec.h - c.sec.h || a.ni - c.ni || a.si - c.si));
+        sp.labels = {}; const kAll = new Set(ks);
+        for (const j of jobs) {
+          const Q = lays.get(j.n).Q, ksn = BR.spanTypes(Q, s).filter(k => BR.typeLines(Q, k).length); useN(j.n);
+          ksn.forEach(k => { kAll.add(k); if (sp.labels[k] == null) sp.labels[k] = BR.types(Q)[k].label; });
+          const ent = { name: j.sec.name, A: j.sec.A, h: j.sec.h, pass: true, types: [], nb: j.n, S: Q.xs.bays[0] };
+          sp.sections.push(ent);
+          for (const k of ksn) { const res = yield* search(Q, k, j.sec.name, o, ctx, log); ent.types.push({ k, res }); if (!res.best) { ent.pass = false; break; } if (ctx.stopped) break; }
+          if (ctx.stopped) { ent.pass = ent.pass && ent.types.length === ksn.length; break; }
+          if (ent.pass) { ent.W = ent.types.reduce((a, q) => a + q.res.best.W, 0); sp.cands.push(ent); if (sp.cands.length >= o.topN) break; }
+        }
+        sp.types = [...kAll].sort((a, c) => a - c); ks.forEach(k => { if (sp.labels[k] == null) sp.labels[k] = BR.types(P)[k].label; });
+        if (!sp.cands.length) { let bl = null; const and = f => { bl = bl ? bl.filter(n => f.includes(n)) : f.slice(); };
+          ks.forEach(k => and(out.cur[k].ev.fails)); sp.sections.forEach(e => e.types.forEach(q => { if (!q.res.best) and(q.res.closest ? q.res.closest.fails : []); }));
+          sp.blocked = bl || []; }
         if (ctx.stopped) break;
         continue;
       }
@@ -542,6 +623,12 @@
       if (ctx.stopped) break;
     }
     out.runs = ctx.runs; out.ms = Date.now() - t0; out.stopped = ctx.stopped;
+    if (multi) {   // the count every span can take with the least concrete in all (each span's lightest candidate at it); the spans' default choice
+      const tot = n => { let w = 0; for (const sp of out.spans) { const c = sp.cands.filter(e => e.nb === n); if (!c.length) return Infinity; w += Math.min(...c.map(e => e.W)); } return w; };
+      const pick = NB.list.reduce((b, n) => tot(n) < tot(b) - 1e-9 ? n : b, NB.list[0]);
+      out.nb.pick = isFinite(tot(pick)) ? pick : null;
+      out.sel = {}; out.spans.forEach(sp => { const i = sp.cands.findIndex(e => e.nb === out.nb.pick); out.sel[sp.s] = i >= 0 ? i : 0; });
+    }
     return out;
   }
   function runSync(P, o) { const it = run(P, o); let r = it.next(); while (!r.done) r = it.next(); return r.value; }
@@ -550,16 +637,20 @@
      section, strand rows, draped strands, f′c and f′ci as its own inputs (PSBBridge.setOvr: the override against the base design; the shape
      for every type of the span, PS-8). Other inputs are not changed. Returns { changed: [{ k, label, from, to }], note }. */
   function apply(P, Res, choice) {
-    const BR = window.PSBBridge, out = [];
-    Res.spans.forEach(sp => { const c = sp.cands[(choice && choice[sp.s]) || 0]; if (!c) return;
+    const BR = window.PSBBridge, out = [], pickOf = sp => sp.cands[choice && choice[sp.s] != null ? choice[sp.s] : (Res.sel && Res.sel[sp.s]) || 0];
+    // PSAD-B: a candidate at another girder count: every span's choice must have the same count; the layout first (one step with the designs)
+    const nbs = [...new Set(Res.spans.map(pickOf).filter(Boolean).map(c => c.nb != null ? c.nb : P.xs.nb))];
+    if (nbs.length > 1) return { changed: [], note: '', err: `The candidates chosen have different girder counts (${nbs.join(', ')}): choose candidates of one count in every span.` };
+    const lay = nbs.length && nbs[0] !== P.xs.nb ? applyLayout(P, nbs[0]) : [];
+    Res.spans.forEach(sp => { const c = pickOf(sp); if (!c) return;
       c.types.forEach(({ k, res }) => { const T = P.types[k], b = res.best; if (!T || !b) return;
         const eff = BR.effBase(P, k), from = `${eff.girder}, ${countOf(eff)} strands (${+eff.harp.n || 0} draped), f′c ${eff.mat.fc} / f′ci ${eff.mat.fci} ksi`;
         eff.girder = b.girder; eff.rows = J(b.rows); eff.harp = J(b.harp); eff.mat = Object.assign({}, eff.mat, { fc: b.fc, fci: b.fci });
         BR.setOvr(P, k, eff);
         out.push({ k, label: T.label, from, to: `${b.girder}, ${b.N} strands (${b.nh} draped), f′c ${b.fc} / f′ci ${b.fci} ksi` }); }); });
-    return { changed: out, note: out.length ? `Auto design applied: ${out.map(q => `${q.label}: ${q.from} → ${q.to}`).join('; ')}.` : '' };
+    return { changed: out, layout: lay, note: out.length ? `Auto design applied: ${lay.length ? lay.join('; ') + '; ' : ''}${out.map(q => `${q.label}: ${q.from} → ${q.to}`).join('; ')}.` : '' };
   }
   const countOf = b => (Array.isArray(b.rows) ? b.rows : []).reduce((a, q) => a + (+q.n || 0), 0) + (+(b.harp || {}).n || 0);
 
-  window.PSBAutoDesign = { DEF, FRACS, GROW, RULE, settings, refine, distance, cmpDist, modRows, over, family, sections, conc, rowsOf, fill, drapes, lineInputs, fitErrors, evalCand, search, run, runSync, apply, countOf, hdOf };
+  window.PSBAutoDesign = { DEF, FRACS, GROW, RULE, settings, refine, distance, cmpDist, modRows, over, counts, nbLock, applyLayout, layoutFor, S_LO, S_HI, family, sections, conc, rowsOf, fill, drapes, lineInputs, fitErrors, evalCand, search, run, runSync, apply, countOf, hdOf };
 })();

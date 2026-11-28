@@ -100,6 +100,9 @@
   const ad = (k, l, x) => Object.assign({ k: 'autodesign.' + k, s: `[data-ad="${k}"]`, l }, x || {});
   add('ad', 'Search', 'ad', [ad('mode', 'Mode (New design / Refine the entered design)', { b: 'Usually New design, but a run that only adjusts the entered design uses Refine.' }), ad('topN', 'Sections to list per span'),
     ad('maxRatio', 'Target ratio (every check ≤)', { b: 'An office margin, but one bridge can ask for a different one.' })]);
+  add('ad', 'Girder count', 'ad', [ad('vars.nb', 'Girder count N<sub>b</sub> (Lock / Auto / Range)', { b: 'Whether to study other girder counts is a choice for each bridge.' }),
+    ad('nbMin', 'N<sub>b</sub>, fewest', { w: 'with Range', b: 'The counts to study depend on the bridge.' }), ad('nbMax', 'N<sub>b</sub>, most', { w: 'with Range', b: 'The counts to study depend on the bridge.' }),
+    ad('sLo', 'Girder spacing, least (Auto)', { w: 'with Auto', b: 'An office limit, but one bridge can call for another.' }), ad('sHi', 'Girder spacing, most (Auto)', { w: 'with Auto', b: 'An office limit, but one bridge can call for another.' })]);
   add('ad', 'Concrete strength range', 'ad', [ad('fcLo', 'f′<sub>c</sub>, lowest'), ad('fcHi', 'f′<sub>c</sub>, highest'), ad('fciLo', 'f′<sub>ci</sub>, lowest'), ad('fciHi', 'f′<sub>ci</sub>, highest (plant)')]);
   const OWNER = { k: 'base.owner', s: dp('base.owner'), t: 'own', b: 'The office’s usual owner, but a bridge for another DOT needs a different one, so each bridge keeps its own.' };
   const SCOPED = ['gird', 'mat', 'loads'];   // ui/types.js SCOPED: values per girder type

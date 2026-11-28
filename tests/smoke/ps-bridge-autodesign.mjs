@@ -109,6 +109,19 @@ try {
   ok(`Refine and target 0.95 set on the input tab (saved in P.autodesign); ${r.rows.length} designs on the current section, the target in the governing column`);
   await shot('auto-refine');
 
+  // 4c. PSAD-B (2026-11-28): the girder count N_b Auto (New design, target blank): the N_b column, the counts searched, Apply's layout note
+  await itab('ad'); await p.selectOption('#ad_mode', 'new'); await p.waitForTimeout(150);
+  await p.fill('#ad_maxRatio', ''); await p.dispatchEvent('#ad_maxRatio', 'change'); await p.waitForTimeout(150);
+  await p.selectOption('[data-ad="vars.nb"]', 'auto'); await p.waitForTimeout(150);
+  r = await p.evaluate(() => ({ a: JSON.parse(localStorage.getItem('psb2.project.current')).autodesign, sLo: !!document.getElementById('ad_sLo') }));
+  assert.equal(r.a.vars.nb, 'auto'); assert.equal(r.a.mode, undefined); assert.equal(r.a.maxRatio, undefined); assert.ok(r.sLo, 'the spacing limits shown');
+  await itab('ad'); await p.click('#ad_run'); await until(() => p.evaluate(() => !!document.querySelector('#ad-span-1') && !PSBAutoDesignUI.state().running), 240000, 'the N_b results');
+  r = await p.evaluate(() => ({ txt: document.getElementById('adHost').innerText, head: document.querySelector('#ad-span-1 thead').innerText, rows: [...document.querySelectorAll('#ad-span-1 tbody tr')].map(t => t.innerText.replace(/\s+/g, ' ')) }));
+  assert.ok(/Girder counts searched: the current count ± 1/.test(r.txt), 'the counts named'); assert.ok(/Nb \(S, ft\)|N\s*b \(S, ft\)/.test(r.head), r.head);
+  assert.ok(r.rows.some(t => / 4 \(12\.00\)/.test(t)) && r.rows.some(t => / 6 \(7\.20\)/.test(t)), 'the counts 4 and 6 tried: ' + r.rows.join(' / '));
+  ok(`girder count Auto: ${r.rows.length} (count, section) rows, the counts 4, 5, 6 with S = 12.00, 9.00, 7.20 ft`);
+  await shot('auto-nb');
+
   // 5. phone width, keys, errors
   await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(400);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no sideways scroll');
