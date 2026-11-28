@@ -5,7 +5,7 @@
    rating factors against 1.0 (the steel bar chart, PSBVizAlong.hbars) and the rated sections along the span (the steel detail kit).
    The MBE citations are the old app's labels (article numbers, no edition) so that the tab matches the old app (harness B); the MBE 4th
    Ed. (2026) labels come in their own PR (plan §5 PR 6, PS-14 e). The old tab's "Send capacity to MCT Rating" hand-off is not carried here
-   (the cross-tool connections move with the switch-over, plan §5). φ_c, φ_s and the vehicles are inputs on the Loads tab.
+   (NOMCT, 2026-11-25: no MCT output). φ_c, φ_s and the vehicles are inputs on the Loads tab.
    E1 (2026-11-15, review finding O17; the Steel Bridge app's Rating tab, apps/steel-bridge/ui/rating.js): the rating at every analysis
    station of the girder (engine/rating-along.js, MBE 4th Ed. (2026)): flexure in positive and in negative moment (continuity on: over the
    half span next to an interior support), shear from the critical section, Service III; the governing location of each group (its worked

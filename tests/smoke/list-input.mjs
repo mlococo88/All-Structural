@@ -21,7 +21,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,bpad,sbridge,secpropren').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 const outDir = args.out ? path.resolve(String(args.out)) : null; if (outDir) fs.mkdirSync(outDir, { recursive: true });   // raw readouts A / B per tool and case
 // BASE: origin/main at the re-baseline of 2026-11-06 (RLI). Differences from the entries' `a` commits checked as display text only
@@ -341,7 +341,7 @@ TOOLS.bpad = {   // BasePlateAnchorDesigner: stacked hairpin depths (S.vRebar.vD
   },
   tableSel: '.fRow:has-text("Depths of the stacked pieces") [data-sli="host"]',
 };
-TOOLS.pbd = {   // Prestressed Bridge Design: the bridge bar's span lengths (bridge.spans, an array), committed when the focus leaves the table
+TOOLS.pbd = {   // (not in the default --part list since the switch-over, 2026-11-28: the file is a redirect page; a and b must name trees that hold the old page) Prestressed Bridge Design: the bridge bar's span lengths (bridge.spans, an array), committed when the focus leaves the table
   file: 'Prestressed Bridge Design.html', a: '0cea448', values: '100, 120, 100', expect: '[100,120,100]',
   over: 212,   // 212 px at 390 on main before the table: the title-block grid
   ignore: /^\[BABEL\] Note/, serial: true, timeout: 120000,

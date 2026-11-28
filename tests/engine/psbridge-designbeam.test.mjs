@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { loadShared, test, ROOT } from './harness.mjs';
+import { pinText } from './psbridge-source.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
@@ -14,7 +15,8 @@ const W = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'rigid', 'lld
 const M = W.PSBModel, H = W.PSBHandoffs;
 
 // the old page's BridgeBeam (its IIFE, from `(function(){` before `var NS='bridgeSuite.v1', K_SEL` to its window.addEventListener line)
-const OLD = fs.readFileSync(path.join(ROOT, 'Prestressed Bridge Design.html'), 'utf8');
+// switch-over (2026-11-28): the page is a redirect now; its text at the pin of tests/engine/psbridge-source.mjs (the old app, frozen since PR 2a)
+const OLD = pinText();
 function oldBB(store) {
   const a = OLD.indexOf("var NS='bridgeSuite.v1', K_SEL=NS+'.designBeam'"), i = OLD.lastIndexOf('(function(){', a), j = OLD.indexOf("window.addEventListener('storage',function(e){ if(!e.key||e.key===K_SEL", i);
   assert.ok(i > 0 && j > a, 'old BridgeBeam anchors');

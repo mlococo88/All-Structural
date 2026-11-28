@@ -52,7 +52,7 @@
   }
   function card(P) {
     return `<section class="sec" id="lgCard"><div class="secHead">From the old app (Prestressed Bridge Design)</div><div class="secBody">
-      <p class="note">Imports a design of the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> into this project: its girder design, span, spacing, girder count, position, overhang, skew and continuity. Read only: the old app's saved data is never changed, and the old app keeps working.</p>
+      <p class="note">Imports a design saved by the old Prestressed Bridge Design app (the single-file app this one replaced on 2026-11-28; its file name now opens this app) into this project: its girder design, span, spacing, girder count, position, overhang, skew and continuity. Read only: the old app's saved data in this browser is never changed or deleted.</p>
       <div class="fRow"><button type="button" data-lg="scan" title="List the designs the old app saved in this browser">Find the old app's designs</button><button type="button" data-lg="file" title="An old-app Export JSON file">Import an old-app JSON file…</button></div>
       <div id="lgListHost">${listHtml()}</div></div></section>` + summaryHtml(P);
   }
@@ -82,5 +82,32 @@
     else if (a === 'imp') { const x = S.list && S.list.items.find(q => q.id === S.sel); if (x) doImport(x, ctx); }
     return true;
   }
-  window.PSBLegacyUI = { card, onClick, importText, state: S };
+  /* Switch-over (2026-11-28, plan §5 row 10; engineer: the old app's designs are offered for import, its saved data kept untouched; shown
+     only when the old app's keys hold a design): on the first open after the switch-over, when this browser's storage holds designs the
+     old app saved (PSBLegacy.scan: psbeam.inputs.v1, the shared Bridge Suite projects with a psbeam / psbeamBridge slice, psbeam.projects.v1),
+     a notice above the output tabs offers them, with a link to this card. It reads those keys only (scan never writes); "Show them" or
+     "Not now" writes this app's own key OFFER_KEY (the time), so the notice shows once per browser. Nothing is imported without the card's
+     Import button and its confirm. */
+  const OFFER_KEY = 'psb2.legacyOffer.v1';
+  let OFFER = null;   // { n } once computed for this page load, or { n: 0 }
+  function offerState(st) {
+    if (OFFER) return OFFER;
+    let seen = null; try { seen = st.getItem(OFFER_KEY); } catch (e) { seen = null; }
+    if (seen) return (OFFER = { n: 0 });
+    let n = 0; try { n = LG().scan(st).items.length; } catch (e) { n = 0; }
+    return (OFFER = { n });
+  }
+  function offerBar(st) {
+    const o = offerState(st); if (!o.n) return '';
+    return `<div class="notice" id="lgOffer" role="status"><div><b>Designs from the old Prestressed Bridge Design app.</b> This browser holds ${o.n === 1 ? 'a design' : o.n + ' designs'} saved by the old single-file app, which this app replaces. You can import ${o.n === 1 ? 'it' : 'one'} into a project here (Project tab, card "From the old app"); the old saved data is kept as it is.</div><div class="nBtns"><button type="button" data-lgoffer="go">Show them</button><button type="button" data-lgoffer="no">Not now</button></div></div>`;
+  }
+  /* onOffer(e, st, show): a click on the notice; show() opens the Project tab at this card. true when handled */
+  function onOffer(e, st, show) {
+    const b = e.target.closest('[data-lgoffer]'); if (!b) return false;
+    try { st.setItem(OFFER_KEY, new Date().toISOString()); } catch (x) { /* storage full or blocked: the notice closes for this page load */ }
+    OFFER = { n: 0 };
+    if (b.dataset.lgoffer === 'go') { try { S.list = LG().scan(st); S.sel = S.list.items.length === 1 ? S.list.items[0].id : ''; } catch (x) { S.list = null; } show(); }
+    return true;
+  }
+  window.PSBLegacyUI = { card, onClick, importText, state: S, offerBar, onOffer, OFFER_KEY };
 })();

@@ -38,7 +38,7 @@ const APPS = {
     change: async p => { await p.evaluate(() => { const t = [...document.querySelectorAll('button,a,[role=tab]')].find(x => x.textContent.trim() === 'Project'); if (t) t.click(); }); await p.waitForTimeout(600);
       await p.evaluate(() => { const i = document.querySelector('.tb-grid .tb-cell input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, i.value + ' x'); i.dispatchEvent(new Event('input', { bubbles: true })); }); await p.waitForTimeout(1800); } }
 };
-const list = arg('app', Object.keys(APPS).join(',')).split(',');
+const list = arg('app', 'mct,lldf').split(',');   // switch-over (2026-11-28): psb (the old Prestressed Bridge Design.html) is a redirect page now; --app psb on a tree that still holds it
 let failed = 0;
 const SEED = () => ({
   bp_test_alpha: { name: 'Alpha', savedAt: '2026-11-01T12:00:00.000Z', slices: { lldf: { app: 'AASHTO-LLDF', inputs: { skew: 0 } }, stgirder: { old: true } }, demands: { kind: 'test', rows: [1, 2, 3] } },

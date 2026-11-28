@@ -1,6 +1,6 @@
 # PS Bridge (`apps/ps-bridge/`): plan (revised with the engineer's decisions of 2026-11-12)
 
-**Status:** approved direction (engineer, 2026-11-12, decisions PS-1 to PS-14 below). Phases 1–3 are being built as small PRs; the girder library and auto-design wait for the engineer's standard sheets. This plan supersedes `docs/prestressed-rebuild-plan.md` (2026-11-02, `apps/prestressed/`, module-by-module rewrite); that plan's §9 (saved data, "From old app") and §9.4 (hand-off table) are reused here.
+**Status (2026-11-28): switched over.** `apps/ps-bridge/` is the Prestressed Bridge Design app; `Prestressed Bridge Design.html` and `psbeam.html` are redirect pages to it (row 10). Still to come, each in its own PR: row 4b (per-row strand positions) and row 6 (the MBE 4th Ed. labels of the engine's own rating cards). Approved direction (engineer, 2026-11-12, decisions PS-1 to PS-14 below). Phases 1–3 are being built as small PRs; the girder library and auto-design wait for the engineer's standard sheets. This plan supersedes `docs/prestressed-rebuild-plan.md` (2026-11-02, `apps/prestressed/`, module-by-module rewrite); that plan's §9 (saved data, "From old app") and §9.4 (hand-off table) are reused here.
 
 **Rules:** CLAUDE.md §1–§9. Code basis: AASHTO LRFD 10th Ed. (2024); MBE 4th Ed. (2026) (label change in its own PR, below). Every assumption is a note in its tab and in the Report; every value is worked and linked (§6).
 
@@ -64,7 +64,7 @@ Summary · Section properties · Loads & LLDF · Analysis (M/V envelopes, contin
   base:{ <a psbeam inputs object, DEFAULTS shape> }                    // PR 2a on
   groups / cells:{ 'G<g>/S<s>':{ ovr, locks } }, autodesign, legacy }  // PR 3a on
 ```
-- Keys: `psb2.project.current`, `psb2.project.unreadable.<ISO time>`, `psb2.ui`, `psb2.lib.index`, `psb2.lib.p.<id>`, `psb2.lib.current`, per-browser UI keys `psb2.splitRatio_v1`, `psb2.dashCollapsed_v1`. `psb2.` is unused elsewhere in the repo.
+- Keys: `psb2.project.current`, `psb2.project.unreadable.<ISO time>`, `psb2.ui`, `psb2.legacyOffer.v1` (switch-over: the old app's designs offered once), `psb2.redirect.offered.v1` (written by the redirect page `Prestressed Bridge Design.html`), `psb2.lib.index`, `psb2.lib.p.<id>`, `psb2.lib.current`, per-browser UI keys `psb2.splitRatio_v1`, `psb2.dashCollapsed_v1`. `psb2.` is unused elsewhere in the repo.
 - Every `psbeam.*` key is read only ("From old app"), never written or deleted.
 - One mapping feeds the engine: `cellInputs(P, g, s) = mergeInputs(base ⊕ cell override)`, then the bridge-driven fields (L, S, nGirders, position, continuity, DC2/DW, DF) are set by `engine/bridge.js`. The engine only ever sees today's input format.
 
@@ -111,9 +111,9 @@ Every PR: `fixlog/ps-bridge.md` entry, tests, only `apps/ps-bridge/` + its tests
 | 5 | Auto design (§4) | waits for 4 |
 | 6 | MBE 4th Ed. (2026) citation labels | §4 (labels) |
 | 7 | Drawings + DXF (girder sheet, strand and draping schedule with hold-down from ℄ bearing and from the girder end (PS-13), camber table) | after 5 |
-| 8 | Bridge-suite bootstrap moved to `shared/` (planned §3 work; before hand-offs) | all three copies |
-| 9 | Hand-offs at switch-over (app id `psbeam`): bearings → elastomeric, every-girder `superReactions` → SubLoads, others unchanged | cross-tool |
-| 10 | Comparison document (`docs/ps-bridge-comparison.md`: harness A/B + the engineer's real projects), then **switch-over** (PSBD → redirect, `psbeam.html` → new app, data offer as PBD-C3) | engineer approval. **Comparison document done (2026-11-28, `tests/psbridge-oldnew.mjs`): 677 cases, every difference placed on its cause; the engineer has no projects saved in the old app (confirmed 2026-11-28)** |
+| 8 | Bridge-suite bootstrap moved to `shared/` (planned §3 work; before hand-offs) | all three copies. **Done (BSB, 2026-11-28): `shared/bridge-suite-boot.js` (`window.SharedBridgeBoot`), loaded by index.html, lldf.html and this app (BridgeXfer only); the old page's frozen copy went with the switch-over** |
+| 9 | Hand-offs at switch-over (app id `psbeam`): bearings → elastomeric, every-girder `superReactions` → SubLoads, others unchanged | cross-tool. **Done: every-girder superReactions (batch F, `.by.psbeam`), bearingLoads (BRG-HO, #1684), the old channels (item 12); at the switch-over BridgeApps' app id `psbeam` opens this app** |
+| 10 | Comparison document (`docs/ps-bridge-comparison.md`: harness A/B + the engineer's real projects), then **switch-over** (PSBD → redirect, `psbeam.html` → new app, data offer as PBD-C3) | engineer approval. **Comparison document done (2026-11-28, `tests/psbridge-oldnew.mjs`): 677 cases, every difference placed on its cause; the engineer has no projects saved in the old app (confirmed 2026-11-28)** **Switch-over done (2026-11-28, engineer approval in its PR): the old page a redirect page to `apps/ps-bridge/index.html` (#hash and ?query kept), `psbeam.html` straight to it, every link to the old file moved, the old app's designs offered once on first open when there are any (`ui/legacy.js`; read only), the "in development" notes removed.** |
 
 ---
 
@@ -136,8 +136,8 @@ Every PR: `fixlog/ps-bridge.md` entry, tests, only `apps/ps-bridge/` + its tests
 | PS-14 | Accepted: (a) deck/haunch/strip method as today; (b) diaphragms once; (c) bearings → elastomeric and `superReactions` → SubLoads after switch-over; (d) DXF after auto-design; (e) MBE 4th label in its own PR; (f) own project library + read-only import of the old data; (g) old app frozen; (h) bootstrap to `shared/` first | old Q8–Q11, Q17–Q22 |
 
 ## 7. Open items
-1. **Real projects (old Q23):** 5–10 of the engineer's prestressed jobs (simple and continuous, each owner) for the switch-over comparison — requested.
+1. **Real projects (old Q23):** 5–10 of the engineer's prestressed jobs (simple and continuous, each owner) for the switch-over comparison — requested. Closed 2026-11-28: the engineer has no projects saved in the old app; the comparison uses the built-in and test cases (docs/ps-bridge-comparison.md).
 2. **Girder sheets (PS-2):** NEBT, NEDBT, NEXT D/F, box section properties, strand grid, harpable web positions, fill order — awaited; PRs 4–5 wait for them.
 3. To confirm in PR 3a: how the steel distribution maps onto the engine's inputs (S per girder from the adjacent bays, DC2/DW per girder, DF override) — shown with worked check cases before merge.
-4. Old Q18 (no hand-offs from the new app before switch-over, so two apps never publish as `psbeam`) is read as part of PS-14 (c); the skeleton and phases 2–3 follow it. Confirm.
+4. Old Q18 (no hand-offs from the new app before switch-over, so two apps never publish as `psbeam`) is read as part of PS-14 (c); the skeleton and phases 2–3 follow it. Confirm. (Superseded by item 12, HO-D1; moot since the switch-over: only the new app is served.)
 5. Risks carried: Babel-ES5 vs native numerics (harness A, report not fix); `computeAll` run time × cells × trials (measure in 2a, chunked runs); the steel app still changing (copies pinned, listed for `shared/`); two apps sharing Chrome/Edge storage before switch-over (new app writes `psb2.*` only, sends nothing).

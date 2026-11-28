@@ -136,7 +136,7 @@
     const r = o.run ? o.run() : null;
     if (r && r.busy) return `Running every girder type × line (${r.i} / ${r.n})… Until then the chips are those of the girder type and line shown. <button type="button" data-sumrun="stop">Stop</button>`;
     if (r && r.stopped) return `Stopped (${r.i} of ${r.n} girder type × line results): the chips are those of the girder type and line shown only. <button type="button" data-sumrun="run">Run all</button>`;
-    return 'In development: the checks of the design girder only.';
+    return 'The checks of the girder type and line shown.';   // switch-over (2026-11-28): was 'In development: the checks of the design girder only.'
   }
   /* the Rating chip (not a check): the lowest of the HL-93 inventory rating factors; 99 = not applicable */
   function rtChip(R, A) {
