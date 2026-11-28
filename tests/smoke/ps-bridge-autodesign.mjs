@@ -122,6 +122,14 @@ try {
   ok(`girder count Auto: ${r.rows.length} (count, section) rows, the counts 4, 5, 6 with S = 12.00, 9.00, 7.20 ft`);
   await shot('auto-nb');
 
+  // 4d. PSAD-C (2026-11-28): the strand pattern option on the input tab (saved in P.autodesign; the debonding limits listed)
+  await itab('ad'); await p.selectOption('#ad_pattern', 'both'); await p.waitForTimeout(150);
+  r = await p.evaluate(() => ({ a: JSON.parse(localStorage.getItem('psb2.project.current')).autodesign, txt: document.getElementById('inPanes').innerText }));
+  assert.equal(r.a.pattern, 'both'); assert.ok(/Straight strands with debonding/.test(r.txt) && /5\.9\.4\.3\.3/.test(r.txt) && /CTDOT V2 5\.9\.4\.3\.3/.test(r.txt), 'the limits listed');
+  await p.selectOption('#ad_pattern', 'draped'); await p.waitForTimeout(150);
+  assert.equal(JSON.parse(await proj()).autodesign.pattern, undefined, 'draped = absent (the default)');
+  ok('strand pattern: Both saved in P.autodesign, the debonding limits listed; Draped = the default (absent)');
+
   // 5. phone width, keys, errors
   await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(400);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no sideways scroll');

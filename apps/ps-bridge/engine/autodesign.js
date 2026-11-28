@@ -71,7 +71,7 @@
   const GROW = ['Flexure', 'Srv III tens', 'Min reinf', 'Shear', 'Long. reinf (5.7.3.5)', 'Fatigue I (strand)'];
   const HD = /^Hold-down force/;
   const DEF = { mode: 'new', objective: 'weight', topN: 3, maxRatio: 1.00, vars: { section: 'auto', strands: 'auto', drape: 'auto', conc: 'auto', nb: 'lock' },
-    fcLo: '', fcHi: '', fciLo: 4.0, fciHi: '', maxRuns: 20000, nbMin: '', nbMax: '', sLo: '', sHi: '' };
+    fcLo: '', fcHi: '', fciLo: 4.0, fciHi: '', maxRuns: 20000, nbMin: '', nbMax: '', sLo: '', sHi: '', pattern: 'draped' };
   /* PSAD-B (2026-11-28, item 1): the girder count N_b (vars.nb: 'lock' the current count, the default; 'auto' the current count ± 1 with the
      spacing within the limits; 'range' every count nbMin … nbMax). Each count is a full re-layout (layoutFor): equal spacing over the
      current exterior girder spacing W_cc = Σ bays, the overhangs kept (the app's equal-spacing rule, EQSP); the girder types re-assigned
@@ -90,7 +90,7 @@
     const a = (P && P.autodesign) || {}, v = Object.assign({}, DEF.vars, a.vars || {});
     Object.keys(v).forEach(k => { if (k === 'nb') { if (v[k] !== 'auto' && v[k] !== 'range') v[k] = 'lock'; } else if (v[k] !== 'lock') v[k] = 'auto'; });
     const mr = num(a.maxRatio, DEF.maxRatio);
-    return { mode: a.mode === 'refine' ? 'refine' : 'new', maxRatio: mr > 0 && mr < 1 ? R2(mr) : 1,
+    return { pattern: a.pattern === 'straight' || a.pattern === 'both' ? a.pattern : 'draped', mode: a.mode === 'refine' ? 'refine' : 'new', maxRatio: mr > 0 && mr < 1 ? R2(mr) : 1,
       objective: a.objective === 'depth' ? 'depth' : 'weight', topN: Math.max(1, Math.min(10, Math.round(num(a.topN, DEF.topN)))), vars: v,
       nbMin: num(a.nbMin, NaN), nbMax: num(a.nbMax, NaN), sLo: num(a.sLo, NaN), sHi: num(a.sHi, NaN),
       fcLo: num(a.fcLo, NaN), fcHi: num(a.fcHi, NaN), fciLo: num(a.fciLo, DEF.fciLo), fciHi: num(a.fciHi, NaN), maxRuns: Math.max(100, num(a.maxRuns, DEF.maxRuns)),
@@ -164,7 +164,7 @@
   const over = (c, t) => t < 1 && !RULE.test(c.n) && !(c.r <= t + TOL);
   /* evalCand(P, k, eff, ctx, full): eff on every line of type k. Not full: stops at the first failing line (that line is tried first next
      time). Returns { pass, fails, gov, lines, err, fit }. */
-  function evalCand(P, k, eff, ctx, full) {
+  function evalCand(P, k, eff, ctx, full, deb) {
     const fit = fitErrors(P, k, eff, ctx);
     if (fit.length) return { pass: false, fails: ['strand fit (input check)'], fit, gov: null, lines: null, err: '' };
     const BR = window.PSBBridge, tgt = ctx && ctx.o ? ctx.o.maxRatio : 1; let L = BR.typeLines(P, k).slice();
@@ -174,6 +174,7 @@
       const R = engineRun(lineInputs(P, k, g, eff), ctx);
       if (!R || R.error) { out.pass = false; out.err = (R && R.error) || 'no result'; out.fails.push('engine error'); if (ctx.first) ctx.first[k] = g; if (!full) return out; continue; }
       out.lines.push({ g, R });
+      if (deb && Array.isArray(R.warns) && R.warns.some(w => DEB_W.test(w))) { out.pass = false; if (!out.fails.includes('Debonding (5.9.4.3.3)')) out.fails.push('Debonding (5.9.4.3.3)'); out.debW = R.warns.filter(w => DEB_W.test(w)); }   // PSAD-C
       R.checks.forEach(c => { if (!out.gov || !(c.r <= out.gov.r)) out.gov = { n: c.n, r: c.r, g, loc: c.loc };
         if (tgt < 1 && !RULE.test(c.n) && (!out.govT || !(c.r <= out.govT.r))) out.govT = { n: c.n, r: c.r, g, loc: c.loc };   // the governing check the target applies to
         if (!c.pass || over(c, tgt)) { out.pass = false; if (!out.fails.includes(c.n)) out.fails.push(c.n); } });
@@ -501,6 +502,153 @@
     res.best = res.list[0];
     return res;
   }
+  /* ---------- straight strands with debonding (PSAD-C, item 3; PS-12 reopened by the engineer 2026-11-28 for this option only) ----------
+     settings.pattern: 'draped' (the search above; the default: entered debonding kept, never added, PS-12 as before), 'straight' (no draped
+     strand; debonding searched, searchStraight), 'both' (both searched for each type and section, ranked together: pickPat).
+     The debonding limits, AASHTO LRFD 10th Ed. (2024) Art. 5.9.4.3.3 (paraphrased; engineer's mapping of 2026-11-28), applied as limits on
+     the patterns proposed (no new formula):
+       (A) per row at most 45 % of the row's strands debonded;           (D) an even count per row (symmetric about the vertical ℄);
+       (B) at most 6 strands terminating at one section, 4 with 0.7 in strand or when 10 or fewer are debonded in all: each debonded row
+           has its own length (staggered), at most that many strands in a row;
+       (C) termination sections at least 60 d_b apart: the debond lengths of the rows step by Δ = ⌈60 d_b / 12⌉ ft on the 1 ft grid;
+       (G) simple spans: the longest at most min(0.20 L, L/2 − ℓ_d) (the engine's own check, its warning rejects the candidate; a span
+           made continuous: the same limit, conservatively, from the same engine values);
+       (I) single-web sections (I-girders, bulb tees, deck bulb tees): the strands within the web width b_w and the outermost strand
+           each side of every row stay bonded, whatever the share debonded or b_f / b_w;
+       (J) box beams and voided slabs: only strands under a void (between the webs' projections) are debonded, the outermost bonded;
+       (K) NEXT beams and solid slabs: the outermost strand each side (each stem) bonded, debonded strands split evenly between the stems.
+     (E) (alternating bonded / debonded positions) is not checked: the model has no strand position within a row (stated in the output).
+     Owner rules: CTDOT V2 5.9.4.3.3 (at most 25 % of all strands; the engine's owner check, a RULE check that must pass, and a cap on the
+     count tried); MassDOT Bridge Manual 3.7.2.2 (straight debonded strands preferred over draped strands for box beams, NEBT and NEDBT:
+     draped only when debonding alone does not pass; 'both' ranks the straight design first for those); RIDOT BDM 5.6.3.2: debonding as
+     AASHTO LRFD (no further limit). Debond lengths on a 1 ft grid from the girder ends, as short as possible (bisection on the shortest).
+     Any 5.9.4.3.3 warning of the engine (A, B, C, D, G) on a line rejects the candidate. */
+  const DEB_W = /5\.9\.4\.3\.3\((A|B|C|D|G)\)|5\.9\.4\.3\.3\(G\)/;
+  const RELEASE = ['Release comp', 'Release tens', 'Release tens (+M, bot)', 'Release tens. steel (5.9.2.3.1b)', 'Srv tens (top)'];
+  /* debCaps(P, k, eff, rows): for each straight row the most strands that may be debonded (even), the limits above: { caps, nTerm(D), dStep } */
+  function debCaps(P, k, eff, rows) {
+    const BR = window.PSBBridge, inp = lineInputs(P, k, BR.typeLines(P, k)[0], Object.assign({}, eff, { rows, harp: Object.assign({}, eff.harp, { n: 0 }) }));
+    let g = null; try { g = girderGross(inp); } catch (e) { g = null; }
+    const st = (typeof STRANDS !== 'undefined' && STRANDS[eff.str && eff.str.size]) || { db: 0.6 }, db = +st.db, f = family(eff.girder).fam;
+    const vs = g && typeof sectionVoids === 'function' ? sectionVoids(g) : [];
+    const caps = rows.map(r => { const n = +r.n || 0; if (n < 4) return 0;
+      let elig;
+      if (g && g.isNext && g.next) { const half = Math.floor(n / 2); elig = 2 * Math.max(0, half - 2); }   // (K) per stem: the two outermost bonded
+      else { const xs = [...Array(n)].map((_, i) => (i - (n - 1) / 2) * 2), xmax = Math.max(...xs.map(Math.abs));
+        const inner = xs.filter(x => Math.abs(x) < xmax - 1e-9);   // the outermost each side bonded
+        if (f === 'I' || f === 'dbt') elig = inner.filter(x => Math.abs(x) > (g ? +g.bw : 0) / 2 + 1e-9).length;   // (I) the web width bonded
+        else if (vs.length) elig = inner.filter(x => vs.some(v => v.type === 'rect' ? Math.abs(x - v.x) < v.w / 2 - 1e-9 : Math.abs(x - v.x) < v.d / 2 - 1e-9)).length;   // (J) under a void
+        else elig = inner.length; }   // (K) a solid slab
+      return Math.min(2 * Math.floor(Math.floor(0.45 * n + 1e-9) / 2), 2 * Math.floor(elig / 2)); });
+    return { caps, db, nTerm: D => (db >= 0.7 - 1e-9 || D <= 10) ? 4 : 6, dStep: Math.max(1, Math.ceil(60 * db / 12 - 1e-9)) };
+  }
+  /* debRows(rows, caps, D, nTerm): D debonded strands, bottom row first, each row up to min(cap, nTerm) (pairs); null if they do not fit */
+  function debRows(rows, caps, D, nTerm) {
+    const nd = rows.map(() => 0); let rem = D;
+    for (let i = 0; i < rows.length && rem > 0; i++) { const c = Math.min(caps[i], 2 * Math.floor(nTerm / 2)); const t = Math.min(c, rem); nd[i] = t - (t % 2); rem -= nd[i]; }
+    return rem > 0 ? null : nd;
+  }
+  /* withDeb(rows, nd, l0, step): the rows with nd[i] debonded; the debonded rows' lengths l0, l0 + step, … from the highest debonded row down
+     (the bottom row, the most eccentric, the longest) */
+  function withDeb(rows, nd, l0, step) {
+    const idx = rows.map((r, i) => i).filter(i => nd[i] > 0), out = rows.map(r => Object.assign({}, r, { nd: 0, dbnd: 0 }));
+    idx.slice().reverse().forEach((i, j) => { out[i].nd = nd[i]; out[i].dbnd = l0 + j * step; });
+    return out;
+  }
+  /* searchStraight(P, k, girder, o, ctx, log): as search(), no draped strand; at each N the fewest debonded strands (then the shortest
+     lengths) that pass. Steps: the strengths as search() (the entered, the entered f′c with the highest f′ci, the highest); (1) the fewest
+     straight strands N1 passing Strength I flexure and Service III tension (bisection, no debonding); (2) N = N1, N1 + 2, …: no debonding,
+     then D = 2, 4, … debonded strands (debRows), the shortest first length l0 (1 ft grid) at which the release checks pass (bisection,
+     longer debonding relieving the end more: assumed, AD-D8 as the drape), then every check; (3) the lowest f′c / f′ci as search(). */
+  function* searchStraight(P, k, girder, o, ctx, log) {
+    const b0 = window.PSBBridge.effBase(P, k), base = Object.assign(J(b0), { girder }), C = conc(P, k, o);
+    const res = { girder, best: null, trials: 0, closest: null, why: '', level: null, pattern: 'straight' };
+    const h = window.PSBInputCheck.depthOf(base), h0 = window.PSBInputCheck.depthOf(b0);
+    const upper = r => isNum(+r.y) && +r.y > h0 / 2, ent = (Array.isArray(b0.rows) ? b0.rows : []).filter(r => r && typeof r === 'object');
+    const tops = ent.filter(upper).map(r => Object.assign(J(r), { y: R2(h - (h0 - +r.y)) })), nTop = tops.reduce((a, r) => a + (+r.n || 0), 0);
+    const L = +lineInputs(P, k, window.PSBBridge.typeLines(P, k)[0], base).L;
+    const mk = (rows, fc, fci) => { const e = J(base); e.rows = J(rows).concat(J(tops)); e.harp = Object.assign({}, b0.harp, { n: 0 }); e.mat = Object.assign({}, e.mat, { fc, fci }); return e; };
+    const note = (what, r) => { res.trials++;
+      if (r.gov && (!res.closest || r.fails.length < res.closest.fails.length || (r.fails.length === res.closest.fails.length && r.gov.r < res.closest.gov.r))) res.closest = { what, fails: r.fails.slice(), gov: r.gov };
+      if (log.length < 3000) log.push({ k, girder, what, pass: r.pass, fails: r.fails.slice(0, 4), gov: r.gov ? { n: r.gov.n, r: r.gov.r, g: r.gov.g } : null });
+      if (ctx.runs >= o.maxRuns) ctx.stopped = true; };
+    const trial = function* (rows, fc, fci, what, full) { const r = evalCand(P, k, mk(rows, fc, fci), ctx, !!full, true); note(what, r); yield { i: ctx.runs, msg: `${girder}: ${what}` }; return r; };
+    const dTxt = rw => { const d = rw.filter(r => r.nd > 0); return d.length ? `, debonded ${d.map(r => `${r.nd} at y ${r.y} in for ${r.dbnd} ft`).join(', ')}` : ''; };
+    const top = C.fc.length ? C.fc[C.fc.length - 1] : null, hiFci = f => { const q = C.fciOf(f); return q.length ? q[q.length - 1] : null; };
+    const fc0 = +b0.mat.fc, fci0 = +b0.mat.fci, levels = [];
+    const addL = (fc, fci, lab) => { if (fc == null || fci == null || !(fci <= fc + 1e-9)) return; if (!levels.some(q => q.fc === fc && q.fci === fci)) levels.push({ fc, fci, lab }); };
+    if (C.lock) addL(fc0, fci0, 'the entered f′c / f′ci (locked)');
+    else { if (C.fc.includes(R2(fc0)) && C.fciOf(R2(fc0)).includes(R2(fci0))) addL(R2(fc0), R2(fci0), 'the entered f′c / f′ci');
+      if (C.fc.includes(R2(fc0))) addL(R2(fc0), hiFci(R2(fc0)), 'the entered f′c, the highest f′ci');
+      addL(top, top != null ? hiFci(top) : null, 'the highest f′c and f′ci'); }
+    if (!levels.length) { res.why = 'no f′c / f′ci in the ranges searched'; return res; }
+    const rows = rowsOf(P, k, base, ctx), capS = rows.reduce((a, q) => a + q.cap, 0) - (rows.reduce((a, q) => a + q.cap, 0) % 2);
+    if (!rows.length) { res.why = 'no strand row fits the section'; return res; }
+    const owner = window.PBD && window.PBD.ownerOf ? window.PBD.ownerOf(base) : 'AASHTO', rDb = rule(owner, 'db.max');
+    { const LT = levels[levels.length - 1], r = yield* trial(fill(rows, capS, []), LT.fc, LT.fci, `straight: every row full (${capS} straight), ${LT.lab}`, true);   // the quick reject of search()
+      if (r.fails.includes('LL deflection')) { res.why = 'the live-load deflection fails at the highest f′c (the section\'s stiffness: no strand pattern changes it)'; return res; }
+      if (!(r.lines && !r.err && !r.fails.includes('Flexure') && !r.fails.includes('Srv III tens'))) { res.why = `Strength I flexure or Service III tension fails with every row full (${capS} straight strands) at the highest f′c`; return res; } }
+    const lMax = Math.floor(Math.min(0.20 * L, L / 2) + 1e-9);   // the 1 ft grid up to 0.20 L (5.9.4.3.3(G)'s first limit; the engine checks the second)
+    let pat = null;
+    for (const lv of levels) {
+      const okS = r => r.lines && !r.err && r.fails.every(n => !(n === 'Flexure' || n === 'Srv III tens'));
+      const s1 = function* (Ns) { const rw = fill(rows, Ns, []); if (!rw) return false; return okS(yield* trial(rw, lv.fc, lv.fci, `straight, step 1: ${Ns} straight, no debonding, ${lv.lab}`, true)); };
+      let lo = 2, hi = capS; if (!(yield* s1(hi))) continue;
+      while (hi - lo > 2) { const mid = lo + 2 * Math.floor((hi - lo) / 4); if (yield* s1(mid)) hi = mid; else lo = mid; }
+      const N1 = (yield* s1(lo)) ? lo : hi;
+      outer: for (let Ns = N1; Ns <= capS; Ns += 2) {
+        const rw = fill(rows, Ns, []); if (!rw) break;
+        const r0 = yield* trial(rw, lv.fc, lv.fci, `straight: N ${Ns + nTop}, no debonding, ${lv.lab}`); if (ctx.stopped) break outer;
+        if (r0.pass) { pat = { rows: rw, N: Ns + nTop, D: 0, lv }; break; }
+        const rel = r0.fails.filter(n => !GROW.includes(n) && !RELEASE.includes(n));
+        if (rel.length) { res.why = `no straight pattern passes at N = ${Ns + nTop}: ${rel.join(', ')} fails and is not changed by more strands or debonding`; break; }
+        const dc = debCaps(P, k, base, rw), Dcap = dc.caps.reduce((a, c) => a + c, 0), Dmax = rDb ? Math.min(Dcap, 2 * Math.floor(rDb.value * (Ns + nTop) / 2 + 1e-9)) : Dcap;
+        if (r0.fails.some(n => RELEASE.includes(n))) for (let D = 2; D <= Dmax; D += 2) {
+          const nd = debRows(rw, dc.caps, D, dc.nTerm(D)); if (!nd) break;
+          const nRow = nd.filter(x => x > 0).length, l1 = lMax - (nRow - 1) * dc.dStep; if (l1 < 1) break;   // every length within 0.20 L
+          const at = function* (l0) { return yield* trial(withDeb(rw, nd, l0, dc.dStep), lv.fc, lv.fci, `straight: N ${Ns + nTop}${dTxt(withDeb(rw, nd, l0, dc.dStep))}, ${lv.lab}`); };
+          const relOK = r => r.lines && !r.err && !r.fails.some(n => RELEASE.includes(n));
+          const rT = yield* at(l1); if (ctx.stopped) break outer;
+          if (!relOK(rT)) continue;   // even the longest debonding leaves a release check failing: more debonded strands
+          let a = 0, c = l1, rc = rT; while (c - a > 1) { const m = (a + c) >> 1, r = yield* at(m); if (ctx.stopped) break outer; if (relOK(r)) { c = m; rc = r; } else a = m; }
+          if (rc.pass) { pat = { rows: withDeb(rw, nd, c, dc.dStep), N: Ns + nTop, D, lv }; break outer; }
+          // the shortest lengths pass the release checks but another check fails: longer debonding does not help it (it takes prestress
+          // off the end); a check more strands improve: the next N; else more debonded strands
+          if (rc.fails.every(n => GROW.includes(n))) break;
+        }
+        if (!r0.fails.some(n => GROW.includes(n)) && !r0.fails.some(n => RELEASE.includes(n))) break;
+      }
+      if (pat || ctx.stopped) break;
+    }
+    if (!pat) { if (!res.why) res.why = ctx.stopped ? 'stopped' : 'no straight strand pattern with debonding passes'; return res; }
+    res.level = pat.lv.lab;
+    let fc = pat.lv.fc, fci = pat.lv.fci;
+    if (!C.lock) {
+      for (const f of C.fc) { if (f > fc + 1e-9) break; const fi = hiFci(f); if (fi == null) continue; if (f === fc && fi <= fci) break;
+        const r = yield* trial(pat.rows, f, fi, `straight, step 3: f′c ${f} ksi, f′ci ${fi} ksi`); if (r.pass) { fc = f; fci = fi; break; } }
+      for (const fi of C.fciOf(fc)) { if (fi >= fci - 1e-9) break; const r = yield* trial(pat.rows, fc, fi, `straight, step 3: f′c ${fc} ksi, f′ci ${fi} ksi`); if (r.pass) { fci = fi; break; } }
+    }
+    const e = mk(pat.rows, fc, fci), r = evalCand(P, k, e, ctx, true, true);
+    if (!r.pass) { res.why = 'the final design does not pass (unexpected)'; return res; }
+    const W = r.lines.reduce((a, q) => a + q.R.g.wsw * (q.R.L + 2 * (+e.opt.endOh || 0) / 12), 0);
+    res.best = { k, girder, N: pat.N, nh: 0, nTop, rows: e.rows, harp: e.harp, fc, fci, eff: e, ev: r, W, hd: null, pattern: 'straight', nDeb: e.rows.reduce((a, q) => a + (q.dbnd > 0 ? +q.nd || 0 : 0), 0) };
+    return res;
+  }
+  /* searchPat(P, k, girder, o, ctx, log): the design of type k on the section by the pattern setting. 'both': the draped and the straight
+     design, the choice: fewer strands N, then fewer special strands (draped n_h, or debonded), then the draped (Decision PSAD-D11); MassDOT
+     3.7.2.2: for box beams, NEBT and NEDBT the straight design first whenever one passes. */
+  function* searchPat(P, k, girder, o, ctx, log) {
+    if (o.pattern === 'straight') return yield* searchStraight(P, k, girder, o, ctx, log);
+    const a = yield* search(P, k, girder, o, ctx, log); if (o.pattern !== 'both' || ctx.stopped) return a;
+    const b = yield* searchStraight(P, k, girder, o, ctx, log);
+    a.alt = b; b.alt = a;
+    if (!b.best) return a; if (!a.best) return Object.assign(b, { trials: a.trials + b.trials });
+    const md = window.PBD && window.PBD.ownerOf && window.PBD.ownerOf(window.PSBBridge.effBase(P, k)) === 'MassDOT', SC = window.PSBSections;
+    const fam = SC && Object.prototype.hasOwnProperty.call(SC.MD, girder) ? SC.MD[girder].src.fam : '', mdPref = md && (family(girder).fam === 'adj' || family(girder).fam === 'spread' || fam === 'nebt' || fam === 'nedbt');
+    const pick = mdPref ? b : (b.best.N < a.best.N || (b.best.N === a.best.N && b.best.nDeb < a.best.nh)) ? b : a;
+    pick.trials = a.trials + b.trials; if (mdPref) pick.why = 'MassDOT 3.7.2.2: straight debonded strands preferred'; return pick;
+  }
+
   /* hdOf(ev): the hold-down check of the worst line (F_hd / limit), or null */
   const hdOf = ev => { let q = null; (ev.lines || []).forEach(l => l.R.checks.forEach(c => { if (HD.test(c.n) && (!q || c.r > q.r)) q = { n: c.n, r: c.r, g: l.g }; })); return q; };
 
@@ -592,7 +740,7 @@
           ksn.forEach(k => { kAll.add(k); if (sp.labels[k] == null) sp.labels[k] = BR.types(Q)[k].label; });
           const ent = { name: j.sec.name, A: j.sec.A, h: j.sec.h, pass: true, types: [], nb: j.n, S: Q.xs.bays[0] };
           sp.sections.push(ent);
-          for (const k of ksn) { const res = yield* search(Q, k, j.sec.name, o, ctx, log); ent.types.push({ k, res }); if (!res.best) { ent.pass = false; break; } if (ctx.stopped) break; }
+          for (const k of ksn) { const res = o.pattern === 'draped' ? yield* search(Q, k, j.sec.name, o, ctx, log) : yield* searchPat(Q, k, j.sec.name, o, ctx, log); ent.types.push({ k, res }); if (!res.best) { ent.pass = false; break; } if (ctx.stopped) break; }
           if (ctx.stopped) { ent.pass = ent.pass && ent.types.length === ksn.length; break; }
           if (ent.pass) { ent.W = ent.types.reduce((a, q) => a + q.res.best.W, 0); sp.cands.push(ent); if (sp.cands.length >= o.topN) break; }
         }
@@ -607,7 +755,7 @@
         const ent = { name: sec.name, A: sec.A, h: sec.h, pass: true, types: [] };
         sp.sections.push(ent);
         for (const k of ks) {
-          const res = yield* search(P, k, sec.name, o, ctx, log);
+          const res = o.pattern === 'draped' ? yield* search(P, k, sec.name, o, ctx, log) : yield* searchPat(P, k, sec.name, o, ctx, log);
           ent.types.push({ k, res });
           if (!res.best) { ent.pass = false; break; }   // the other types of the span need not be run on this section
           if (ctx.stopped) break;
@@ -652,5 +800,5 @@
   }
   const countOf = b => (Array.isArray(b.rows) ? b.rows : []).reduce((a, q) => a + (+q.n || 0), 0) + (+(b.harp || {}).n || 0);
 
-  window.PSBAutoDesign = { DEF, FRACS, GROW, RULE, settings, refine, distance, cmpDist, modRows, over, counts, nbLock, applyLayout, layoutFor, S_LO, S_HI, family, sections, conc, rowsOf, fill, drapes, lineInputs, fitErrors, evalCand, search, run, runSync, apply, countOf, hdOf };
+  window.PSBAutoDesign = { DEF, FRACS, GROW, RULE, settings, refine, distance, cmpDist, modRows, over, counts, nbLock, applyLayout, layoutFor, S_LO, S_HI, debCaps, debRows, withDeb, searchStraight, searchPat, DEB_W, family, sections, conc, rowsOf, fill, drapes, lineInputs, fitErrors, evalCand, search, run, runSync, apply, countOf, hdOf };
 })();
