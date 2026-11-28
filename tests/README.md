@@ -8,6 +8,8 @@ The tools stay single, self-contained HTML files with no build step and no npm (
 
 **Steel Bridge Design (2026-11-19, SBDA):** the old single-file app is archived as `archive/Steel Bridge Design (archived 2026-11-19).html`; the GirderDetail / Preliminary sizing / ST-Girder tests and scripts below read that file (constant `SBD_ARCHIVE_FILE` in `tests/engine/harness.mjs`, re-exported by `tests/lib.mjs`), and a git ref older than the archiving is read under its old name. `Steel Bridge Design.html` is now a redirect page to `apps/steel-bridge/index.html`.
 
+**PS Bridge switch-over comparison (2026-11-28):** `node tests/psbridge-oldnew.mjs [--out <json>] [--md <table>]` computes every harness A case and harness B design in the old app (its own engine from the pinned page) and in the new app (imported through "From the old app"), and places each difference on its cause; its output is the table of `docs/ps-bridge-comparison.md`.
+
 ## Requirements
 
 - Node 18 or later (tested on Node 22).
