@@ -177,13 +177,14 @@ test('projectMeta: the title block fields; Use never blanks a field and changes 
   assert.equal(pl.lines.length, 3); assert.match(pl.lines[1], /Checker: "\(blank\)" → "CD"/);
 });
 
-test('ui/bridgexfer.js is the HANDOFF.md §5 reference copy; the page loads the hand-off files', () => {
+// BSB (2026-11-28): the BridgeXfer text is shared/bridge-suite-boot.js part xfer(); ui/bridgexfer.js calls it
+test('BridgeXfer (shared/bridge-suite-boot.js xfer(), installed by ui/bridgexfer.js) is the HANDOFF.md §5 reference copy; the page loads the hand-off files', () => {
   const h = fs.readFileSync(path.join(ROOT, 'HANDOFF.md'), 'utf8'), ref = /## 5\. Shared helper[\s\S]*?```js\n([\s\S]*?)```/.exec(h)[1].trim();
-  assert.ok(fs.readFileSync(path.join(APP, 'ui/bridgexfer.js'), 'utf8').includes(ref));
+  assert.ok(fs.readFileSync(path.join(ROOT, 'shared/bridge-suite-boot.js'), 'utf8').includes(ref));
   const page = fs.readFileSync(path.join(APP, 'index.html'), 'utf8');
-  for (const f of ['engine/handoffs.js', 'ui/bridgexfer.js', 'ui/handoffs.js']) assert.ok(page.includes(`'${f}'`), f);
+  for (const f of ['engine/handoffs.js', '../../shared/bridge-suite-boot.js', 'ui/bridgexfer.js', 'ui/handoffs.js']) assert.ok(page.includes(`'${f}'`), f);
   // BridgeXfer publish: the stamped superReactions = the old app's stamp except producerFile (receivers do not read it, HANDOFF.md §4.4)
-  const mk = () => { const m = new Map(), c = { localStorage: { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }, document: { title: 't' }, location: { pathname: '/x' } }; c.window = c; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(APP, 'ui/bridgexfer.js'), 'utf8'), c); return c; };
+  const mk = () => { const m = new Map(), c = { localStorage: { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }, document: { title: 't' }, location: { pathname: '/x' } }; c.window = c; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(ROOT, 'shared/bridge-suite-boot.js'), 'utf8'), c); vm.runInContext(fs.readFileSync(path.join(APP, 'ui/bridgexfer.js'), 'utf8'), c); return c; };
   const inp = D.inputs(CASES[0][1]), b = H.srPayload(inp, O.computeAll(J(inp))).payload;
   const a1 = mk().BridgeXfer.publish('superReactions', J(b), H.PRODUCER, 'apps/ps-bridge/index.html').payload, a0 = mk().BridgeXfer.publish('superReactions', J(b), 'PS-Beam', 'Prestressed Bridge Design.html').payload;
   [a1, a0].forEach(p => { delete p.producedAt; }); assert.equal(a1.producerFile, 'apps/ps-bridge/index.html'); delete a1.producerFile; delete a0.producerFile;
