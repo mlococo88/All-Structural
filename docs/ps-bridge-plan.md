@@ -113,7 +113,7 @@ Every PR: `fixlog/ps-bridge.md` entry, tests, only `apps/ps-bridge/` + its tests
 | 7 | Drawings + DXF (girder sheet, strand and draping schedule with hold-down from ℄ bearing and from the girder end (PS-13), camber table) | after 5 |
 | 8 | Bridge-suite bootstrap moved to `shared/` (planned §3 work; before hand-offs) | all three copies |
 | 9 | Hand-offs at switch-over (app id `psbeam`): bearings → elastomeric, every-girder `superReactions` → SubLoads, others unchanged | cross-tool |
-| 10 | Comparison document (`docs/ps-bridge-comparison.md`: harness A/B + the engineer's real projects), then **switch-over** (PSBD → redirect, `psbeam.html` → new app, data offer as PBD-C3) | engineer approval |
+| 10 | Comparison document (`docs/ps-bridge-comparison.md`: harness A/B + the engineer's real projects), then **switch-over** (PSBD → redirect, `psbeam.html` → new app, data offer as PBD-C3) | engineer approval. **Comparison document done (2026-11-28, `tests/psbridge-oldnew.mjs`): 677 cases, every difference placed on its cause; the engineer has no projects saved in the old app (confirmed 2026-11-28)** |
 
 ---
 
